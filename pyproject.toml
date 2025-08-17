@@ -1,0 +1,52 @@
+[project]
+name = "bio-mcp"
+version = "0.1.0"
+description = "Biomedical MCP server providing PubMed search, RAG, and corpus management tools"
+requires-python = ">=3.12"
+dependencies = [
+    "mcp>=1.0.0",
+    "weaviate-client>=4.0.0",
+    "openai>=1.0.0",
+    "biopython>=1.80",
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.13.0",
+    "httpx>=0.27.0",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "typer>=0.12.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.5.0",
+    "mypy>=1.10.0",
+    "pre-commit>=3.7.0",
+]
+
+[project.scripts]
+bio-mcp = "bio_mcp.main:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "RUF"]
+ignore = ["E501"]
+
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
