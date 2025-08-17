@@ -1,83 +1,161 @@
-This document defines the public contracts between MCP clients and the bio-mcp server, plus internal adapter boundaries. All request/response bodies are JSON. Changes follow semver; breaking changes bump the major version.
+# Bio-MCP API Contracts
 
-# MCP API (Public)
-## Tool: pubmed.sync_delta
+This document defines the public contracts between MCP clients and the bio-mcp server, plus internal adapter boundaries. All request/response bodies are JSON. Changes follow semantic versioning; breaking changes bump the major version.
 
-Purpose: Incrementally sync PubMed records for a query using EDAT windowing, upsert metadata, chunk+embed, and push to Weaviate.
+---
 
-Request
+## 🔄 MCP API (Public)
+
+### Tool: `pubmed.sync_delta`
+
+**Purpose:** Incrementally sync PubMed records for a query using EDAT windowing, upsert metadata, chunk+embed, and push to Weaviate.
+
+#### Request Schema
+```json
 {
   "type": "object",
   "required": ["query_key", "term"],
   "properties": {
-    "query_key": { "type": "string", "minLength": 1 },
-    "term": { "type": "string", "minLength": 1 },
-    "overlap_days": { "type": "integer", "minimum": 0, "default": 5 }
-  },
-  "additionalProperties": false
-}
-
-
-Response
-{
-  "type": "object",
-  "required": ["job_id", "inserted", "updated", "skipped", "pmids_processed"],
-  "properties": {
-    "job_id": { "type": "string" },
-    "inserted": { "type": "integer", "minimum": 0 },
-    "updated": { "type": "integer", "minimum": 0 },
-    "skipped": { "type": "integer", "minimum": 0 },
-    "pmids_processed": { "type": "integer", "minimum": 0 },
-    "max_edat_seen": { "type": ["string","null"], "description": "ISO8601 UTC timestamp or null" },
-    "warnings": {
-      "type": "array",
-      "items": { "type": "string" }
+    "query_key": { 
+      "type": "string", 
+      "minLength": 1,
+      "description": "Unique identifier for the query"
+    },
+    "term": { 
+      "type": "string", 
+      "minLength": 1,
+      "description": "PubMed search term"
+    },
+    "overlap_days": { 
+      "type": "integer", 
+      "minimum": 0, 
+      "default": 5,
+      "description": "Days to overlap with previous sync to ensure completeness"
     }
   },
   "additionalProperties": false
 }
+```
 
+#### Response Schema
+```json
+{
+  "type": "object",
+  "required": ["job_id", "inserted", "updated", "skipped", "pmids_processed"],
+  "properties": {
+    "job_id": { 
+      "type": "string",
+      "description": "Unique identifier for this sync job"
+    },
+    "inserted": { 
+      "type": "integer", 
+      "minimum": 0,
+      "description": "Number of new records inserted"
+    },
+    "updated": { 
+      "type": "integer", 
+      "minimum": 0,
+      "description": "Number of existing records updated"
+    },
+    "skipped": { 
+      "type": "integer", 
+      "minimum": 0,
+      "description": "Number of records skipped (no changes)"
+    },
+    "pmids_processed": { 
+      "type": "integer", 
+      "minimum": 0,
+      "description": "Total PMIDs processed in this sync"
+    },
+    "max_edat_seen": { 
+      "type": ["string","null"], 
+      "description": "Latest EDAT timestamp seen (ISO8601 UTC) or null"
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Non-fatal warnings during sync"
+    }
+  },
+  "additionalProperties": false
+}
+```
 
-Notes / Guarantees
+#### Guarantees
+- ✅ **Idempotent**: Safe to replay; watermark uses EDAT with overlap
+- ✅ **Versioning**: Bumps on content change or LR (Last Revised) advance
 
-Idempotent: safe to replay; watermark uses EDAT with overlap.
+### Tool: `rag.search`
 
-Version bumps on content change or LR advance.
+**Purpose:** Retrieve top-K chunks from Weaviate using hybrid search, optionally reranked by quality.
 
-## Tool: rag.search
-
-Purpose: Retrieve top-K chunks from Weaviate using hybrid search, optionally reranked by quality.
-
-Request
+#### Request Schema
+```json
 {
   "type": "object",
   "required": ["query"],
   "properties": {
-    "query": { "type": "string", "minLength": 1 },
-    "top_k": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 },
-    "quality_bias": { "type": "boolean", "default": true }
+    "query": { 
+      "type": "string", 
+      "minLength": 1,
+      "description": "Search query text"
+    },
+    "top_k": { 
+      "type": "integer", 
+      "minimum": 1, 
+      "maximum": 100, 
+      "default": 20,
+      "description": "Maximum number of results to return"
+    },
+    "quality_bias": { 
+      "type": "boolean", 
+      "default": true,
+      "description": "Whether to apply quality-based reranking"
+    }
   },
   "additionalProperties": false
 }
+```
 
-
-Response
+#### Response Schema
+```json
 {
   "type": "object",
   "required": ["results"],
   "properties": {
     "results": {
       "type": "array",
+      "description": "Search results ordered by relevance score",
       "items": {
         "type": "object",
         "required": ["doc_id", "uuid", "score"],
         "properties": {
-          "doc_id": { "type": "string", "pattern": "^pmid:[0-9]+$" },
-          "uuid": { "type": "string", "minLength": 10 },
-          "sim": { "type": ["number","null"] },
-          "bm25": { "type": ["number","null"] },
-          "quality": { "type": ["number","null"] },
-          "score": { "type": "number" }
+          "doc_id": { 
+            "type": "string", 
+            "pattern": "^pmid:[0-9]+$",
+            "description": "Stable document identifier for lookup"
+          },
+          "uuid": { 
+            "type": "string", 
+            "minLength": 10,
+            "description": "Unique chunk identifier"
+          },
+          "sim": { 
+            "type": ["number","null"],
+            "description": "Semantic similarity score"
+          },
+          "bm25": { 
+            "type": ["number","null"],
+            "description": "BM25 relevance score"
+          },
+          "quality": { 
+            "type": ["number","null"],
+            "description": "Document quality score"
+          },
+          "score": { 
+            "type": "number",
+            "description": "Final combined relevance score"
+          }
         },
         "additionalProperties": false
       }
@@ -85,113 +163,199 @@ Response
   },
   "additionalProperties": false
 }
+```
 
+#### Guarantees
+- ✅ **Score Ordering**: `score` is the final rerank key (quality-weighted if enabled)
+- ✅ **Stable IDs**: `doc_id` is the stable key for `rag.get` / resource lookup
 
-Notes / Guarantees
+### Tool: `rag.get`
 
-score is the final rerank key (quality-weighted if enabled).
+**Purpose:** Fetch the normalized document metadata and quality scores for a doc_id.
 
-doc_id is the stable key for rag.get / resource lookup.
-
-## Tool: rag.get
-
-Purpose: Fetch the normalized document metadata and quality scores for a doc_id.
-
-Request
+#### Request Schema
+```json
 {
   "type": "object",
   "required": ["doc_id"],
   "properties": {
-    "doc_id": { "type": "string", "pattern": "^pmid:[0-9]+$" }
+    "doc_id": { 
+      "type": "string", 
+      "pattern": "^pmid:[0-9]+$",
+      "description": "PubMed ID in format 'pmid:12345'"
+    }
   },
   "additionalProperties": false
 }
+```
 
-
-Response
+#### Response Schema
+```json
 {
   "type": "object",
   "required": ["doc_id", "title", "journal", "pub_types", "quality", "version"],
   "properties": {
-    "doc_id": { "type": "string" },
-    "title": { "type": ["string","null"] },
-    "abstract": { "type": ["string","null"] },
-    "journal": { "type": ["string","null"] },
-    "pub_types": { "type": "array", "items": { "type": "string" } },
-    "pdat": { "type": ["string","null"] },
-    "edat": { "type": ["string","null"] },
-    "lr": { "type": ["string","null"] },
-    "pmcid": { "type": ["string","null"] },
+    "doc_id": { 
+      "type": "string",
+      "description": "PubMed document identifier"
+    },
+    "title": { 
+      "type": ["string","null"],
+      "description": "Article title"
+    },
+    "abstract": { 
+      "type": ["string","null"],
+      "description": "Article abstract text"
+    },
+    "journal": { 
+      "type": ["string","null"],
+      "description": "Journal name"
+    },
+    "pub_types": { 
+      "type": "array", 
+      "items": { "type": "string" },
+      "description": "Publication types (e.g., 'Randomized Controlled Trial')"
+    },
+    "pdat": { 
+      "type": ["string","null"],
+      "description": "Publication date (YYYY-MM-DD)"
+    },
+    "edat": { 
+      "type": ["string","null"],
+      "description": "Entrez date (ISO8601 UTC)"
+    },
+    "lr": { 
+      "type": ["string","null"],
+      "description": "Last revision date (ISO8601 UTC)"
+    },
+    "pmcid": { 
+      "type": ["string","null"],
+      "description": "PubMed Central ID"
+    },
     "quality": {
       "type": "object",
       "required": ["total"],
+      "description": "Quality scoring breakdown",
       "properties": {
-        "design": { "type": ["integer","null"] },
-        "recency": { "type": ["integer","null"] },
-        "journal": { "type": ["integer","null"] },
-        "human": { "type": ["integer","null"] },
-        "total": { "type": "integer" }
+        "design": { 
+          "type": ["integer","null"],
+          "description": "Study design quality score"
+        },
+        "recency": { 
+          "type": ["integer","null"],
+          "description": "Publication recency score"
+        },
+        "journal": { 
+          "type": ["integer","null"],
+          "description": "Journal impact score"
+        },
+        "human": { 
+          "type": ["integer","null"],
+          "description": "Human studies relevance score"
+        },
+        "total": { 
+          "type": "integer",
+          "description": "Combined quality score"
+        }
       },
       "additionalProperties": false
     },
-    "version": { "type": "integer", "minimum": 1 }
+    "version": { 
+      "type": "integer", 
+      "minimum": 1,
+      "description": "Document version number"
+    }
   },
   "additionalProperties": false
 }
+```
 
-## Tools: corpus.checkpoint.get / corpus.checkpoint.set
+### Tools: `corpus.checkpoint.get` / `corpus.checkpoint.set`
 
-Get Request
+**Purpose:** Manage sync watermarks for query checkpoints.
+
+#### Get Request Schema
+```json
 {
   "type": "object",
   "required": ["query_key"],
-  "properties": { "query_key": { "type": "string", "minLength": 1 } },
+  "properties": { 
+    "query_key": { 
+      "type": "string", 
+      "minLength": 1,
+      "description": "Unique query identifier"
+    } 
+  },
   "additionalProperties": false
 }
+```
 
-
-Get Response
+#### Get Response Schema
+```json
 {
   "type": "object",
   "required": ["query_key"],
   "properties": {
-    "query_key": { "type": "string" },
-    "last_edat": { "type": ["string","null"], "description": "ISO8601 UTC or null" }
+    "query_key": { 
+      "type": "string",
+      "description": "Query identifier"
+    },
+    "last_edat": { 
+      "type": ["string","null"], 
+      "description": "Last processed EDAT timestamp (ISO8601 UTC) or null if none"
+    }
   },
   "additionalProperties": false
 }
+```
 
-
-Set Request
-
+#### Set Request Schema
+```json
 {
   "type": "object",
   "required": ["query_key", "last_edat"],
   "properties": {
-    "query_key": { "type": "string" },
-    "last_edat": { "type": "string", "description": "ISO8601 UTC" }
+    "query_key": { 
+      "type": "string",
+      "description": "Query identifier"
+    },
+    "last_edat": { 
+      "type": "string", 
+      "description": "New checkpoint timestamp (ISO8601 UTC)"
+    }
   },
   "additionalProperties": false
 }
+```
 
-
-Set Response
+#### Set Response Schema
+```json
 {
   "type": "object",
   "required": ["ok"],
-  "properties": { "ok": { "type": "boolean" } },
+  "properties": { 
+    "ok": { 
+      "type": "boolean",
+      "description": "Success indicator"
+    } 
+  },
   "additionalProperties": false
 }
+```
 
+#### Guarantees
+- ✅ **Monotonic Watermarks**: Server enforces monotonic watermarks on automatic advancement
+- ⚠️ **Manual Override**: Manual set may move backward for backfills (audited)
 
-Notes / Guarantees
+---
 
-Server enforces monotonic watermarks on automatic advancement; manual set may move backward for backfills (audited).
+## ❌ Error Handling
 
-## Error Envelope (all tools/resources)
+### Error Envelope (all tools/resources)
 
-On failure, responses adopt this envelope:
+On failure, all responses adopt this standard error envelope:
 
+```json
 {
   "type": "object",
   "required": ["error"],
@@ -203,109 +367,219 @@ On failure, responses adopt this envelope:
         "code": {
           "type": "string",
           "enum": [
-            "RATE_LIMIT","UPSTREAM","VALIDATION","NOT_FOUND",
-            "INVARIANT_FAILURE","STORE","EMBEDDINGS","WEAVIATE","ENTREZ","UNKNOWN"
+            "RATE_LIMIT",        // API rate limit exceeded
+            "UPSTREAM",          // External service error
+            "VALIDATION",        // Invalid request parameters
+            "NOT_FOUND",         // Resource not found
+            "INVARIANT_FAILURE", // Internal consistency error
+            "STORE",             // Database/storage error
+            "EMBEDDINGS",        // Embedding service error
+            "WEAVIATE",          // Vector database error
+            "ENTREZ",            // PubMed API error
+            "UNKNOWN"            // Unexpected error
           ]
         },
-        "message": { "type": "string" },
-        "details": { "type": ["object","array","string","null"] }
+        "message": { 
+          "type": "string",
+          "description": "Human-readable error description"
+        },
+        "details": { 
+          "type": ["object","array","string","null"],
+          "description": "Additional error context (optional)"
+        }
       },
       "additionalProperties": false
     }
   },
   "additionalProperties": false
 }
+```
 
-# MCP Resources
-## resource://pubmed/paper/{pmid}
+---
 
-Path params: {pmid} (digits)
+## 📄 MCP Resources
 
-Payload schema: identical to rag.get response (document metadata).
-Guarantees: read-only; consistent with metadata store.
+### Resource: `resource://pubmed/paper/{pmid}`
 
-# Internal Adapter Contracts (Non-public but stable)
-## Weaviate Adapter
+**Purpose:** Direct access to PubMed document metadata.
 
-Class name: configurable (WEAVIATE_CLASS, default PubMedChunk)
+#### Path Parameters
+- `{pmid}`: PubMed ID (digits only, e.g., `12345678`)
 
-Required props on upsert:
+#### Response
+- **Schema**: Identical to `rag.get` response (document metadata)
+- **Content-Type**: `application/json`
 
-pmid:string, chunk_id:string, text:string, vector:number[]
+#### Guarantees
+- ✅ **Read-only**: No mutations allowed
+- ✅ **Consistency**: Always consistent with metadata store
 
-Optional props:
+---
 
-journal?:string, pub_types?:string[], year?:number,
+## 🔧 Internal Adapter Contracts
+*Non-public but stable interfaces for internal components*
 
-quality_total?:number, edat?:string(ISO8601), lr?:string(ISO8601), source_url?:string
+### Weaviate Adapter
 
-Functions:
+#### Configuration
+- **Class Name**: Configurable via `WEAVIATE_CLASS` (default: `PubMedChunk`)
 
-ensure_schema() -> None
+#### Schema Properties
 
-upsert_chunks(chunks: Iterable[dict]) -> BatchResult
+**Required on upsert:**
+- `pmid`: string
+- `chunk_id`: string  
+- `text`: string
+- `vector`: number[]
 
-hybrid_search(query:str, limit:int) -> List[{uuid, pmid, sim?, bm25?, quality?}]
+**Optional properties:**
+- `journal`: string
+- `pub_types`: string[]
+- `year`: number
+- `quality_total`: number
+- `edat`: string (ISO8601)
+- `lr`: string (ISO8601)
+- `source_url`: string
 
-Invariants:
+#### Interface Methods
 
-Stable UUID: uuid5(ns, f"{pmid}:{chunk_id}")
+```python
+def ensure_schema() -> None
+    """Initialize Weaviate schema if needed"""
 
-len(vector) == Embeddings.dim; normalized vectors.
+def upsert_chunks(chunks: Iterable[dict]) -> BatchResult
+    """Batch upsert document chunks"""
 
-## Embeddings Adapter
+def hybrid_search(query: str, limit: int) -> List[SearchResult]
+    """Perform hybrid semantic + BM25 search"""
+    # Returns: [{"uuid": str, "pmid": str, "sim": float?, "bm25": float?, "quality": float?}]
+```
+
+#### Invariants
+- ✅ **Stable UUIDs**: `uuid5(namespace, f"{pmid}:{chunk_id}")`
+- ✅ **Vector Consistency**: `len(vector) == Embeddings.dim`
+- ✅ **Normalized Vectors**: All vectors are L2-normalized
+
+### Embeddings Adapter
+
+#### Interface Definition
+```python
+class Embeddings:
+    @property
+    def dim(self) -> int:
+        """Embedding dimensionality"""
+        
+    def embed(self, texts: Iterable[str]) -> List[List[float]]:
+        """Generate embeddings for input texts"""
+```
+
+#### Supported Providers
+- `openai`: OpenAI embedding models
+- `hf`: Hugging Face transformers
+
+#### Guarantees
+- ✅ **One-to-One**: One vector per input text
+- ✅ **Batched Processing**: Efficient batch operations
+- ✅ **Error Handling**: Errors surfaced as typed exceptions
+- ✅ **Normalized Vectors**: All output vectors are L2-normalized
+
+### Entrez (PubMed) Client
+
+#### Interface Methods
+```python
+def esearch_delta(term: str, mindate: str, maxdate: str, datetype: str = "edat") -> List[str]:
+    """Search PubMed for PMIDs in date range"""
+    # Returns: List of PMID strings
+
+def esummary_batch(pmids: List[str]) -> List[DocSummary]:
+    """Fetch document summaries for PMIDs"""
+    # Returns: List of document metadata
+```
+
+#### DocSummary Schema
+```python
+@dataclass
+class DocSummary:
+    pmid: str
+    title: Optional[str] = None
+    journal: Optional[str] = None
+    pub_types: List[str] = field(default_factory=list)
+    pdat: Optional[str] = None      # Publication date
+    edat: Optional[str] = None      # Entrez date
+    lr: Optional[str] = None        # Last revision
+    pmcid: Optional[str] = None     # PMC ID
+    authors: Optional[List[str]] = None
+    abstract: Optional[str] = None
+```
+
+#### Rate Limiting
+- **Limit**: ≤ ~3 requests/second with API key
+- **Backoff**: Exponential backoff on 429/5xx responses
+
+### Metadata Store (SQL)
+
+#### Interface Methods
+```python
+def upsert_pubmed_docs(docs: List[DocSummary]) -> UpsertResult:
+    """Upsert document metadata with deduplication"""
+    # Returns: {"inserted": int, "updated": int, "skipped": int, "max_edat_seen": str?}
+
+def get_pubmed_doc(pmid: str) -> Optional[Doc]:
+    """Retrieve document by PMID"""
+
+def get_checkpoint(query_key: str) -> CheckpointResult:
+    """Get last processed EDAT for query"""
+    # Returns: {"last_edat": str?}
+
+def set_checkpoint(query_key: str, last_edat: str) -> None:
+    """Update query checkpoint watermark"""
+```
+
+#### Invariants
+- ✅ **Unique PMIDs**: Each PMID appears once in the store
+- ✅ **Version Control**: Version increments on content_hash change or LR advance
+- ✅ **Audit Trail**: All checkpoint changes are logged
+
+---
+
+## 📋 Versioning Policy
+
+### MCP Tool/Request/Response Changes
+
+| Change Type | Version Impact | Examples |
+|-------------|----------------|----------|
+| **Additive fields** | Minor version bump | Adding optional request parameters, new response fields |
+| **Breaking changes** | Major version bump | Field removal, rename, type changes, semantic changes |
+
+### Database Schema Changes
+
+| Change Type | Action Required |
+|-------------|----------------|
+| **Additive only** | No version bump needed |
+| **Breaking changes** | Migration + major version bump |
+
+### Examples
+- ✅ **Minor**: Adding `include_abstracts: boolean` to search requests
+- ❌ **Major**: Changing `pmid` from string to integer
+- ❌ **Major**: Renaming `quality.total` to `quality.score`
+
+---
+
+## 💡 Usage Examples
+
+### PubMed Sync Delta
+
+**Request:**
+```json
 {
-  "interface": "Embeddings",
-  "methods": {
-    "dim": { "type": "integer", "description": "embedding dimensionality" },
-    "embed": {
-      "args": ["texts: Iterable<string>"],
-      "returns": "List<List<number>>"
-    }
-  },
-  "providers": ["openai", "hf"]
+  "query_key": "glp1_obesity_v1", 
+  "term": "(GLP-1 receptor agonist) AND obesity", 
+  "overlap_days": 5
 }
+```
 
-
-Guarantees: one vector per input; batched; errors surfaced as typed exceptions; vectors normalized.
-
-## Entrez (PubMed) Client
-
-esearch_delta(term, mindate, maxdate, datetype="edat") -> List[str(pmids)]
-
-esummary_batch(pmids) -> List[DocSummary]
-
-DocSummary = { pmid, title?, journal?, pub_types[], pdat?, edat?, lr?, pmcid?, authors?, abstract? }
-
-Rate limits: ≤ ~3 rps with API key; exponential backoff on 429/5xx.
-
-## Metadata Store (SQL)
-
-upsert_pubmed_docs(docs) -> {inserted, updated, skipped, max_edat_seen?}
-
-get_pubmed_doc(pmid) -> Doc
-
-get_checkpoint(query_key) -> {last_edat?}
-
-set_checkpoint(query_key, last_edat) -> None
-
-Invariants: pmid unique; version increments on content_hash change or lr advance.
-
-# Versioning Policy
-
-MCP tool/request/response changes:
-
-Additive fields → minor version.
-
-Field removal/rename/semantics change → major version.
-
-Weaviate/DB schema: additive only without bump; breaking changes require migration + major bump.
-
-# Examples
-pubmed.sync_delta → request
-{ "query_key": "glp1_obesity_v1", "term": "(GLP-1 receptor agonist) AND obesity", "overlap_days": 5 }
-
-pubmed.sync_delta → response
+**Response:**
+```json
 {
   "job_id": "sync_2025-08-17T16:02:10Z",
   "inserted": 37,
@@ -315,22 +589,54 @@ pubmed.sync_delta → response
   "max_edat_seen": "2025-08-17T15:59:02Z",
   "warnings": []
 }
+```
 
-rag.search → request
-{ "query": "phase 2 weight loss vs placebo", "top_k": 10, "quality_bias": true }
+### RAG Search
 
-rag.search → response
+**Request:**
+```json
+{
+  "query": "phase 2 weight loss vs placebo", 
+  "top_k": 10, 
+  "quality_bias": true
+}
+```
+
+**Response:**
+```json
 {
   "results": [
-    { "doc_id": "pmid:384001", "uuid": "7d5c...", "sim": 0.72, "bm25": 14.2, "quality": 9, "score": 1.37 },
-    { "doc_id": "pmid:383912", "uuid": "a1b2...", "sim": 0.69, "bm25": 13.1, "quality": 8, "score": 1.25 }
+    {
+      "doc_id": "pmid:384001", 
+      "uuid": "7d5c...", 
+      "sim": 0.72, 
+      "bm25": 14.2, 
+      "quality": 9, 
+      "score": 1.37
+    },
+    {
+      "doc_id": "pmid:383912", 
+      "uuid": "a1b2...", 
+      "sim": 0.69, 
+      "bm25": 13.1, 
+      "quality": 8, 
+      "score": 1.25
+    }
   ]
 }
+```
 
-rag.get → request
-{ "doc_id": "pmid:384001" }
+### Document Retrieval
 
-rag.get → response
+**Request:**
+```json
+{
+  "doc_id": "pmid:384001"
+}
+```
+
+**Response:**
+```json
 {
   "doc_id": "pmid:384001",
   "title": "Once-weekly XYZ shows weight reduction vs placebo...",
@@ -341,14 +647,43 @@ rag.get → response
   "edat": "2024-06-02T00:00:00Z",
   "lr": "2024-06-15T00:00:00Z",
   "pmcid": "PMC1234567",
-  "quality": { "design": 2, "recency": 2, "journal": 2, "human": 2, "total": 8 },
+  "quality": {
+    "design": 2, 
+    "recency": 2, 
+    "journal": 2, 
+    "human": 2, 
+    "total": 8
+  },
   "version": 2
 }
+```
 
-# Validation & Testing
+---
 
-Contract tests: validate all tool inputs/outputs against the JSON Schemas above.
+## 🧪 Testing Strategy
 
-Golden tests: a tiny set of PMIDs with fixed metadata to assert scoring, versioning, and Weaviate UUID stability.
+### Contract Tests
+**Purpose:** Validate all tool inputs/outputs against JSON schemas
+- ✅ Request parameter validation
+- ✅ Response schema compliance
+- ✅ Error envelope format
 
-Smoke tests: start local Weaviate via Compose, run pubmed.sync_delta on a narrow term, then rag.search and rag.get.
+### Golden Tests  
+**Purpose:** Ensure consistency across versions
+- ✅ Fixed PMID set with known metadata
+- ✅ Assert scoring algorithm stability
+- ✅ Verify Weaviate UUID consistency
+- ✅ Version increment behavior
+
+### Smoke Tests
+**Purpose:** End-to-end integration testing
+1. Start local Weaviate via Docker Compose
+2. Run `pubmed.sync_delta` on narrow search term
+3. Execute `rag.search` with test queries
+4. Verify `rag.get` returns expected metadata
+
+### Performance Tests
+**Purpose:** Validate scalability requirements
+- ✅ Batch processing throughput
+- ✅ Search response times
+- ✅ Concurrent request handling
