@@ -26,6 +26,15 @@ Based on the contracts, this MCP server provides:
 - Main entry point: `uv run bio-mcp` command (defined in pyproject.toml)
 - Python 3.12+ required
 
+## Development Patterns
+- **New MCP Tools**: Add schema to `src/bio_mcp/tool_definitions.py`, implement in separate module, register routing in `main.py`
+- **Database Integration**: Follow database-first pattern - check database first, fallback to external API
+- **Testing MCP Tools**: Use CLI client `uv run python clients/cli.py <tool-name>` for end-to-end testing
+- **Tool Organization**: Group related tools by domain (e.g., pubmed.*, rag.*, corpus.*)
+
+## Current Implementation Status
+Refer to `IMPLEMENTATION_PLAN.md` for detailed implementation status, completed phases, and roadmap.
+
 ## Dependencies
 Core dependencies include:
 - MCP framework for protocol implementation
@@ -38,7 +47,8 @@ Core dependencies include:
 ## Development Tools
 - **Linting & Formatting**: `uv run ruff check` and `uv run ruff format` for fast Python linting and formatting
 - **Type Checking**: `uv run mypy .` for static type analysis
-- **Testing**: `uv run pytest` with async support
+- **Testing**: `uv run pytest` (includes testcontainers for integration tests)
+- **MCP Testing**: `uv run python clients/cli.py list-tools` to verify server works
 - **Pre-commit**: Automated code quality checks
 
 ## Testing
