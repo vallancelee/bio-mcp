@@ -5,9 +5,8 @@ Phase 1A: Basic environment variable loading.
 
 import os
 from dataclasses import dataclass
-from typing import Optional
 
-from . import __version__, __build__, __commit__
+from . import __build__, __commit__, __version__
 
 
 @dataclass
@@ -16,16 +15,16 @@ class Config:
     
     # Version information
     version: str = __version__
-    build: Optional[str] = __build__
-    commit: Optional[str] = __commit__
+    build: str | None = __build__
+    commit: str | None = __commit__
     
     # Server configuration
     server_name: str = "bio-mcp"
     log_level: str = "INFO"
     
     # API Keys (optional for Phase 1A)
-    pubmed_api_key: Optional[str] = None
-    openai_api_key: Optional[str] = None
+    pubmed_api_key: str | None = None
+    openai_api_key: str | None = None
     
     # Database (defaults to in-memory for Phase 1A)
     database_url: str = "sqlite:///:memory:"

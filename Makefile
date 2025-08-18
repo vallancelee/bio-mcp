@@ -4,6 +4,7 @@
 .PHONY: help install dev test test-unit test-integration test-docker test-coverage test-watch test-ci
 .PHONY: lint format type-check security-scan clean build run docker-build docker-run docker-up docker-down
 .PHONY: deps-update version bump-patch bump-minor bump-major
+.PHONY: manual-test test-health test-server test-logs test-signals test-docker-health test-all-manual
 
 # Default target
 .DEFAULT_GOAL := help
@@ -178,3 +179,35 @@ pre-commit: format lint type-check test ## Run all pre-commit checks
 dev-setup: dev docker-up ## Full development setup
 	@echo "$(GREEN)✓ Development environment fully set up$(NC)"
 	@echo "$(BLUE)Ready to develop! Try 'make test' or 'make run'$(NC)"
+
+# Complete Testing Workflow
+test-all: ## Run all tests (unit + integration)
+	@echo "$(YELLOW)Running all tests...$(NC)"
+	$(UV) run pytest tests/ -v
+	@echo "$(GREEN)✓ All tests completed$(NC)"
+
+# Local Deployment
+deploy-local: ## Build and deploy locally for manual testing
+	@echo "$(YELLOW)Building and deploying locally...$(NC)"
+	@echo "1. Cleaning previous build..."
+	@$(MAKE) clean
+	@echo "2. Building package..."
+	@$(MAKE) build
+	@echo "3. Starting server (will run for 10 seconds for testing)..."
+	@timeout 10s $(UV) run python -m bio_mcp.main & \
+	SERVER_PID=$$!; \
+	sleep 2; \
+	echo "4. Testing health endpoint..."; \
+	$(UV) run python -m bio_mcp.health && \
+	echo "$(GREEN)✓ Server is healthy$(NC)" || echo "$(RED)✗ Health check failed$(NC)"; \
+	echo "5. Server running at PID $$SERVER_PID (will auto-stop)..."; \
+	wait $$SERVER_PID 2>/dev/null || true; \
+	echo "$(GREEN)✓ Local deployment test complete$(NC)"
+	@echo ""
+	@echo "$(BLUE)To run server manually:$(NC) make run"
+	@echo "$(BLUE)To run with services:$(NC) make docker-up && make run"
+
+# Full workflow
+workflow: clean build test-all deploy-local ## Complete build -> test -> deploy workflow
+	@echo "$(GREEN)🎉 Complete workflow finished!$(NC)"
+	@echo "$(BLUE)Server is ready for use. Run 'make run' to start manually.$(NC)"

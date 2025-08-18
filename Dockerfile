@@ -28,7 +28,7 @@ ENV BIO_MCP_LOG_LEVEL=INFO
 # Expose no ports (MCP uses stdio)
 # Health check for container orchestration
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD echo '{"jsonrpc": "2.0", "method": "ping", "id": 1}' | timeout 5s uv run python -m src.bio_mcp.main || exit 1
+  CMD uv run python -m bio_mcp.health || exit 1
 
 # Run the MCP server
-CMD ["uv", "run", "python", "-m", "src.bio_mcp.main"]
+CMD ["uv", "run", "python", "-m", "bio_mcp.main"]

@@ -122,27 +122,34 @@ class TestMCPServer:
     
     @pytest.mark.asyncio
     async def test_call_tool_unknown_tool(self):
-        """Test calling unknown tool raises ValueError."""
-        with pytest.raises(ValueError, match="Unknown tool: nonexistent"):
-            await call_tool("nonexistent", {})
+        """Test calling unknown tool returns error response."""
+        result = await call_tool("nonexistent", {})
+        
+        assert isinstance(result, list)
+        assert len(result) == 1
+        content = result[0]
+        assert isinstance(content, TextContent)
+        assert "Validation error" in content.text
     
     @pytest.mark.asyncio
     async def test_call_tool_ping_with_invalid_args(self):
-        """Test ping tool handles various argument types gracefully."""
-        # Test with None message
+        """Test ping tool handles various argument types with validation."""
+        # Test with None message (should work as it's allowed)
         result = await call_tool("ping", {"message": None})
         content = result[0]
         assert "Bio-MCP Server Response: None" in content.text
         
-        # Test with numeric message
+        # Test with numeric message (should be validated and return error)
         result = await call_tool("ping", {"message": 42})
         content = result[0]
-        assert "Bio-MCP Server Response: 42" in content.text
+        assert "Error:" in content.text
+        assert "must be a string" in content.text
         
-        # Test with extra arguments (should be ignored)
+        # Test with extra arguments (should be rejected due to additionalProperties: false)
         result = await call_tool("ping", {"message": "test", "extra": "ignored"})
         content = result[0]
-        assert "Bio-MCP Server Response: test" in content.text
+        assert "Error:" in content.text
+        assert "Unexpected fields" in content.text
 
 
 @pytest.mark.unit
@@ -152,11 +159,32 @@ class TestMCPServerLogging:
     @pytest.mark.asyncio
     async def test_ping_tool_logging(self):
         """Test that ping tool logs correctly."""
-        with patch('bio_mcp.main.logger') as mock_logger:
+        import logging
+        from io import StringIO
+        
+        # Capture log output
+        log_stream = StringIO()
+        handler = logging.StreamHandler(log_stream)
+        handler.setLevel(logging.INFO)
+        
+        # Add handler to the structured logger's underlying logger
+        from bio_mcp.main import logger
+        underlying_logger = logger.logger
+        underlying_logger.addHandler(handler)
+        underlying_logger.setLevel(logging.INFO)
+        
+        try:
             await call_tool("ping", {"message": "test"})
             
-            # Check that info log was called
-            mock_logger.info.assert_called_once_with("Ping tool called with message: test")
+            # Check log output
+            log_output = log_stream.getvalue()
+            assert "Processing ping tool request" in log_output or \
+                   "Ping tool completed successfully" in log_output, \
+                   f"Expected log messages not found in: {log_output}"
+        
+        finally:
+            # Clean up
+            underlying_logger.removeHandler(handler)
 
 
 @pytest.mark.unit  
