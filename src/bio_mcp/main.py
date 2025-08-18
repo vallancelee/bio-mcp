@@ -17,6 +17,7 @@ from .config import config
 from .error_handling import error_boundary, validate_tool_arguments
 from .logging_config import auto_configure_logging, get_logger
 from .metrics import record_tool_call
+from .security import validate_request_security
 
 # Configure structured logging
 auto_configure_logging()
