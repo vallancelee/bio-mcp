@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  bio-mcp:
+    build: .
+    container_name: bio-mcp-server
+    environment:
+      - BIO_MCP_LOG_LEVEL=DEBUG
+      - BIO_MCP_SERVER_NAME=bio-mcp-dev
+      # Phase 1A: Basic setup with environment defaults
+      - DATABASE_URL=sqlite:///data/bio-mcp.db
+      - WEAVIATE_URL=http://weaviate:8080
+      # API keys can be set via .env file
+      - PUBMED_API_KEY=${PUBMED_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - weaviate
+    stdin_open: true
+    tty: true
+    # MCP uses stdio, so we'll run interactively for testing
+
+  # Weaviate vector database for future phases
+  weaviate:
+    image: semitechnologies/weaviate:1.24.5
+    container_name: bio-mcp-weaviate
+    ports:
+      - "8080:8080"
+    environment:
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+      DEFAULT_VECTORIZER_MODULE: 'none'
+      ENABLE_MODULES: ''
+      CLUSTER_HOSTNAME: 'node1'
+    volumes:
+      - weaviate_data:/var/lib/weaviate
+
+  # PostgreSQL for future phases
+  postgres:
+    image: postgres:15-alpine
+    container_name: bio-mcp-postgres
+    environment:
+      POSTGRES_DB: biomcp
+      POSTGRES_USER: biomcp
+      POSTGRES_PASSWORD: biomcp_password
+    ports:
+      - "5433:5432"  # Use different port to avoid conflict
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  weaviate_data:
+  postgres_data:
