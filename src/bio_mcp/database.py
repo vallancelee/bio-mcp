@@ -3,23 +3,29 @@ Database layer for Bio-MCP server.
 Phase 2A: Basic Database with SQLAlchemy models for PubMed documents.
 """
 
-import asyncio
-import time
-from datetime import datetime, date, timezone
-from typing import List, Optional, Dict, Any, Union
-from dataclasses import dataclass
 import os
+import time
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import (
-    Column, String, Text, JSON, Date, DateTime, Integer, 
-    create_engine, text, inspect
+    JSON,
+    Column,
+    Date,
+    String,
+    Text,
+    text,
 )
 from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import (
-    create_async_engine, AsyncEngine, AsyncSession, async_sessionmaker
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
 )
 from sqlalchemy.orm import declarative_base
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from .error_handling import ValidationError
 from .logging_config import get_logger
@@ -50,8 +56,8 @@ class PubMedDocument(Base):
     keywords = Column(JSON, nullable=True, default=list)
     
     # Metadata
-    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(TIMESTAMP(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+    updated_at = Column(TIMESTAMP(timezone=True), nullable=False, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
     
     def __init__(self, pmid: str, title: str, **kwargs):
         """Initialize PubMed document with validation."""
@@ -72,7 +78,7 @@ class PubMedDocument(Base):
         self.keywords = kwargs.get('keywords', [])
         
         # Set timestamps
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         self.created_at = kwargs.get('created_at', now)
         self.updated_at = kwargs.get('updated_at', now)
     
@@ -84,7 +90,7 @@ class PubMedDocument(Base):
 class DatabaseConfig:
     """Configuration for database connections."""
     
-    url: Optional[str] = None
+    url: str | None = None
     pool_size: int = 5
     max_overflow: int = 10
     pool_timeout: float = 30.0
@@ -100,6 +106,13 @@ class DatabaseConfig:
             pool_timeout=float(os.getenv('BIO_MCP_DB_POOL_TIMEOUT', '30.0')),
             echo=os.getenv('BIO_MCP_DB_ECHO', '').lower() in ('true', '1', 'yes')
         )
+    
+    @classmethod
+    def from_url(cls, url: str) -> 'DatabaseConfig':
+        """Create configuration from database URL."""
+        if not url:
+            raise ValueError("Database URL is required")
+        return cls(url=url)
 
 
 class DatabaseManager:
@@ -107,8 +120,8 @@ class DatabaseManager:
     
     def __init__(self, config: DatabaseConfig):
         self.config = config
-        self.engine: Optional[AsyncEngine] = None
-        self.session_factory: Optional[async_sessionmaker] = None
+        self.engine: AsyncEngine | None = None
+        self.session_factory: async_sessionmaker | None = None
     
     async def initialize(self) -> None:
         """Initialize database engine and create tables."""
@@ -118,15 +131,8 @@ class DatabaseManager:
         logger.info("Initializing database connection", url=self.config.url.split('@')[0] + '@***')
         
         try:
-            # Create async engine with asyncpg driver
-            self.engine = create_async_engine(
-                self.config.url,
-                pool_size=self.config.pool_size,
-                max_overflow=self.config.max_overflow,
-                pool_timeout=self.config.pool_timeout,
-                echo=self.config.echo,
-                future=True
-            )
+            # Create async engine with appropriate configuration
+            self.engine = create_database_engine(self.config)
             
             # Create session factory
             self.session_factory = async_sessionmaker(
@@ -159,7 +165,7 @@ class DatabaseManager:
             raise ValidationError("Database not initialized")
         return self.session_factory()
     
-    async def create_document(self, doc_data: Dict[str, Any]) -> PubMedDocument:
+    async def create_document(self, doc_data: dict[str, Any]) -> PubMedDocument:
         """Create a new PubMed document."""
         logger.debug("Creating document", pmid=doc_data.get('pmid'))
         
@@ -182,7 +188,7 @@ class DatabaseManager:
             logger.error("Document creation failed", pmid=doc_data.get('pmid'), error=str(e))
             raise
     
-    async def get_document_by_pmid(self, pmid: str) -> Optional[PubMedDocument]:
+    async def get_document_by_pmid(self, pmid: str) -> PubMedDocument | None:
         """Retrieve a document by PMID."""
         logger.debug("Retrieving document by PMID", pmid=pmid)
         
@@ -201,7 +207,7 @@ class DatabaseManager:
             logger.error("Failed to retrieve document", pmid=pmid, error=str(e))
             raise
     
-    async def update_document(self, pmid: str, updates: Dict[str, Any]) -> Optional[PubMedDocument]:
+    async def update_document(self, pmid: str, updates: dict[str, Any]) -> PubMedDocument | None:
         """Update an existing document."""
         logger.debug("Updating document", pmid=pmid, updates=list(updates.keys()))
         
@@ -219,7 +225,7 @@ class DatabaseManager:
                         setattr(document, key, value)
                 
                 # Update timestamp
-                document.updated_at = datetime.now(timezone.utc)
+                document.updated_at = datetime.now(UTC)
                 
                 await session.commit()
                 await session.refresh(document)
@@ -253,7 +259,7 @@ class DatabaseManager:
             logger.error("Failed to delete document", pmid=pmid, error=str(e))
             raise
     
-    async def list_documents(self, limit: int = 50, offset: int = 0) -> List[PubMedDocument]:
+    async def list_documents(self, limit: int = 50, offset: int = 0) -> list[PubMedDocument]:
         """List documents with pagination."""
         logger.debug("Listing documents", limit=limit, offset=offset)
         
@@ -287,7 +293,7 @@ class DatabaseManager:
             logger.error("Failed to list documents", error=str(e))
             raise
     
-    async def search_documents_by_title(self, search_term: str) -> List[PubMedDocument]:
+    async def search_documents_by_title(self, search_term: str) -> list[PubMedDocument]:
         """Search documents by title."""
         logger.debug("Searching documents by title", search_term=search_term)
         
@@ -321,7 +327,7 @@ class DatabaseManager:
             logger.error("Failed to search documents by title", search_term=search_term, error=str(e))
             raise
     
-    async def bulk_create_documents(self, docs_data: List[Dict[str, Any]]) -> List[PubMedDocument]:
+    async def bulk_create_documents(self, docs_data: list[dict[str, Any]]) -> list[PubMedDocument]:
         """Create multiple documents in bulk."""
         logger.debug("Bulk creating documents", count=len(docs_data))
         
@@ -373,7 +379,7 @@ class DatabaseHealthCheck:
     def __init__(self, manager: DatabaseManager):
         self.manager = manager
     
-    async def check_health(self) -> Dict[str, Any]:
+    async def check_health(self) -> dict[str, Any]:
         """Perform comprehensive database health check."""
         logger.debug("Starting database health check")
         
@@ -430,14 +436,20 @@ class DatabaseHealthCheck:
 # Convenience functions
 def create_database_engine(config: DatabaseConfig) -> AsyncEngine:
     """Create an async database engine."""
-    return create_async_engine(
-        config.url,
-        pool_size=config.pool_size,
-        max_overflow=config.max_overflow,
-        pool_timeout=config.pool_timeout,
-        echo=config.echo,
-        future=True
-    )
+    engine_kwargs = {
+        "echo": config.echo,
+        "future": True
+    }
+    
+    # Only add pool parameters for non-SQLite databases
+    if config.url and not config.url.startswith('sqlite'):
+        engine_kwargs.update({
+            "pool_size": config.pool_size,
+            "max_overflow": config.max_overflow,
+            "pool_timeout": config.pool_timeout,
+        })
+    
+    return create_async_engine(config.url, **engine_kwargs)
 
 
 async def init_database(config: DatabaseConfig) -> DatabaseManager:
@@ -450,3 +462,17 @@ async def init_database(config: DatabaseConfig) -> DatabaseManager:
 async def get_database_session(manager: DatabaseManager) -> AsyncSession:
     """Get a database session from manager."""
     return manager.get_session()
+
+
+# Global database manager instance
+_database_manager: DatabaseManager | None = None
+
+
+def get_database_manager() -> DatabaseManager:
+    """Get the global database manager instance."""
+    global _database_manager
+    if _database_manager is None:
+        from .config import config
+        db_config = DatabaseConfig.from_url(config.database_url)
+        _database_manager = DatabaseManager(db_config)
+    return _database_manager

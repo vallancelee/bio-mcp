@@ -5,8 +5,27 @@ Phase 1A: Basic environment variable loading.
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
 from . import __build__, __commit__, __version__
+
+# Try to load .env file if it exists
+try:
+    from dotenv import load_dotenv
+    
+    # Look for .env file in project root
+    project_root = Path(__file__).parent.parent.parent
+    env_file = project_root / ".env"
+    
+    if env_file.exists():
+        load_dotenv(env_file)
+        print(f"✓ Loaded configuration from {env_file}")
+    else:
+        print(f"i No .env file found at {env_file} (using environment variables)")
+        
+except ImportError:
+    print("i python-dotenv not available (using environment variables only)")
+    pass
 
 
 @dataclass

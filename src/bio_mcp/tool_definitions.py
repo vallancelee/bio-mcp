@@ -158,7 +158,7 @@ def get_all_tool_definitions() -> list[Tool]:
     """Get all available tool definitions."""
     tools = [get_ping_tool_definition()]
     tools.extend(get_pubmed_tool_definitions())
+    tools.extend(get_rag_tool_definitions())
     # Future tools - uncomment when implemented:
-    # tools.extend(get_rag_tool_definitions())
     # tools.extend(get_corpus_tool_definitions())
     return tools

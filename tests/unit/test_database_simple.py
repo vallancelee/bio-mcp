@@ -3,15 +3,11 @@ Simple database tests to verify TDD implementation works.
 Testing basic functionality before full testcontainer integration.
 """
 
-import pytest
-from datetime import datetime, date
-from unittest.mock import AsyncMock, MagicMock
+from datetime import date, datetime
 
-from bio_mcp.database import (
-    PubMedDocument,
-    DatabaseConfig,
-    DatabaseManager
-)
+import pytest
+
+from bio_mcp.database import DatabaseConfig, DatabaseManager, PubMedDocument
 from bio_mcp.error_handling import ValidationError
 
 

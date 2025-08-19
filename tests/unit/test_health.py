@@ -2,21 +2,21 @@
 Unit tests for health check functionality.
 """
 
-import asyncio
 import json
-import pytest
 import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-from bio_mcp.health import (
-    HealthChecker,
-    HealthStatus,
-    HealthCheck,
-    HealthReport,
-    health_checker,
-    health_check_main
-)
+import pytest
+
 from bio_mcp.config import config
+from bio_mcp.health import (
+    HealthCheck,
+    HealthChecker,
+    HealthReport,
+    HealthStatus,
+    health_check_main,
+    health_checker,
+)
 
 
 class TestHealthStatus:

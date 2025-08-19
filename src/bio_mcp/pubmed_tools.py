@@ -14,6 +14,7 @@ from mcp.types import TextContent
 from .database import DatabaseConfig, DatabaseManager
 from .logging_config import get_logger
 from .pubmed_client import PubMedClient, PubMedConfig
+from .weaviate_client import get_weaviate_client
 
 logger = get_logger(__name__)
 
@@ -141,6 +142,8 @@ class PubMedToolsManager:
     def __init__(self) -> None:
         self.pubmed_client: PubMedClient | None = None
         self.database_manager: DatabaseManager | None = None
+        self.embedding_pipeline = None
+        self.weaviate_client = None
         self.initialized = False
 
     async def initialize(self) -> None:
@@ -158,6 +161,10 @@ class PubMedToolsManager:
         db_config = DatabaseConfig.from_env()
         self.database_manager = DatabaseManager(db_config)
         await self.database_manager.initialize()
+
+        # Initialize Weaviate client (with built-in embeddings)
+        self.weaviate_client = get_weaviate_client()
+        await self.weaviate_client.initialize()
 
         self.initialized = True
         logger.info("PubMed tools manager initialized successfully")
@@ -350,12 +357,37 @@ class PubMedToolsManager:
                 try:
                     documents = await self.pubmed_client.fetch_documents(new_pmids)
 
-                    # Store documents in database
+                    # Store documents in database and vector store
                     for doc in documents:
                         try:
+                            # Store in database
                             db_data = doc.to_database_format()
                             await self.database_manager.create_document(db_data)
+                            
+                            # Store in Weaviate (embeddings generated automatically)
+                            try:
+                                logger.debug("Storing document in Weaviate", pmid=doc.pmid)
+                                uuid = await self.weaviate_client.store_document(
+                                    pmid=doc.pmid,
+                                    title=doc.title,
+                                    abstract=doc.abstract or "",
+                                    authors=doc.authors or [],
+                                    journal=doc.journal,
+                                    publication_date=doc.publication_date.isoformat() if doc.publication_date else None,
+                                    doi=doc.doi,
+                                    keywords=doc.keywords or []
+                                )
+                                logger.debug("Document stored in Weaviate successfully", pmid=doc.pmid, uuid=uuid)
+                            except Exception as weaviate_error:
+                                logger.error("Failed to store document in Weaviate", pmid=doc.pmid, error=str(weaviate_error))
+                                # Print full traceback for debugging
+                                import traceback
+                                traceback.print_exc()
+                                # Re-raise to see the actual error
+                                raise
+                            
                             synced_pmids.append(doc.pmid)
+                            logger.debug("Document successfully synced to database and vector store", pmid=doc.pmid)
 
                         except Exception as e:
                             logger.error(
@@ -401,6 +433,7 @@ class PubMedToolsManager:
                 execution_time_ms=execution_time,
             )
             raise
+
 
 
 # Global manager instance

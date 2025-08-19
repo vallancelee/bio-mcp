@@ -3,15 +3,12 @@ Simple integration test for database with testcontainers.
 Focuses on verifying the TDD implementation works with real PostgreSQL.
 """
 
-import pytest
-import asyncio
 from datetime import date
+
+import pytest
 from testcontainers.postgres import PostgresContainer
 
-from bio_mcp.database import (
-    DatabaseConfig,
-    DatabaseManager
-)
+from bio_mcp.database import DatabaseConfig, DatabaseManager
 
 
 class TestDatabaseBasicIntegration:

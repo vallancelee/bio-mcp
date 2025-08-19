@@ -1,10 +1,11 @@
 """Integration tests for Docker setup."""
 
-import pytest
+import json
 import subprocess
 import time
-import json
 from pathlib import Path
+
+import pytest
 
 
 @pytest.mark.integration

@@ -3,12 +3,12 @@ Security validation and protection for Bio-MCP server.
 Phase 1C: Production-ready security enhancements.
 """
 
-import re
 import html
 import json
-from typing import Any, Dict, List, Optional, Union
+import re
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 from .error_handling import ValidationError
 from .logging_config import get_logger
@@ -47,7 +47,7 @@ class SecurityConfig:
 class SecurityValidator:
     """Enhanced security validation for MCP inputs."""
     
-    def __init__(self, config: Optional[SecurityConfig] = None):
+    def __init__(self, config: SecurityConfig | None = None):
         self.config = config or SecurityConfig()
         self._setup_patterns()
     
@@ -199,7 +199,7 @@ class SecurityValidator:
         elif isinstance(obj, str):
             return self.validate_string_content(obj, path)
         
-        elif isinstance(obj, (int, float, bool)) or obj is None:
+        elif isinstance(obj, int | float | bool) or obj is None:
             return obj
         
         else:
@@ -209,7 +209,7 @@ class SecurityValidator:
                 {"path": path, "type": str(type(obj))}
             )
     
-    def validate_tool_request(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_tool_request(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Comprehensive validation of tool request."""
         logger.debug("Starting security validation", tool=tool_name, config=self.config.security_level)
         
@@ -235,7 +235,7 @@ _default_config = SecurityConfig()
 security_validator = SecurityValidator(_default_config)
 
 
-def validate_request_security(tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+def validate_request_security(tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
     """Convenience function for security validation."""
     return security_validator.validate_tool_request(tool_name, arguments)
 

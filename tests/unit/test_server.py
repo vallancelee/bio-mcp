@@ -1,10 +1,11 @@
 """Unit tests for MCP server functionality."""
 
-import pytest
-from unittest.mock import patch, AsyncMock
-from mcp.types import Tool, TextContent
+from unittest.mock import patch
 
-from bio_mcp.main import list_tools, call_tool
+import pytest
+from mcp.types import TextContent, Tool
+
+from bio_mcp.main import call_tool, list_tools
 
 
 class TestMCPServer:
@@ -193,8 +194,8 @@ class TestMCPServerConfig:
     
     def test_server_imports_config(self):
         """Test that server properly imports and uses config."""
-        from bio_mcp.main import server
         from bio_mcp.config import config
+        from bio_mcp.main import server
         
         # Server should be created with config name
         assert server.name == config.server_name
@@ -204,7 +205,6 @@ class TestMCPServerConfig:
         import logging
         
         # Re-import to trigger logging configuration
-        from bio_mcp import main
         
         # Check that bio_mcp logger level is configured
         bio_mcp_logger = logging.getLogger("bio_mcp.main")

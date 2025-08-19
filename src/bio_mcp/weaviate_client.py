@@ -1,0 +1,228 @@
+"""
+Weaviate client for Bio-MCP server.
+Vector storage and semantic search with local transformers.
+"""
+
+from typing import Any
+
+import weaviate
+from weaviate.classes.config import Configure, DataType, Property
+from weaviate.classes.query import MetadataQuery
+
+from .config import config
+from .logging_config import get_logger
+
+logger = get_logger(__name__)
+
+
+class WeaviateClient:
+    """Client for Weaviate vector database operations."""
+    
+    def __init__(self, url: str | None = None):
+        self.url = url or config.weaviate_url
+        self.client: weaviate.WeaviateClient | None = None
+        self.collection_name = "PubMedDocument"
+        self._initialized = False
+
+    async def initialize(self) -> None:
+        """Initialize Weaviate client and ensure schema exists."""
+        if self._initialized:
+            return
+        
+        logger.info("Initializing Weaviate client", url=self.url)
+        
+        try:
+            logger.debug("Connecting to Weaviate", url=self.url)
+            self.client = weaviate.connect_to_local()
+            
+            logger.debug("Testing Weaviate connection")
+            meta = self.client.get_meta()
+            logger.debug("Weaviate meta", meta=meta)
+            
+            await self._ensure_collection_exists()
+            
+            self._initialized = True
+            logger.info("Weaviate client initialized successfully")
+            
+        except Exception as e:
+            logger.error("Failed to initialize Weaviate client", error=str(e))
+            raise
+
+    async def close(self) -> None:
+        """Close Weaviate client connection."""
+        if self.client:
+            self.client.close()
+            self.client = None
+            self._initialized = False
+            logger.info("Weaviate client closed")
+
+    async def _ensure_collection_exists(self) -> None:
+        """Ensure the PubMedDocument collection exists with proper schema."""
+        if not self.client:
+            raise RuntimeError("Weaviate client not initialized")
+        
+        collection_name = self.collection_name
+        
+        # Check if collection exists
+        if self.client.collections.exists(collection_name):
+            logger.debug("Weaviate collection already exists", collection=collection_name)
+            return
+        
+        # Create collection with schema
+        logger.info("Creating Weaviate collection", collection=collection_name)
+        
+        self.client.collections.create(
+            collection_name,
+            properties=[
+                Property(name="pmid", data_type=DataType.TEXT),
+                Property(name="title", data_type=DataType.TEXT),
+                Property(name="abstract", data_type=DataType.TEXT),
+                Property(name="authors", data_type=DataType.TEXT_ARRAY),
+                Property(name="journal", data_type=DataType.TEXT),
+                Property(name="publication_date", data_type=DataType.DATE),
+                Property(name="doi", data_type=DataType.TEXT),
+                Property(name="keywords", data_type=DataType.TEXT_ARRAY),
+                Property(name="content", data_type=DataType.TEXT),  # Combined searchable content
+            ],
+            vectorizer_config=Configure.Vectorizer.text2vec_transformers(),  # Use local transformers
+            description="PubMed documents for biomedical research"
+        )
+        
+        logger.info("Weaviate collection created successfully", collection=collection_name)
+
+    async def store_document(self, pmid: str, title: str, abstract: str | None = None, 
+                           authors: list[str] | None = None, journal: str | None = None,
+                           publication_date: str | None = None, doi: str | None = None, 
+                           keywords: list[str] | None = None) -> str:
+        """Store a document with its embedding in Weaviate."""
+        if not self._initialized:
+            await self.initialize()
+        
+        collection = self.client.collections.get(self.collection_name)
+        
+        # Create combined searchable content
+        content_parts = [title or ""]
+        if abstract:
+            content_parts.append(abstract)
+        if authors:
+            content_parts.append(" ".join(authors))
+        if journal:
+            content_parts.append(journal)
+        content = " ".join(content_parts).strip()
+        
+        formatted_date = None
+        if publication_date:
+            if isinstance(publication_date, str) and 'T' not in publication_date:
+                formatted_date = f"{publication_date}T00:00:00Z"
+            else:
+                formatted_date = publication_date
+        
+        doc_data = {
+            "pmid": pmid,
+            "title": title or "",
+            "abstract": abstract or "",
+            "authors": authors or [],
+            "journal": journal or "",
+            "publication_date": formatted_date,
+            "doi": doi or "",
+            "keywords": keywords or [],
+            "content": content
+        }
+        
+        # Store document - Weaviate will automatically generate embeddings
+        uuid = collection.data.insert(properties=doc_data)
+        
+        logger.debug("Document stored in Weaviate", pmid=pmid, uuid=str(uuid))
+        return str(uuid)
+
+    async def search_documents(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
+        """Search documents by text or vector similarity."""
+        if not self._initialized:
+            await self.initialize()
+        
+        collection = self.client.collections.get(self.collection_name)
+        
+        # Use near_text for semantic search with automatic embeddings
+        logger.debug("Performing semantic search", query=query[:50], limit=limit)
+        response = collection.query.near_text(
+            query=query,
+            limit=limit,
+            return_metadata=MetadataQuery(score=True, distance=True)
+        )
+        
+        # Convert response to list of dictionaries
+        results = []
+        for obj in response.objects:
+            result = {
+                "uuid": str(obj.uuid),
+                "score": obj.metadata.score if hasattr(obj.metadata, 'score') else None,
+                "distance": obj.metadata.distance if hasattr(obj.metadata, 'distance') else None,
+                **obj.properties
+            }
+            results.append(result)
+        
+        logger.info("Search completed", query=query[:50], results_count=len(results))
+        return results
+
+    async def get_document_by_pmid(self, pmid: str) -> dict[str, Any] | None:
+        """Get a document by its PMID."""
+        if not self._initialized:
+            await self.initialize()
+        
+        collection = self.client.collections.get(self.collection_name)
+        
+        # Use Weaviate v4 query syntax
+        from weaviate.classes.query import Filter
+        
+        response = collection.query.fetch_objects(
+            filters=Filter.by_property("pmid").equal(pmid),
+            limit=1
+        )
+        
+        if response.objects:
+            obj = response.objects[0]
+            return {
+                "uuid": str(obj.uuid),
+                **obj.properties
+            }
+        
+        return None
+
+    async def document_exists(self, pmid: str) -> bool:
+        """Check if a document exists by PMID."""
+        doc = await self.get_document_by_pmid(pmid)
+        return doc is not None
+
+    async def health_check(self) -> dict[str, Any]:
+        """Perform health check on Weaviate connection."""
+        try:
+            if not self.client:
+                return {"status": "error", "message": "Client not initialized"}
+            
+            is_ready = self.client.is_ready()
+            collection_exists = self.client.collections.exists(self.collection_name)
+            
+            return {
+                "status": "healthy" if is_ready and collection_exists else "degraded",
+                "ready": is_ready,
+                "collection_exists": collection_exists,
+                "url": self.url
+            }
+        except Exception as e:
+            return {
+                "status": "error", 
+                "message": str(e),
+                "url": self.url
+            }
+
+
+# Global client instance
+_weaviate_client: WeaviateClient | None = None
+
+
+def get_weaviate_client() -> WeaviateClient:
+    """Get the global Weaviate client instance."""
+    global _weaviate_client
+    if _weaviate_client is None:
+        _weaviate_client = WeaviateClient()
+    return _weaviate_client

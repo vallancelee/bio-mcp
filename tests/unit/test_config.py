@@ -1,8 +1,9 @@
 """Unit tests for config module."""
 
 import os
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 from bio_mcp.config import Config
 

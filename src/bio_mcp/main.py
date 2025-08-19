@@ -22,6 +22,7 @@ from .pubmed_tools import (
     pubmed_search_tool,
     pubmed_sync_tool,
 )
+from .rag_tools import rag_get_tool, rag_search_tool
 from .tool_definitions import get_all_tool_definitions
 
 # Configure structured logging
@@ -98,6 +99,12 @@ Server Info:
 
         elif name == "pubmed.sync":
             return await pubmed_sync_tool(name, arguments)
+
+        elif name == "rag.search":
+            return await rag_search_tool(name, arguments)
+
+        elif name == "rag.get":
+            return await rag_get_tool(name, arguments)
 
         else:
             tool_logger.error("Unknown tool requested", tool=name)

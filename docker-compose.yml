@@ -26,14 +26,25 @@ services:
     image: semitechnologies/weaviate:1.24.5
     container_name: bio-mcp-weaviate
     ports:
-      - "8080:8080"
+      - "8080:8080"   # HTTP/REST API
+      - "50051:50051" # gRPC API
     environment:
       QUERY_DEFAULTS_LIMIT: 25
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
       PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
-      DEFAULT_VECTORIZER_MODULE: 'none'
-      ENABLE_MODULES: ''
+      DEFAULT_VECTORIZER_MODULE: 'text2vec-transformers'
+      ENABLE_MODULES: 'text2vec-transformers'
+      TRANSFORMERS_INFERENCE_API: 'http://t2v-transformers:8080'
       CLUSTER_HOSTNAME: 'node1'
+    depends_on:
+      - t2v-transformers
+
+  # Transformer model for embeddings (we'll use a working model first)
+  t2v-transformers:
+    image: semitechnologies/transformers-inference:sentence-transformers-all-MiniLM-L6-v2
+    container_name: bio-mcp-transformers
+    environment:
+      ENABLE_CUDA: '0'  # Set to '1' if you have GPU support
     volumes:
       - weaviate_data:/var/lib/weaviate
 

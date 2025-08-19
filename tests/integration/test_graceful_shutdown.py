@@ -2,14 +2,14 @@
 Integration tests for graceful shutdown functionality.
 """
 
-import asyncio
 import os
 import signal
 import subprocess
 import sys
 import time
-import pytest
 from pathlib import Path
+
+import pytest
 
 
 class TestGracefulShutdown:

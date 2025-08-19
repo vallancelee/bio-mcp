@@ -2,17 +2,17 @@
 Unit tests for security validation functionality.
 """
 
-import pytest
-from unittest.mock import patch
 
+import pytest
+
+from bio_mcp.error_handling import ValidationError
 from bio_mcp.security import (
-    SecurityValidator,
     SecurityConfig,
     SecurityLevel,
+    SecurityValidator,
+    configure_security,
     validate_request_security,
-    configure_security
 )
-from bio_mcp.error_handling import ValidationError
 
 
 class TestSecurityConfig:

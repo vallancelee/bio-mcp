@@ -1,9 +1,10 @@
 """Pytest configuration and fixtures for Bio-MCP tests."""
 
 import os
-import pytest
-from unittest.mock import patch
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
 
 from bio_mcp.config import Config
 

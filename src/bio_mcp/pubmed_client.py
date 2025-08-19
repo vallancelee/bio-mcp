@@ -11,6 +11,7 @@ from datetime import date, datetime
 from typing import Any
 
 import httpx
+import xmltodict
 
 from .logging_config import get_logger
 
@@ -164,6 +165,7 @@ class PubMedClient:
         self.config = config
         self.session: httpx.AsyncClient | None = None
         self._rate_limiter = RateLimiter(config.rate_limit_per_second)
+        self.last_request_time = 0.0
 
         # Initialize session
         self._init_session()
@@ -180,6 +182,10 @@ class PubMedClient:
         if self.session:
             await self.session.aclose()
             self.session = None
+
+    async def _enforce_rate_limit(self) -> None:
+        """Enforce rate limiting between API requests."""
+        await self._rate_limiter.wait_if_needed()
 
     async def _make_request(self, url: str, params: dict[str, str]) -> dict[str, Any]:
         """Make HTTP request with rate limiting and error handling."""
@@ -206,6 +212,44 @@ class PubMedClient:
             logger.debug("PubMed API response received", status=response.status_code)
 
             return data
+
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429:
+                logger.warning("PubMed API rate limit exceeded")
+                raise RateLimitError("Rate limit exceeded")
+            else:
+                logger.error(
+                    "PubMed API HTTP error", status=e.response.status_code, error=str(e)
+                )
+                raise PubMedAPIError(f"HTTP {e.response.status_code}: {e}")
+        except Exception as e:
+            logger.error("PubMed API request failed", error=str(e))
+            raise PubMedAPIError(f"Request failed: {e}")
+
+    async def _make_xml_request(self, url: str, params: dict[str, str]) -> dict[str, Any]:
+        """Make request that returns XML, convert to dict for parsing."""
+        try:
+            await self._enforce_rate_limit()
+
+            if self.config.api_key:
+                params = {**params, "api_key": self.config.api_key}
+
+            logger.debug("Making PubMed XML API request", url=url, params=params)
+
+            response = await self.session.get(url, params=params)
+            response.raise_for_status()
+
+            # Convert XML response to dict for parsing
+            xml_text = response.text
+            try:
+                # Parse XML to dict
+                data = xmltodict.parse(xml_text)
+                logger.debug("PubMed XML API response received and parsed", status=response.status_code)
+                return data
+            except Exception as xml_error:
+                logger.error("Failed to parse XML response", error=str(xml_error), xml_snippet=xml_text[:200])
+                # Return empty dict to fail gracefully
+                return {}
 
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 429:
@@ -282,13 +326,12 @@ class PubMedClient:
             "db": "pubmed",
             "id": ",".join(pmids),
             "retmode": "xml",
-            "format": "json",  # This will be overridden but needed for consistency
         }
 
         logger.info("Fetching PubMed documents", pmid_count=len(pmids))
 
         try:
-            response_data = await self._make_request(url, params)
+            response_data = await self._make_xml_request(url, params)
             documents = parse_efetch_response(response_data)
 
             logger.info(
@@ -371,9 +414,34 @@ def _parse_single_article(article_data: dict[str, Any]) -> PubMedDocument | None
         # Extract abstract
         abstract_data = article.get("Abstract", {})
         abstract_text = abstract_data.get("AbstractText", "")
-        if isinstance(abstract_text, list):
+        
+        def extract_text_from_xml_dict(obj):
+            """Recursively extract text content from XML dictionary structure."""
+            if isinstance(obj, dict):
+                # Handle XML dictionary with #text content
+                if "#text" in obj:
+                    return str(obj["#text"])
+                # Handle simple text content
+                elif len(obj) == 1 and isinstance(next(iter(obj.values())), str):
+                    return str(next(iter(obj.values())))
+                # Recursively extract from nested structures
+                else:
+                    parts = []
+                    for value in obj.values():
+                        if isinstance(value, str | dict | list):
+                            parts.append(extract_text_from_xml_dict(value))
+                    return " ".join(filter(None, parts))
+            elif isinstance(obj, list):
+                return " ".join(extract_text_from_xml_dict(item) for item in obj)
+            else:
+                return str(obj) if obj else ""
+        
+        if isinstance(abstract_text, dict | list):
+            abstract_text = extract_text_from_xml_dict(abstract_text)
+        elif isinstance(abstract_text, list):
             abstract_text = " ".join(str(part) for part in abstract_text)
-        abstract = abstract_text if abstract_text else None
+        
+        abstract = abstract_text.strip() if abstract_text else None
 
         # Extract authors
         authors = []
