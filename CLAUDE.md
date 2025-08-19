@@ -68,3 +68,4 @@ All tool contracts are defined in `contracts.md` with JSON schemas for:
 - Error handling patterns
 - Versioning policy (semver)
 - Internal adapter boundaries
+- always lint before committing

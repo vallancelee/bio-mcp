@@ -135,33 +135,70 @@ class WeaviateClient:
         logger.debug("Document stored in Weaviate", pmid=pmid, uuid=str(uuid))
         return str(uuid)
 
-    async def search_documents(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
-        """Search documents by text or vector similarity."""
+    async def search_documents(self, query: str, limit: int = 5, search_mode: str = "semantic", 
+                             alpha: float = 0.5) -> list[dict[str, Any]]:
+        """Search documents using different search modes.
+        
+        Args:
+            query: Search query text
+            limit: Maximum number of results to return
+            search_mode: 'semantic', 'bm25', or 'hybrid'
+            alpha: Weighting for hybrid search (0.0=pure BM25, 1.0=pure vector)
+            
+        Returns:
+            List of search results with scores and metadata
+        """
         if not self._initialized:
             await self.initialize()
         
         collection = self.client.collections.get(self.collection_name)
         
-        # Use near_text for semantic search with automatic embeddings
-        logger.debug("Performing semantic search", query=query[:50], limit=limit)
-        response = collection.query.near_text(
-            query=query,
-            limit=limit,
-            return_metadata=MetadataQuery(score=True, distance=True)
-        )
+        logger.debug("Performing search", query=query[:50], limit=limit, mode=search_mode, alpha=alpha)
+        
+        if search_mode == "bm25":
+            # Pure BM25 keyword search
+            response = collection.query.bm25(
+                query=query,
+                limit=limit,
+                return_metadata=MetadataQuery(score=True)
+            )
+        elif search_mode == "hybrid":
+            # Hybrid search combining BM25 and vector similarity
+            response = collection.query.hybrid(
+                query=query,
+                alpha=alpha,  # 0.0=pure BM25, 1.0=pure vector
+                limit=limit,
+                return_metadata=MetadataQuery(score=True, explain_score=True)
+            )
+        else:  # semantic (default)
+            # Pure semantic search with vectors
+            response = collection.query.near_text(
+                query=query,
+                limit=limit,
+                return_metadata=MetadataQuery(score=True, distance=True)
+            )
         
         # Convert response to list of dictionaries
         results = []
         for obj in response.objects:
+            # Use scores and distances as returned by Weaviate
+            score = getattr(obj.metadata, 'score', None)
+            distance = getattr(obj.metadata, 'distance', None)
+            
             result = {
                 "uuid": str(obj.uuid),
-                "score": obj.metadata.score if hasattr(obj.metadata, 'score') else None,
-                "distance": obj.metadata.distance if hasattr(obj.metadata, 'distance') else None,
+                "score": score,
+                "distance": distance,
                 **obj.properties
             }
+            
+            # Add explain_score for hybrid searches if available
+            if hasattr(obj.metadata, 'explain_score'):
+                result["explain_score"] = obj.metadata.explain_score
+                
             results.append(result)
         
-        logger.info("Search completed", query=query[:50], results_count=len(results))
+        logger.info("Search completed", query=query[:50], mode=search_mode, results_count=len(results))
         return results
 
     async def get_document_by_pmid(self, pmid: str) -> dict[str, Any] | None:

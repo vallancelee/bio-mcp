@@ -98,17 +98,28 @@ def get_rag_tool_definitions() -> list[Tool]:
     return [
         Tool(
             name="rag.search",
-            description="Search the RAG corpus for relevant documents",
+            description="Hybrid search combining BM25 keyword search with vector similarity for biomedical documents",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Search query"},
+                    "query": {"type": "string", "description": "Search query for biomedical literature"},
                     "top_k": {
                         "type": "integer",
                         "description": "Number of results to return",
-                        "default": 5,
+                        "default": 10,
                         "minimum": 1,
                         "maximum": 50,
+                    },
+                    "search_mode": {
+                        "type": "string", 
+                        "enum": ["hybrid", "semantic", "bm25"],
+                        "description": "Search strategy: 'hybrid' (BM25+vector), 'semantic' (vector only), 'bm25' (keyword only)",
+                        "default": "hybrid"
+                    },
+                    "rerank_by_quality": {
+                        "type": "boolean",
+                        "description": "Boost results by PubMed quality metrics and journal impact",
+                        "default": True
                     },
                 },
                 "required": ["query"],

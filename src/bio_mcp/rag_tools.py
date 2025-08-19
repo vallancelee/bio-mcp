@@ -49,34 +49,43 @@ class RAGToolsManager:
         self, 
         query: str, 
         top_k: int = 5,
-        use_semantic: bool = True,
-        quality_boost: bool = True
+        search_mode: str = "hybrid",
+        filters: dict | None = None,
+        rerank_by_quality: bool = True,
+        alpha: float = 0.5
     ) -> RAGSearchResult:
         """
-        Search documents using semantic or text-based search.
+        Search documents using hybrid, semantic, or BM25 search.
         
         Args:
             query: Search query
             top_k: Number of results to return
-            use_semantic: Whether to use semantic search (embeddings)
-            quality_boost: Whether to apply quality score boosting
+            search_mode: 'semantic', 'bm25', or 'hybrid'
+            filters: Metadata filters (future enhancement)
+            rerank_by_quality: Whether to apply quality score boosting
+            alpha: Hybrid search weighting (0.0=pure BM25, 1.0=pure vector)
             
         Returns:
             RAGSearchResult with found documents
         """
-        logger.info("RAG search", query=query[:50], top_k=top_k, semantic=use_semantic)
+        logger.info("RAG hybrid search", query=query[:50], top_k=top_k, mode=search_mode, alpha=alpha)
         
         try:
             await self.weaviate.initialize()
             
-            search_type = "semantic"
+            # Perform search with specified mode
             results = await self.weaviate.search_documents(
                 query=query,
-                limit=top_k
+                limit=top_k,
+                search_mode=search_mode,
+                alpha=alpha
             )
             
-            if quality_boost:
+            # Apply quality-based reranking if enabled
+            if rerank_by_quality:
                 results = self._apply_quality_boost(results)
+            
+            # Format results for consistent output
             formatted_results = []
             for result in results:
                 formatted_result = {
@@ -88,41 +97,82 @@ class RAGToolsManager:
                     "publication_date": result.get("publication_date", ""),
                     "score": result.get("score", 0.0),
                     "distance": result.get("distance"),
-                    "content": result.get("content", "")[:500] + "..." if len(result.get("content", "")) > 500 else result.get("content", "")
+                    "content": result.get("content", "")[:500] + "..." if len(result.get("content", "")) > 500 else result.get("content", ""),
+                    "search_mode": search_mode
                 }
+                
+                # Include hybrid search explanation if available
+                if "explain_score" in result:
+                    formatted_result["explain_score"] = result["explain_score"]
+                    
                 formatted_results.append(formatted_result)
             
             return RAGSearchResult(
                 query=query,
                 total_results=len(formatted_results),
                 documents=formatted_results,
-                search_type=search_type
+                search_type=search_mode
             )
             
         except Exception as e:
-            logger.error("RAG search failed", query=query, error=str(e))
+            logger.error("RAG search failed", query=query, mode=search_mode, error=str(e))
             return RAGSearchResult(
                 query=query,
                 total_results=0,
                 documents=[],
-                search_type=search_type if 'search_type' in locals() else "unknown"
+                search_type=search_mode  # Always use the requested search mode
             )
     
     def _apply_quality_boost(self, results: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Apply quality score boosting to search results."""
+        """Apply quality score boosting to search results based on PubMed metrics."""
         for result in results:
+            # Extract quality indicators from PubMed data
             quality_total = result.get("quality_total", 0) or 0
             original_score = result.get("score", 0.0)
             
-            if original_score and quality_total:
-                boosted_score = original_score * (1 + quality_total / 10)
+            # Quality boost based on journal impact, publication recency, etc.
+            quality_factors = []
+            
+            # Boost for high-impact journals (simplified heuristic)
+            journal = result.get("journal", "").lower()
+            if any(term in journal for term in ["nature", "science", "cell", "lancet", "nejm"]):
+                quality_factors.append(0.1)  # 10% boost for top journals
+            
+            # Boost for recent publications (last 2 years)
+            pub_date = result.get("publication_date")
+            if pub_date:
+                from datetime import UTC, datetime
+                current_year = datetime.now(UTC).year
+                recent_threshold = current_year - 1  # Papers from last 2 years
+                
+                # Handle both string and datetime objects
+                if hasattr(pub_date, 'year'):
+                    # datetime object
+                    if pub_date.year >= recent_threshold:
+                        quality_factors.append(0.05)  # 5% boost for recent papers
+                elif isinstance(pub_date, str):
+                    # string format - extract year if possible
+                    try:
+                        # Try to extract year from string (handles YYYY-MM-DD, YYYY, etc.)
+                        year_str = pub_date[:4]
+                        if year_str.isdigit() and int(year_str) >= recent_threshold:
+                            quality_factors.append(0.05)  # 5% boost for recent papers
+                    except (ValueError, IndexError):
+                        pass  # Skip if can't parse year
+            
+            # Combine quality factors
+            total_quality_boost = sum(quality_factors) + (quality_total / 20 if quality_total else 0)
+            
+            if original_score and original_score > 0:
+                boosted_score = original_score * (1 + total_quality_boost)
                 result["boosted_score"] = boosted_score
-                result["quality_boost"] = quality_total / 10
+                result["quality_boost"] = total_quality_boost
             else:
                 result["boosted_score"] = original_score
                 result["quality_boost"] = 0
         
-        results.sort(key=lambda x: x.get("boosted_score", 0), reverse=True)
+        # Sort by boosted score (highest first)
+        results.sort(key=lambda x: x.get("boosted_score", x.get("score", 0)), reverse=True)
         return results
     
     async def get_document(self, doc_id: str, include_chunks: bool = False) -> RAGGetResult:
@@ -188,17 +238,26 @@ def get_rag_manager() -> RAGToolsManager:
 
 async def rag_search_tool(name: str, arguments: dict[str, Any]) -> Sequence[TextContent]:
     """
-    MCP tool: Search the RAG corpus for relevant documents.
+    MCP tool: Search the RAG corpus using hybrid, semantic, or BM25 search.
     
     Args:
         query: Search query string
-        top_k: Number of results to return (default: 5, max: 50)
+        top_k: Number of results to return (default: 10, max: 50)
+        search_mode: 'hybrid' (default), 'semantic', or 'bm25'
+        rerank_by_quality: Whether to boost results by quality (default: true)
         
     Returns:
-        Formatted search results
+        Formatted search results with hybrid scoring
     """
     query = arguments.get("query", "").strip()
-    top_k = min(max(arguments.get("top_k", 5), 1), 50)
+    top_k = min(max(arguments.get("top_k", 10), 1), 50)
+    search_mode = arguments.get("search_mode", "hybrid").lower()
+    rerank_by_quality = arguments.get("rerank_by_quality", True)
+    
+    # Validate search mode
+    valid_modes = ["hybrid", "semantic", "bm25"]
+    if search_mode not in valid_modes:
+        search_mode = "hybrid"  # Default fallback
     
     if not query:
         return [TextContent(
@@ -206,41 +265,65 @@ async def rag_search_tool(name: str, arguments: dict[str, Any]) -> Sequence[Text
             text="❌ Error: Query parameter is required"
         )]
     
-    logger.info("RAG search tool called", query=query, top_k=top_k)
+    logger.info("RAG hybrid search tool called", query=query, top_k=top_k, mode=search_mode)
     
     try:
         manager = get_rag_manager()
-        result = await manager.search_documents(query, top_k)
+        result = await manager.search_documents(
+            query=query, 
+            top_k=top_k,
+            search_mode=search_mode,
+            rerank_by_quality=rerank_by_quality
+        )
         
         if result.total_results == 0:
-            response_text = f"""🔍 **RAG Search Results**
+            response_text = f"""🔍 **Hybrid RAG Search Results**
 
 **Query:** {query}
-**Search Type:** {result.search_type}
+**Search Mode:** {result.search_type.title()}
 **Results:** No documents found
 
-Try different keywords or check if documents have been synced to the corpus."""
+Try different keywords, search modes ('hybrid', 'semantic', 'bm25'), or check if documents have been synced to the corpus."""
         else:
-            # Format results nicely
+            # Format results with enhanced information
             results_text = []
             for i, doc in enumerate(result.documents, 1):
+                # Enhanced score display
                 score_text = f"Score: {doc['score']:.3f}"
-                if 'boosted_score' in doc and doc['boosted_score'] != doc['score']:
-                    score_text += f" (boosted: {doc['boosted_score']:.3f})"
+                if 'boosted_score' in doc and abs(doc['boosted_score'] - doc['score']) > 0.001:
+                    boost_pct = ((doc['boosted_score'] / doc['score']) - 1) * 100 if doc['score'] > 0 else 0
+                    score_text += f" → {doc['boosted_score']:.3f} (+{boost_pct:.1f}%)"
+                
+                # Add search mode context
+                mode_indicator = {
+                    "hybrid": "🔀",
+                    "semantic": "🧠", 
+                    "bm25": "🔎"
+                }.get(result.search_type, "📄")
                 
                 doc_text = f"""**{i}. {doc['title']}**
-PMID: {doc['pmid']} | {score_text}
-Journal: {doc['journal']} | Date: {doc['publication_date']}
+{mode_indicator} PMID: {doc['pmid']} | {score_text}
+📰 Journal: {doc['journal']} | 📅 Date: {doc['publication_date']}
 
 {doc['content']}
 
 ---"""
                 results_text.append(doc_text)
             
-            response_text = f"""🔍 **RAG Search Results**
+            # Add search statistics
+            mode_description = {
+                "hybrid": "Hybrid (BM25 + Vector)",
+                "semantic": "Semantic (Vector)",
+                "bm25": "Keyword (BM25)"
+            }.get(result.search_type, result.search_type.title())
+            
+            quality_note = "Quality boosting: ON" if rerank_by_quality else "Quality boosting: OFF"
+            
+            response_text = f"""🔍 **Hybrid RAG Search Results**
 
 **Query:** {query}
-**Search Type:** {result.search_type.title()} Search
+**Search Mode:** {mode_description}
+**{quality_note}**
 **Results:** {result.total_results} documents found
 
 {chr(10).join(results_text)}"""
@@ -248,10 +331,10 @@ Journal: {doc['journal']} | Date: {doc['publication_date']}
         return [TextContent(type="text", text=response_text)]
         
     except Exception as e:
-        logger.error("RAG search tool failed", query=query, error=str(e))
+        logger.error("RAG hybrid search tool failed", query=query, mode=search_mode, error=str(e))
         return [TextContent(
             type="text",
-            text=f"❌ Error during RAG search: {e!s}"
+            text=f"❌ Error during hybrid RAG search: {e!s}"
         )]
 
 

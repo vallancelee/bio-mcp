@@ -17,9 +17,14 @@ class TestMCPServer:
         tools = await list_tools()
         
         assert isinstance(tools, list)
-        assert len(tools) == 1
+        assert len(tools) >= 1  # Should have at least the ping tool
         
-        ping_tool = tools[0]
+        # Check that ping tool exists
+        tool_names = [tool.name for tool in tools]
+        assert "ping" in tool_names
+        
+        # Verify ping tool structure
+        ping_tool = next(tool for tool in tools if tool.name == "ping")
         assert isinstance(ping_tool, Tool)
         assert ping_tool.name == "ping"
         assert "ping tool" in ping_tool.description.lower()

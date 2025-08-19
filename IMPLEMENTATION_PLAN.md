@@ -136,45 +136,90 @@ AbstractChunker → Local Embeddings → Vector Storage → Semantic Search
 - [x] Performance optimized for biomedical document storage
 - [x] Testcontainers integration for reliable testing
 
-### Phase 4B: Multi-Modal Search & Advanced RAG 🚧 NEXT
-**Goal**: Enhanced search capabilities with hybrid algorithms and intelligent ranking
+### Phase 4B: Domain-Specific PubMed Retriever 🚧 NEXT
+**Goal**: Focused, production-ready retriever matching minimal MCP manifest
 
-**Deliverables**:
-- [ ] **Multi-Modal Search Engine**: Hybrid semantic + keyword search (BM25)
-- [ ] **Advanced Ranking**: Citation-based scoring, recency weighting, journal quality
-- [ ] **Search Result Organization**: Topic clustering, timeline views, citation networks
-- [ ] **Query Intelligence**: Query expansion with UMLS/MeSH, autocomplete, refinement
-- [ ] **Metadata Filtering**: Advanced filters for date ranges, journals, authors, study types
+**Target Architecture**: **pubmed-retriever** with core capabilities:
+- `retrieval:documents` - Primary semantic & metadata retrieval
+- `retrieval:by-id` - Fetch single doc by stable key  
+- `indexing:corpus-sync` - Admin/sync tasks (low-frequency)
 
-**Technical Architecture**:
+**Implementation Phases**:
+
+#### **4B.1: Hybrid Search Enhancement** (Week 1)
+- [ ] **Upgrade rag.search**: Add BM25+vector hybrid scoring
+- [ ] **Quality-aware reranking**: Boost results by PubMed quality metrics
+- [ ] **Search mode options**: vector, bm25, hybrid with configurable weights
+- [ ] **Performance optimization**: <200ms hybrid search response times
+
 ```python
-# Enhanced search interface
-async def enhanced_search_tool(
+async def rag_search_tool(
     query: str,
-    search_mode: str = "hybrid",  # semantic, keyword, hybrid
-    filters: SearchFilters = None,
-    ranking: RankingOptions = None,
-    organization: str = "relevance"  # relevance, chronological, clustered
-) -> EnhancedSearchResults
-
-# Query intelligence features  
-async def query_expansion_tool(query: str) -> ExpandedQuery
-async def search_suggestions_tool(partial_query: str) -> List[Suggestion]
+    search_mode: str = "hybrid",     # "vector", "bm25", "hybrid"
+    filters: dict = None,            # metadata filters
+    rerank_by_quality: bool = True,  # boost by quality scores
+    top_k: int = 10
+) -> HybridSearchResults
 ```
 
-**Sprint Breakdown**:
-1. **Sprint 1**: Multi-modal search foundation (semantic + keyword fusion)
-2. **Sprint 2**: Advanced ranking algorithms (citation, quality, recency)
-3. **Sprint 3**: Result organization (clustering, timeline, networks)
-4. **Sprint 4**: Query intelligence (expansion, suggestions, refinement)
+#### **4B.2: Incremental Sync System** (Week 2) 
+- [ ] **pubmed.sync_delta**: EDAT watermark-based incremental sync
+- [ ] **Checkpoint persistence**: Store/retrieve sync state in database
+- [ ] **Overlap handling**: Catch document updates with configurable overlap
+- [ ] **Safety limits**: Max documents per sync with rate limiting
+
+```python
+async def pubmed_sync_delta_tool(
+    query_key: str,           # Named corpus identifier
+    edat_start: str = None,   # Override start date (ISO8601)
+    max_docs: int = 1000,     # Safety limit per sync
+    overlap_days: int = 1     # Overlap to catch updates
+) -> IncrementalSyncResult
+```
+
+#### **4B.3: Corpus Management** (Week 3)
+- [ ] **corpus.checkpoint.get**: Read EDAT watermarks by query_key
+- [ ] **corpus.checkpoint.set**: Manual watermark setting for backfills
+- [ ] **Checkpoint database schema**: Persistent sync state management
+- [ ] **Admin safety**: Validation and rollback capabilities
+
+```python
+async def corpus_checkpoint_get_tool(query_key: str) -> CheckpointResult
+async def corpus_checkpoint_set_tool(query_key: str, edat: str) -> CheckpointResult
+```
+
+#### **4B.4: MCP Resources & Polish** (Week 4)
+- [ ] **MCP resource endpoint**: `resource://pubmed/paper/{pmid}`
+- [ ] **Schema definitions**: JSON schemas for all tool inputs/outputs
+- [ ] **Tool metadata**: Categories, safety flags, idempotent marking
+- [ ] **Production readiness**: Error handling, logging, monitoring
+
+**Target MCP Manifest Compliance**:
+```json
+{
+  "name": "pubmed-retriever",
+  "capabilities": ["retrieval:documents", "retrieval:by-id", "indexing:corpus-sync"],
+  "tools": [
+    "rag.search",           // ✅ Implemented → Enhance with hybrid
+    "rag.get",              // ✅ Complete
+    "pubmed.sync_delta",    // 🆕 Incremental sync with EDAT
+    "corpus.checkpoint.get", // 🆕 Read watermarks
+    "corpus.checkpoint.set"  // 🆕 Set watermarks
+  ],
+  "resources": [
+    "resource://pubmed/paper/{pmid}" // 🆕 MCP resource endpoint
+  ]
+}
+```
 
 **Working Layer Success Criteria**:
 - ✅ Production-ready database with PostgreSQL
 - ✅ Local RAG system with semantic search capabilities
-- [ ] Multi-modal search with hybrid algorithms
-- [ ] Advanced ranking with citation and quality metrics
-- [ ] Intelligent query processing and result organization
-- [ ] Can handle complex research workflows efficiently
+- [ ] **Hybrid retrieval**: BM25+vector search with quality reranking
+- [ ] **Incremental sync**: EDAT watermark-based corpus management
+- [ ] **Admin tools**: Checkpoint management and manual overrides
+- [ ] **MCP compliance**: Resources, schemas, and safety annotations
+- [ ] **Production ready**: <200ms search, robust error handling
 
 ---
 
@@ -230,9 +275,9 @@ async def search_suggestions_tool(partial_query: str) -> List[Suggestion]
 
 **Foundation Achievement**: Complete biomedical research workflow from PubMed search to semantic retrieval
 
-### Next Up: 🚧 Phase 4B (Multi-Modal Search & Advanced RAG)
-**Timeline**: 2-3 weeks (4 sprints)
-**Outcome**: Production-capable search with hybrid algorithms and intelligent ranking
+### Next Up: 🚧 Phase 4B (Domain-Specific PubMed Retriever)
+**Timeline**: 4 weeks (focused implementation phases)
+**Outcome**: Production-ready retriever matching minimal MCP manifest with hybrid search and incremental sync
 
 ### Following: Hardened Layer (1C, 2C, 3C)
 **Timeline**: 3-4 weeks  
@@ -313,10 +358,11 @@ curl bio-mcp.company.com/metrics
 - ✅ **Performance**: <2s search time, <5s document storage, 100% sync success
 
 ### Working Layer Goals (Phase 4B Target)
-- **Enhanced Search**: Multi-modal hybrid search with <200ms response times
-- **Intelligence**: Query expansion, result clustering, citation analysis
-- **Scale**: Handle 10,000+ documents with efficient indexing
-- **User Experience**: Intuitive search refinement and result organization
+- **Domain Focus**: Purpose-built PubMed retriever (not general-purpose)
+- **Hybrid Search**: BM25+vector fusion with <200ms response times
+- **Incremental Sync**: EDAT watermark-based corpus management
+- **Production Ready**: MCP compliant with schemas, safety, and resources
+- **Scale**: Handle 100,000+ documents with efficient incremental updates
 
 ### Hardened Layer Goals
 - **Security**: Pass enterprise security audits
