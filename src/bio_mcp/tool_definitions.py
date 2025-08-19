@@ -5,6 +5,8 @@ Centralized location for all MCP tool schemas and metadata.
 
 from mcp.types import Tool
 
+from .search_config import SEARCH_CONFIG
+
 
 def get_ping_tool_definition() -> Tool:
     """Get ping tool definition."""
@@ -38,9 +40,9 @@ def get_pubmed_tool_definitions() -> list[Tool]:
                     "limit": {
                         "type": "integer",
                         "description": "Number of results to return",
-                        "default": 10,
-                        "minimum": 1,
-                        "maximum": 100,
+                        "default": SEARCH_CONFIG.PUBMED_DEFAULT_LIMIT,
+                        "minimum": SEARCH_CONFIG.PUBMED_MIN_LIMIT,
+                        "maximum": SEARCH_CONFIG.PUBMED_MAX_LIMIT,
                     },
                     "offset": {
                         "type": "integer",
@@ -81,9 +83,9 @@ def get_pubmed_tool_definitions() -> list[Tool]:
                     "limit": {
                         "type": "integer",
                         "description": "Number of documents to sync",
-                        "default": 10,
-                        "minimum": 1,
-                        "maximum": 100,
+                        "default": SEARCH_CONFIG.PUBMED_DEFAULT_LIMIT,
+                        "minimum": SEARCH_CONFIG.PUBMED_MIN_LIMIT,
+                        "maximum": SEARCH_CONFIG.PUBMED_MAX_LIMIT,
                     },
                 },
                 "required": ["query"],
@@ -106,9 +108,9 @@ def get_rag_tool_definitions() -> list[Tool]:
                     "top_k": {
                         "type": "integer",
                         "description": "Number of results to return",
-                        "default": 10,
-                        "minimum": 1,
-                        "maximum": 50,
+                        "default": SEARCH_CONFIG.DEFAULT_TOP_K,
+                        "minimum": SEARCH_CONFIG.MIN_TOP_K,
+                        "maximum": SEARCH_CONFIG.MAX_TOP_K,
                     },
                     "search_mode": {
                         "type": "string", 

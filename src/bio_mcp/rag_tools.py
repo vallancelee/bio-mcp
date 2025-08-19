@@ -9,13 +9,14 @@ Implements MCP tools for:
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Any
 
 from mcp.types import TextContent
 
 from .database import get_database_manager
 from .logging_config import get_logger
+from .quality_scoring import JournalQualityScorer
+from .search_config import RESPONSE_CONFIG, SEARCH_CONFIG
 from .weaviate_client import get_weaviate_client
 
 logger = get_logger(__name__)
@@ -45,6 +46,7 @@ class RAGToolsManager:
     def __init__(self):
         self.weaviate = get_weaviate_client()
         self.db_manager = get_database_manager()
+        self.quality_scorer = JournalQualityScorer()
     
     async def search_documents(
         self, 
@@ -84,7 +86,7 @@ class RAGToolsManager:
             
             # Apply quality-based reranking if enabled
             if rerank_by_quality:
-                results = self._apply_quality_boost(results)
+                results = self.quality_scorer.apply_quality_boost(results)
             
             # Format results for consistent output
             formatted_results = []
@@ -98,7 +100,7 @@ class RAGToolsManager:
                     "publication_date": result.get("publication_date", ""),
                     "score": result.get("score", 0.0),
                     "distance": result.get("distance"),
-                    "content": result.get("content", "")[:500] + "..." if len(result.get("content", "")) > 500 else result.get("content", ""),
+                    "content": self._truncate_content(result.get("content", "")),
                     "search_mode": search_mode
                 }
                 
@@ -124,56 +126,6 @@ class RAGToolsManager:
                 search_type=search_mode  # Always use the requested search mode
             )
     
-    def _apply_quality_boost(self, results: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        """Apply quality score boosting to search results based on PubMed metrics."""
-        for result in results:
-            # Extract quality indicators from PubMed data
-            quality_total = result.get("quality_total", 0) or 0
-            original_score = result.get("score", 0.0)
-            
-            # Quality boost based on journal impact, publication recency, etc.
-            quality_factors = []
-            
-            # Boost for high-impact journals (simplified heuristic)
-            journal = result.get("journal", "").lower()
-            if any(term in journal for term in ["nature", "science", "cell", "lancet", "nejm"]):
-                quality_factors.append(0.1)  # 10% boost for top journals
-            
-            # Boost for recent publications (last 2 years)
-            pub_date = result.get("publication_date")
-            if pub_date:
-                current_year = datetime.now(UTC).year
-                recent_threshold = current_year - 1  # Papers from last 2 years (current + previous year)
-                
-                # Handle both string and datetime objects
-                if hasattr(pub_date, 'year'):
-                    # datetime object
-                    if pub_date.year >= recent_threshold:
-                        quality_factors.append(0.05)  # 5% boost for recent papers
-                elif isinstance(pub_date, str):
-                    # string format - extract year if possible
-                    try:
-                        # Try to extract year from string (handles YYYY-MM-DD, YYYY, etc.)
-                        year_str = pub_date[:4]
-                        if year_str.isdigit() and int(year_str) >= recent_threshold:
-                            quality_factors.append(0.05)  # 5% boost for recent papers
-                    except (ValueError, IndexError):
-                        pass  # Skip if can't parse year
-            
-            # Combine quality factors
-            total_quality_boost = sum(quality_factors) + (quality_total / 20 if quality_total else 0)
-            
-            if original_score and original_score > 0:
-                boosted_score = original_score * (1 + total_quality_boost)
-                result["boosted_score"] = boosted_score
-                result["quality_boost"] = total_quality_boost
-            else:
-                result["boosted_score"] = original_score
-                result["quality_boost"] = 0
-        
-        # Sort by boosted score (highest first)
-        results.sort(key=lambda x: x.get("boosted_score", x.get("score", 0)), reverse=True)
-        return results
     
     async def get_document(self, doc_id: str, include_chunks: bool = False) -> RAGGetResult:
         """
@@ -222,6 +174,16 @@ class RAGToolsManager:
                 doc_id=doc_id,
                 found=False
             )
+    
+    def _truncate_content(self, content: str) -> str:
+        """Truncate content for display based on configuration."""
+        if not content:
+            return content
+            
+        max_length = RESPONSE_CONFIG.MAX_CONTENT_PREVIEW_LENGTH
+        if len(content) > max_length:
+            return content[:max_length] + RESPONSE_CONFIG.CONTENT_TRUNCATION_SUFFIX
+        return content
 
 
 # Global manager instance
@@ -250,7 +212,10 @@ async def rag_search_tool(name: str, arguments: dict[str, Any]) -> Sequence[Text
         Formatted search results with hybrid scoring
     """
     query = arguments.get("query", "").strip()
-    top_k = min(max(arguments.get("top_k", 10), 1), 50)
+    top_k = min(
+        max(arguments.get("top_k", SEARCH_CONFIG.DEFAULT_TOP_K), SEARCH_CONFIG.MIN_TOP_K),
+        SEARCH_CONFIG.MAX_TOP_K
+    )
     search_mode = arguments.get("search_mode", "hybrid").lower()
     rerank_by_quality = arguments.get("rerank_by_quality", True)
     

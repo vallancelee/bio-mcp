@@ -227,7 +227,7 @@ class TestRAGManagerHybridSearch:
     
     @pytest.mark.asyncio
     async def test_quality_boost_algorithm(self):
-        """Test the enhanced quality boost algorithm."""
+        """Test the enhanced quality boost algorithm with new domain object."""
         from datetime import UTC, datetime
         manager = RAGToolsManager()
         
@@ -263,8 +263,8 @@ class TestRAGManagerHybridSearch:
             }
         ]
         
-        # Apply quality boost
-        boosted_results = manager._apply_quality_boost(mock_results.copy())
+        # Apply quality boost using the new domain object
+        boosted_results = manager.quality_scorer.apply_quality_boost(mock_results.copy())
         
         # Verify boosts were applied correctly
         assert len(boosted_results) == 3

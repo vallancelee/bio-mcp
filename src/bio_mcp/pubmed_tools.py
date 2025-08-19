@@ -11,10 +11,9 @@ from typing import Any
 
 from mcp.types import TextContent
 
-from .database import DatabaseConfig, DatabaseManager
 from .logging_config import get_logger
-from .pubmed_client import PubMedClient, PubMedConfig
-from .weaviate_client import get_weaviate_client
+from .search_config import RESPONSE_CONFIG
+from .services import DocumentService, PubMedService, SyncOrchestrator
 
 logger = get_logger(__name__)
 
@@ -31,9 +30,10 @@ class SearchResult:
 
     def to_mcp_response(self) -> str:
         """Convert to MCP response format."""
-        pmids_display = ", ".join(self.pmids[:5])  # Show first 5 PMIDs
-        if len(self.pmids) > 5:
-            pmids_display += f" ... ({len(self.pmids)} total)"
+        max_display = RESPONSE_CONFIG.MAX_PMIDS_DISPLAY
+        pmids_display = ", ".join(self.pmids[:max_display])
+        if len(self.pmids) > max_display:
+            pmids_display += RESPONSE_CONFIG.PMIDS_TRUNCATION_SUFFIX.format(total=len(self.pmids))
 
         return f"""Search completed for query: "{self.query}"
 
@@ -128,56 +128,39 @@ Summary:
 Execution time: {self.execution_time_ms:.1f}ms"""
 
         if self.pmids_failed:
-            failed_display = ", ".join(self.pmids_failed[:5])
-            if len(self.pmids_failed) > 5:
-                failed_display += f" ... ({len(self.pmids_failed)} total)"
+            max_display = RESPONSE_CONFIG.MAX_PMIDS_DISPLAY
+            failed_display = ", ".join(self.pmids_failed[:max_display])
+            if len(self.pmids_failed) > max_display:
+                failed_display += RESPONSE_CONFIG.PMIDS_TRUNCATION_SUFFIX.format(total=len(self.pmids_failed))
             result += f"\n\nFailed PMIDs: {failed_display}"
 
         return result
 
 
 class PubMedToolsManager:
-    """Manager for PubMed tools operations."""
+    """Manager for PubMed tools operations using service-oriented architecture."""
 
     def __init__(self) -> None:
-        self.pubmed_client: PubMedClient | None = None
-        self.database_manager: DatabaseManager | None = None
-        self.weaviate_client = None
+        self.pubmed_service = PubMedService()
+        self.document_service = DocumentService()
+        self.orchestrator = SyncOrchestrator(self.pubmed_service, self.document_service)
         self.initialized = False
 
     async def initialize(self) -> None:
-        """Initialize the tools manager with clients."""
+        """Initialize the tools manager with services."""
         if self.initialized:
             return
 
         logger.info("Initializing PubMed tools manager")
-
-        # Initialize PubMed client
-        pubmed_config = PubMedConfig.from_env()
-        self.pubmed_client = PubMedClient(pubmed_config)
-
-        # Initialize database manager
-        db_config = DatabaseConfig.from_env()
-        self.database_manager = DatabaseManager(db_config)
-        await self.database_manager.initialize()
-
-        # Initialize Weaviate client (with built-in embeddings)
-        self.weaviate_client = get_weaviate_client()
-        await self.weaviate_client.initialize()
-
+        await self.orchestrator.initialize()
         self.initialized = True
         logger.info("PubMed tools manager initialized successfully")
 
     async def close(self) -> None:
         """Close all connections and cleanup."""
-        if self.pubmed_client:
-            await self.pubmed_client.close()
-            self.pubmed_client = None
-
-        if self.database_manager:
-            await self.database_manager.close()
-            self.database_manager = None
-
+        if self.orchestrator:
+            await self.orchestrator.close()
+        
         self.initialized = False
         logger.info("PubMed tools manager closed")
 
@@ -193,7 +176,7 @@ class PubMedToolsManager:
         logger.info("Searching PubMed", query=query, limit=limit, offset=offset)
 
         try:
-            search_result = await self.pubmed_client.search(
+            search_result = await self.pubmed_service.search(
                 query, limit=limit, offset=offset
             )
 
@@ -238,7 +221,7 @@ class PubMedToolsManager:
 
         try:
             # Check database first
-            db_doc = await self.database_manager.get_document_by_pmid(pmid)
+            db_doc = await self.document_service.get_document_by_pmid(pmid)
 
             if db_doc:
                 execution_time = (time.time() - start_time) * 1000
@@ -266,7 +249,7 @@ class PubMedToolsManager:
                 "Document not in database, fetching from PubMed API", pmid=pmid
             )
 
-            api_docs = await self.pubmed_client.fetch_documents([pmid])
+            api_docs = await self.pubmed_service.fetch_documents([pmid])
 
             execution_time = (time.time() - start_time) * 1000
 
@@ -309,105 +292,26 @@ class PubMedToolsManager:
             raise
 
     async def sync(self, query: str, limit: int = 10) -> SyncResult:
-        """Search PubMed and sync documents to database."""
+        """Search PubMed and sync documents to database using orchestrator."""
         if not self.initialized:
             await self.initialize()
 
         start_time = time.time()
-
         logger.info("Starting sync operation", query=query, limit=limit)
 
         try:
-            # Search for documents
-            search_result = await self.pubmed_client.search(query, limit=limit)
-            pmids = search_result.pmids
-
-            if not pmids:
-                execution_time = (time.time() - start_time) * 1000
-                return SyncResult(
-                    query=query,
-                    total_requested=0,
-                    successfully_synced=0,
-                    already_existed=0,
-                    failed=0,
-                    pmids_synced=[],
-                    pmids_failed=[],
-                    execution_time_ms=execution_time,
-                )
-
-            # Check which documents already exist
-            existing_pmids = []
-            new_pmids = []
-
-            for pmid in pmids:
-                exists = await self.database_manager.document_exists(pmid)
-                if exists:
-                    existing_pmids.append(pmid)
-                else:
-                    new_pmids.append(pmid)
-
-            # Fetch new documents from PubMed API
-            synced_pmids = []
-            failed_pmids = []
-
-            if new_pmids:
-                logger.info("Fetching new documents from PubMed", count=len(new_pmids))
-
-                try:
-                    documents = await self.pubmed_client.fetch_documents(new_pmids)
-
-                    # Store documents in database and vector store
-                    for doc in documents:
-                        try:
-                            # Store in database
-                            db_data = doc.to_database_format()
-                            await self.database_manager.create_document(db_data)
-                            
-                            # Store in Weaviate (embeddings generated automatically)
-                            try:
-                                logger.debug("Storing document in Weaviate", pmid=doc.pmid)
-                                uuid = await self.weaviate_client.store_document(
-                                    pmid=doc.pmid,
-                                    title=doc.title,
-                                    abstract=doc.abstract or "",
-                                    authors=doc.authors or [],
-                                    journal=doc.journal,
-                                    publication_date=doc.publication_date.isoformat() if doc.publication_date else None,
-                                    doi=doc.doi,
-                                    keywords=doc.keywords or []
-                                )
-                                logger.debug("Document stored in Weaviate successfully", pmid=doc.pmid, uuid=uuid)
-                            except Exception as weaviate_error:
-                                logger.error("Failed to store document in Weaviate", pmid=doc.pmid, error=str(weaviate_error))
-                                # Print full traceback for debugging
-                                import traceback
-                                traceback.print_exc()
-                                # Re-raise to see the actual error
-                                raise
-                            
-                            synced_pmids.append(doc.pmid)
-                            logger.debug("Document successfully synced to database and vector store", pmid=doc.pmid)
-
-                        except Exception as e:
-                            logger.error(
-                                "Failed to store document", pmid=doc.pmid, error=str(e)
-                            )
-                            failed_pmids.append(doc.pmid)
-
-                except Exception as e:
-                    logger.error("Failed to fetch documents from PubMed", error=str(e))
-                    failed_pmids.extend(new_pmids)
-
+            # Use orchestrator for the entire sync process
+            sync_result = await self.orchestrator.sync_documents(query, limit)
             execution_time = (time.time() - start_time) * 1000
 
             result = SyncResult(
                 query=query,
-                total_requested=len(pmids),
-                successfully_synced=len(synced_pmids),
-                already_existed=len(existing_pmids),
-                failed=len(failed_pmids),
-                pmids_synced=synced_pmids,
-                pmids_failed=failed_pmids,
+                total_requested=sync_result["total_requested"],
+                successfully_synced=sync_result["successfully_synced"],
+                already_existed=sync_result["already_existed"],
+                failed=sync_result["failed"],
+                pmids_synced=sync_result["pmids_synced"],
+                pmids_failed=sync_result["pmids_failed"],
                 execution_time_ms=execution_time,
             )
 
