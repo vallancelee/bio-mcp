@@ -12,11 +12,11 @@ import pytest
 from weaviate.classes.query import Filter
 
 from src.bio_mcp.clients.pubmed_client import PubMedDocument, PubMedSearchResult
+from src.bio_mcp.clients.weaviate_client import get_weaviate_client
 from src.bio_mcp.mcp.pubmed_tools import (
     PubMedToolsManager,
 )
 from src.bio_mcp.mcp.rag_tools import rag_search_tool
-from src.bio_mcp.clients.weaviate_client import get_weaviate_client
 
 
 class TestEndToEndRAGWorkflow:

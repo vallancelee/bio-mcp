@@ -212,7 +212,6 @@ class TestMCPServerConfig:
         # Re-import to trigger logging configuration
         
         # Check that bio_mcp logger level is configured
-        bio_mcp_logger = logging.getLogger("bio_mcp.main")
         # The logger should inherit from root or have explicit level set
         # Since basicConfig is called, root level should be set
         assert logging.getLogger().hasHandlers()  # Should have handlers from basicConfig

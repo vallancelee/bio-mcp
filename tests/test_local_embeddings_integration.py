@@ -9,9 +9,9 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from src.bio_mcp.clients.pubmed_client import PubMedDocument
+from src.bio_mcp.clients.weaviate_client import WeaviateClient
 from src.bio_mcp.mcp.pubmed_tools import PubMedToolsManager
 from src.bio_mcp.mcp.rag_tools import RAGToolsManager
-from src.bio_mcp.clients.weaviate_client import WeaviateClient
 
 
 class TestWeaviateLocalEmbeddings:

@@ -11,8 +11,8 @@ from datetime import UTC
 import pytest
 from weaviate.classes.query import Filter
 
-from src.bio_mcp.mcp.rag_tools import RAGToolsManager, rag_search_tool
 from src.bio_mcp.clients.weaviate_client import get_weaviate_client
+from src.bio_mcp.mcp.rag_tools import RAGToolsManager, rag_search_tool
 
 
 class TestRealWeaviateIntegration:

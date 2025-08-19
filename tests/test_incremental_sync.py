@@ -12,7 +12,10 @@ import pytest
 
 from src.bio_mcp.clients.database import SyncWatermark
 from src.bio_mcp.clients.pubmed_client import PubMedDocument, PubMedSearchResult
-from src.bio_mcp.mcp.pubmed_tools import PubMedToolsManager, pubmed_sync_incremental_tool
+from src.bio_mcp.mcp.pubmed_tools import (
+    PubMedToolsManager,
+    pubmed_sync_incremental_tool,
+)
 from src.bio_mcp.services.services import SyncOrchestrator
 
 

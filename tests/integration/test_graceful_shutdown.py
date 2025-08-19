@@ -357,7 +357,8 @@ class TestShutdownLogging:
                     "starting", "start", "shutdown", "signal", "sigterm", 
                     "graceful", "stopped", "stopping", "bio-mcp"
                 ]
-                has_log_activity = any(
+                # Check for log activity but don't assign to unused variable
+                any(
                     indicator in stderr_output.lower() 
                     for indicator in log_indicators
                 )

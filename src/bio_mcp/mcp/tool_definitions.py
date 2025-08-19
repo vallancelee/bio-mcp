@@ -172,20 +172,90 @@ def get_corpus_tool_definitions() -> list[Tool]:
     """Get corpus management tool definitions for checkpoint management."""
     return [
         Tool(
-            name="corpus.checkpoint.get",
-            description="Get corpus checkpoint for a query key",
+            name="corpus.checkpoint.create",
+            description="Create a new corpus checkpoint capturing current corpus state for reproducible research",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "query_key": {
+                    "checkpoint_id": {
                         "type": "string",
-                        "description": "Query key for checkpoint",
-                    }
+                        "description": "Unique identifier for the checkpoint",
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Human-readable name for the checkpoint",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Optional description of the checkpoint purpose",
+                    },
+                    "primary_queries": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of primary queries used to build this corpus",
+                    },
+                    "parent_checkpoint_id": {
+                        "type": "string",
+                        "description": "Optional parent checkpoint ID for lineage tracking",
+                    },
                 },
-                "required": ["query_key"],
+                "required": ["checkpoint_id", "name"],
                 "additionalProperties": False,
             },
-        )
+        ),
+        Tool(
+            name="corpus.checkpoint.get",
+            description="Get corpus checkpoint details by ID",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "checkpoint_id": {
+                        "type": "string",
+                        "description": "Checkpoint ID to retrieve",
+                    }
+                },
+                "required": ["checkpoint_id"],
+                "additionalProperties": False,
+            },
+        ),
+        Tool(
+            name="corpus.checkpoint.list",
+            description="List all available corpus checkpoints with pagination",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of checkpoints to return",
+                        "default": 20,
+                        "minimum": 1,
+                        "maximum": 100,
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "Number of checkpoints to skip for pagination",
+                        "default": 0,
+                        "minimum": 0,
+                    },
+                },
+                "additionalProperties": False,
+            },
+        ),
+        Tool(
+            name="corpus.checkpoint.delete",
+            description="Delete a corpus checkpoint permanently",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "checkpoint_id": {
+                        "type": "string",
+                        "description": "Checkpoint ID to delete",
+                    }
+                },
+                "required": ["checkpoint_id"],
+                "additionalProperties": False,
+            },
+        ),
     ]
 
 
@@ -194,6 +264,5 @@ def get_all_tool_definitions() -> list[Tool]:
     tools = [get_ping_tool_definition()]
     tools.extend(get_pubmed_tool_definitions())
     tools.extend(get_rag_tool_definitions())
-    # Corpus tools will be added in Phase 4B.3
-    # tools.extend(get_corpus_tool_definitions())
+    tools.extend(get_corpus_tool_definitions())
     return tools

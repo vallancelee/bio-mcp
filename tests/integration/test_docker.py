@@ -65,7 +65,7 @@ class TestDockerRun:
         ]
         
         result = subprocess.run(
-            ["timeout", "3s", "docker", "run", "--rm"] + env_vars + ["bio-mcp:test"],
+            ["timeout", "3s", "docker", "run", "--rm", *env_vars, "bio-mcp:test"],
             capture_output=True,
             text=True
         )

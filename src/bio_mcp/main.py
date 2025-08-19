@@ -11,20 +11,27 @@ from collections.abc import Sequence
 from typing import Any
 
 from mcp.server import Server
-from mcp.types import TextContent, Tool
+from mcp.types import Resource, TextContent, Tool
 
 from .config.config import config
-from .core.error_handling import error_boundary, validate_tool_arguments
 from .config.logging_config import auto_configure_logging, get_logger
-from .monitoring.metrics import record_tool_call
+from .core.error_handling import error_boundary, validate_tool_arguments
+from .mcp.corpus_tools import (
+    corpus_checkpoint_create_tool,
+    corpus_checkpoint_delete_tool,
+    corpus_checkpoint_get_tool,
+    corpus_checkpoint_list_tool,
+)
 from .mcp.pubmed_tools import (
     pubmed_get_tool,
     pubmed_search_tool,
-    pubmed_sync_tool,
     pubmed_sync_incremental_tool,
+    pubmed_sync_tool,
 )
 from .mcp.rag_tools import rag_get_tool, rag_search_tool
+from .mcp.resources import list_resources, read_resource
 from .mcp.tool_definitions import get_all_tool_definitions
+from .monitoring.metrics import record_tool_call
 
 # Configure structured logging
 auto_configure_logging()
@@ -40,6 +47,18 @@ server = Server(config.server_name)
 async def list_tools() -> list[Tool]:
     """List available tools."""
     return get_all_tool_definitions()
+
+
+@server.list_resources()
+async def list_mcp_resources() -> list[Resource]:
+    """List available MCP resources."""
+    return await list_resources()
+
+
+@server.read_resource()
+async def read_mcp_resource(uri: str) -> str:
+    """Read a specific MCP resource by URI."""
+    return await read_resource(uri)
 
 
 @server.call_tool()
@@ -109,6 +128,18 @@ Server Info:
 
         elif name == "rag.get":
             return await rag_get_tool(name, arguments)
+        
+        elif name == "corpus.checkpoint.create":
+            return await corpus_checkpoint_create_tool(name, arguments)
+        
+        elif name == "corpus.checkpoint.get":
+            return await corpus_checkpoint_get_tool(name, arguments)
+        
+        elif name == "corpus.checkpoint.list":
+            return await corpus_checkpoint_list_tool(name, arguments)
+        
+        elif name == "corpus.checkpoint.delete":
+            return await corpus_checkpoint_delete_tool(name, arguments)
 
         else:
             tool_logger.error("Unknown tool requested", tool=name)
