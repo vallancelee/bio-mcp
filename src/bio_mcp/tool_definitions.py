@@ -94,7 +94,7 @@ def get_pubmed_tool_definitions() -> list[Tool]:
 
 
 def get_rag_tool_definitions() -> list[Tool]:
-    """Get RAG tool definitions (placeholder for future implementation)."""
+    """Get RAG tool definitions for hybrid search and document retrieval."""
     return [
         Tool(
             name="rag.search",
@@ -145,7 +145,7 @@ def get_rag_tool_definitions() -> list[Tool]:
 
 
 def get_corpus_tool_definitions() -> list[Tool]:
-    """Get corpus management tool definitions (placeholder for future implementation)."""
+    """Get corpus management tool definitions for checkpoint management."""
     return [
         Tool(
             name="corpus.checkpoint.get",
@@ -170,6 +170,6 @@ def get_all_tool_definitions() -> list[Tool]:
     tools = [get_ping_tool_definition()]
     tools.extend(get_pubmed_tool_definitions())
     tools.extend(get_rag_tool_definitions())
-    # Future tools - uncomment when implemented:
+    # Corpus tools will be added in Phase 4B.3
     # tools.extend(get_corpus_tool_definitions())
     return tools

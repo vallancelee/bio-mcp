@@ -142,7 +142,6 @@ class PubMedToolsManager:
     def __init__(self) -> None:
         self.pubmed_client: PubMedClient | None = None
         self.database_manager: DatabaseManager | None = None
-        self.embedding_pipeline = None
         self.weaviate_client = None
         self.initialized = False
 

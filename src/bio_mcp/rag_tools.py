@@ -9,6 +9,7 @@ Implements MCP tools for:
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 from mcp.types import TextContent
@@ -141,9 +142,8 @@ class RAGToolsManager:
             # Boost for recent publications (last 2 years)
             pub_date = result.get("publication_date")
             if pub_date:
-                from datetime import UTC, datetime
                 current_year = datetime.now(UTC).year
-                recent_threshold = current_year - 1  # Papers from last 2 years
+                recent_threshold = current_year - 1  # Papers from last 2 years (current + previous year)
                 
                 # Handle both string and datetime objects
                 if hasattr(pub_date, 'year'):
@@ -205,8 +205,8 @@ class RAGToolsManager:
             
             chunks = None
             if include_chunks:
-                # TODO: Implement chunk retrieval from database
-                # For now, return the single document as a "chunk"
+                # Note: Document chunking is available but not yet integrated with database storage
+                # Currently returning the full document as a single chunk
                 chunks = [document]
             
             return RAGGetResult(
