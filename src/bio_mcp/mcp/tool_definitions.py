@@ -92,6 +92,28 @@ def get_pubmed_tool_definitions() -> list[Tool]:
                 "additionalProperties": False,
             },
         ),
+        Tool(
+            name="pubmed.sync.incremental",
+            description="Search PubMed and sync documents incrementally using EDAT watermarks for efficient updates",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query for PubMed documents to sync incrementally",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of new documents to sync in this batch",
+                        "default": 100,
+                        "minimum": 1,
+                        "maximum": 500,
+                    },
+                },
+                "required": ["query"],
+                "additionalProperties": False,
+            },
+        ),
     ]
 
 

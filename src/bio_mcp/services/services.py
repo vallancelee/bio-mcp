@@ -46,6 +46,13 @@ class PubMedService:
         
         return await self.client.search(query, limit=limit, offset=offset)
     
+    async def search_incremental(self, query: str, last_edat: str | None = None, limit: int = 100, offset: int = 0):
+        """Search PubMed incrementally using EDAT watermark."""
+        if not self._initialized:
+            await self.initialize()
+        
+        return await self.client.search_incremental(query, last_edat=last_edat, limit=limit, offset=offset)
+    
     async def fetch_documents(self, pmids: list[str]):
         """Fetch documents by PMIDs."""
         if not self._initialized:
@@ -264,4 +271,165 @@ class SyncOrchestrator:
         }
         
         logger.info("Orchestrated sync completed", **{k: v for k, v in result.items() if k not in ["pmids_synced", "pmids_failed"]})
+        return result
+    
+    async def sync_documents_incremental(self, query: str, limit: int = 100):
+        """
+        Orchestrate incremental document sync using EDAT watermarks:
+        1. Get last sync watermark for this query
+        2. Search PubMed for documents newer than watermark
+        3. Check database for existing documents
+        4. Fetch missing documents from PubMed
+        5. Store in database and vector store
+        6. Update sync watermark
+        """
+        if not self._initialized:
+            await self.initialize()
+        
+        # Generate a stable query key for watermark tracking
+        import hashlib
+        query_key = hashlib.md5(query.encode()).hexdigest()[:16]
+        
+        logger.info("Starting incremental sync", query=query, query_key=query_key, limit=limit)
+        
+        # Step 1: Get sync watermark to determine incremental starting point
+        try:
+            watermark = await self.document_service.manager.get_sync_watermark(query_key)
+            last_edat = watermark.last_edat if watermark else None
+            logger.info("Retrieved sync watermark", query_key=query_key, last_edat=last_edat)
+        except Exception as e:
+            logger.warning("Failed to get sync watermark, using full sync", query_key=query_key, error=str(e))
+            last_edat = None
+        
+        # Step 2: Search PubMed incrementally
+        try:
+            search_result = await self.pubmed_service.client.search_incremental(
+                query=query, 
+                last_edat=last_edat,
+                limit=limit
+            )
+            pmids = search_result.pmids
+        except Exception as e:
+            logger.error("Incremental search failed, falling back to regular search", error=str(e))
+            search_result = await self.pubmed_service.search(query, limit=limit)
+            pmids = search_result.pmids
+        
+        if not pmids:
+            logger.info("No new PMIDs found for incremental sync", query=query, last_edat=last_edat)
+            # Still update watermark to mark this sync attempt
+            if last_edat:
+                from datetime import datetime
+                current_edat = datetime.now().strftime("%Y/%m/%d")
+                try:
+                    await self.document_service.manager.create_or_update_sync_watermark(
+                        query_key=query_key,
+                        last_edat=current_edat,
+                        last_sync_count="0"
+                    )
+                except Exception as e:
+                    logger.warning("Failed to update watermark after empty sync", error=str(e))
+            
+            return {
+                "total_requested": 0,
+                "successfully_synced": 0,
+                "already_existed": 0,
+                "failed": 0,
+                "pmids_synced": [],
+                "pmids_failed": [],
+                "incremental": True,
+                "last_edat": last_edat,
+                "query_key": query_key
+            }
+        
+        # Step 3: Check which documents already exist
+        existing_pmids = []
+        new_pmids = []
+        
+        for pmid in pmids:
+            exists = await self.document_service.document_exists(pmid)
+            if exists:
+                existing_pmids.append(pmid)
+            else:
+                new_pmids.append(pmid)
+        
+        logger.info("Document existence check completed", 
+                   total_pmids=len(pmids), existing=len(existing_pmids), new=len(new_pmids))
+        
+        # Step 4: Fetch and store new documents
+        synced_pmids = []
+        failed_pmids = []
+        
+        if new_pmids:
+            try:
+                documents = await self.pubmed_service.fetch_documents(new_pmids)
+                
+                for doc in documents:
+                    try:
+                        # Store in database
+                        db_data = doc.to_database_format()
+                        await self.document_service.create_document(db_data)
+                        
+                        # Store in vector store if available
+                        if self.vector_service:
+                            await self.vector_service.store_document(
+                                pmid=doc.pmid,
+                                title=doc.title,
+                                abstract=doc.abstract or "",
+                                authors=doc.authors or [],
+                                journal=doc.journal,
+                                publication_date=doc.publication_date.isoformat() if doc.publication_date else None,
+                                doi=doc.doi,
+                                keywords=doc.keywords or []
+                            )
+                        
+                        synced_pmids.append(doc.pmid)
+                        logger.debug("Document successfully synced", pmid=doc.pmid)
+                    
+                    except Exception as e:
+                        logger.error("Failed to store document", pmid=doc.pmid, error=str(e))
+                        failed_pmids.append(doc.pmid)
+            
+            except Exception as e:
+                logger.error("Failed to fetch documents from PubMed", error=str(e))
+                failed_pmids.extend(new_pmids)
+        
+        # Step 5: Update sync watermark with current date
+        from datetime import datetime
+        current_edat = datetime.now().strftime("%Y/%m/%d")
+        total_synced_now = len(synced_pmids)
+        
+        try:
+            # Get current total count
+            if watermark:
+                previous_total = int(watermark.total_synced)
+                new_total = str(previous_total + total_synced_now)
+            else:
+                new_total = str(total_synced_now)
+            
+            await self.document_service.manager.create_or_update_sync_watermark(
+                query_key=query_key,
+                last_edat=current_edat,
+                total_synced=new_total,
+                last_sync_count=str(total_synced_now)
+            )
+            logger.info("Sync watermark updated", query_key=query_key, 
+                       last_edat=current_edat, total_synced=new_total)
+        except Exception as e:
+            logger.warning("Failed to update sync watermark", query_key=query_key, error=str(e))
+        
+        result = {
+            "total_requested": len(pmids),
+            "successfully_synced": len(synced_pmids),
+            "already_existed": len(existing_pmids),
+            "failed": len(failed_pmids),
+            "pmids_synced": synced_pmids,
+            "pmids_failed": failed_pmids,
+            "incremental": True,
+            "last_edat": last_edat,
+            "new_edat": current_edat,
+            "query_key": query_key
+        }
+        
+        logger.info("Incremental sync completed", 
+                   **{k: v for k, v in result.items() if k not in ["pmids_synced", "pmids_failed"]})
         return result

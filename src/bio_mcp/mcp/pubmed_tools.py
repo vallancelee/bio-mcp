@@ -336,7 +336,56 @@ class PubMedToolsManager:
                 execution_time_ms=execution_time,
             )
             raise
+    
+    async def sync_incremental(self, query: str, limit: int = 100) -> SyncResult:
+        """Search PubMed and sync documents incrementally using EDAT watermarks."""
+        if not self.initialized:
+            await self.initialize()
 
+        start_time = time.time()
+        logger.info("Starting incremental sync operation", query=query, limit=limit)
+
+        try:
+            # Use orchestrator for the entire incremental sync process
+            sync_result = await self.orchestrator.sync_documents_incremental(query, limit)
+            execution_time = (time.time() - start_time) * 1000
+
+            result = SyncResult(
+                query=query,
+                total_requested=sync_result["total_requested"],
+                successfully_synced=sync_result["successfully_synced"],
+                already_existed=sync_result["already_existed"],
+                failed=sync_result["failed"],
+                pmids_synced=sync_result["pmids_synced"],
+                pmids_failed=sync_result["pmids_failed"],
+                execution_time_ms=execution_time,
+            )
+
+            logger.info(
+                "Incremental sync operation completed",
+                query=query,
+                total_requested=result.total_requested,
+                successfully_synced=result.successfully_synced,
+                already_existed=result.already_existed,
+                failed=result.failed,
+                incremental=sync_result.get("incremental", False),
+                last_edat=sync_result.get("last_edat"),
+                new_edat=sync_result.get("new_edat"),
+                query_key=sync_result.get("query_key"),
+                execution_time_ms=execution_time,
+            )
+
+            return result
+
+        except Exception as e:
+            execution_time = (time.time() - start_time) * 1000
+            logger.error(
+                "Incremental sync operation failed",
+                query=query,
+                error=str(e),
+                execution_time_ms=execution_time,
+            )
+            raise
 
 
 # Global manager instance
@@ -429,11 +478,40 @@ async def pubmed_sync_tool(
         return [TextContent(type="text", text=f"Error syncing documents: {e!s}")]
 
 
+async def pubmed_sync_incremental_tool(
+    name: str, arguments: dict[str, Any]
+) -> Sequence[TextContent]:
+    """MCP tool: Search PubMed and sync documents incrementally using EDAT watermarks."""
+    try:
+        query = arguments.get("query", "")
+        limit = arguments.get("limit", 100)
+
+        if not query:
+            return [
+                TextContent(
+                    type="text",
+                    text="Error: 'query' parameter is required for incremental sync operation",
+                )
+            ]
+
+        manager = get_tools_manager()
+        result = await manager.sync_incremental(query, limit=limit)
+
+        return [TextContent(type="text", text=result.to_mcp_response())]
+
+    except Exception as e:
+        logger.error(
+            "PubMed incremental sync tool error", query=arguments.get("query"), error=str(e)
+        )
+        return [TextContent(type="text", text=f"Error syncing documents incrementally: {e!s}")]
+
+
 def register_pubmed_tools(server) -> None:
     """Register PubMed tools with the MCP server."""
     # Register the tools with the server
     server.call_tool()(pubmed_search_tool)
     server.call_tool()(pubmed_get_tool)
     server.call_tool()(pubmed_sync_tool)
+    server.call_tool()(pubmed_sync_incremental_tool)
 
     logger.info("PubMed tools registered with MCP server")

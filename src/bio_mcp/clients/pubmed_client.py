@@ -315,6 +315,88 @@ class PubMedClient:
 
         # Should not reach here
         raise PubMedAPIError("All retry attempts failed")
+    
+    async def search_incremental(
+        self, 
+        query: str, 
+        last_edat: str | None = None,
+        limit: int = 20, 
+        offset: int = 0, 
+        retries: int | None = None
+    ) -> PubMedSearchResult:
+        """Search PubMed with EDAT (Entry Date) filtering for incremental sync.
+        
+        Args:
+            query: Base search query
+            last_edat: Last Entry Date in YYYY/MM/DD format (e.g., "2024/01/15")
+            limit: Maximum number of results to return
+            offset: Starting offset for pagination
+            retries: Number of retry attempts
+            
+        Returns:
+            PubMedSearchResult with PMIDs of documents newer than last_edat
+        """
+        if retries is None:
+            retries = self.config.retries
+        
+        # Build incremental query with EDAT filter
+        incremental_query = query
+        if last_edat:
+            # Add EDAT filter to find documents entered after the last sync
+            # EDAT (Entry Date) tracks when documents were added to PubMed
+            incremental_query = f"({query}) AND (EDAT[{last_edat}:3000/12/31])"
+            logger.info("Using incremental search with EDAT filter", 
+                       base_query=query, last_edat=last_edat, full_query=incremental_query)
+        else:
+            logger.info("Using full search (no EDAT filter)", query=query)
+        
+        url = f"{self.config.base_url}esearch.fcgi"
+        params = {
+            "db": "pubmed",
+            "term": incremental_query,
+            "retmax": str(limit),
+            "retstart": str(offset),
+            "usehistory": "y",
+            "sort": "date",  # Sort by date to get newest entries first
+        }
+        
+        logger.info("Searching PubMed incrementally", 
+                   query=incremental_query, limit=limit, offset=offset, last_edat=last_edat)
+        
+        for attempt in range(retries + 1):
+            try:
+                response_data = await self._make_request(url, params)
+                result = parse_esearch_response(response_data, incremental_query)
+                
+                logger.info(
+                    "PubMed incremental search completed",
+                    base_query=query,
+                    last_edat=last_edat,
+                    total_count=result.total_count,
+                    returned_count=len(result.pmids),
+                )
+                
+                return result
+                
+            except (PubMedAPIError, RateLimitError):
+                # Re-raise PubMed specific errors immediately
+                raise
+            except Exception as e:
+                if attempt == retries:
+                    # Convert generic exception to PubMedAPIError on final attempt
+                    raise PubMedAPIError(f"Incremental search failed: {e}")
+                
+                wait_time = 2**attempt  # Exponential backoff
+                logger.warning(
+                    "PubMed incremental search attempt failed, retrying",
+                    attempt=attempt + 1,
+                    wait_time=wait_time,
+                    error=str(e),
+                )
+                await asyncio.sleep(wait_time)
+        
+        # Should not reach here
+        raise PubMedAPIError("All incremental search retry attempts failed")
 
     async def fetch_documents(self, pmids: list[str]) -> list[PubMedDocument]:
         """Fetch full document details by PMIDs."""

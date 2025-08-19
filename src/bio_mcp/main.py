@@ -21,6 +21,7 @@ from .mcp.pubmed_tools import (
     pubmed_get_tool,
     pubmed_search_tool,
     pubmed_sync_tool,
+    pubmed_sync_incremental_tool,
 )
 from .mcp.rag_tools import rag_get_tool, rag_search_tool
 from .mcp.tool_definitions import get_all_tool_definitions
@@ -99,6 +100,9 @@ Server Info:
 
         elif name == "pubmed.sync":
             return await pubmed_sync_tool(name, arguments)
+        
+        elif name == "pubmed.sync.incremental":
+            return await pubmed_sync_incremental_tool(name, arguments)
 
         elif name == "rag.search":
             return await rag_search_tool(name, arguments)

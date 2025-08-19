@@ -86,6 +86,44 @@ class PubMedDocument(Base):
         return f"<PubMedDocument(pmid='{self.pmid}', title='{self.title[:50]}...')>"
 
 
+class SyncWatermark(Base):
+    """SQLAlchemy model for tracking incremental sync progress."""
+    
+    __tablename__ = "sync_watermarks"
+    
+    # Primary key - query identifier
+    query_key = Column(String(255), primary_key=True, nullable=False)
+    
+    # Last successful sync timestamp (EDAT format: YYYY/MM/DD)
+    last_edat = Column(String(10), nullable=True)
+    
+    # Statistics
+    total_synced = Column(String(20), nullable=False, default="0")
+    last_sync_count = Column(String(20), nullable=False, default="0")
+    
+    # Metadata
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=lambda: datetime.now(UTC))
+    updated_at = Column(TIMESTAMP(timezone=True), nullable=False, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+    
+    def __init__(self, query_key: str, **kwargs):
+        """Initialize sync watermark with validation."""
+        if not query_key:
+            raise ValidationError("Query key is required")
+        
+        self.query_key = query_key
+        self.last_edat = kwargs.get('last_edat')
+        self.total_synced = kwargs.get('total_synced', "0")
+        self.last_sync_count = kwargs.get('last_sync_count', "0")
+        
+        # Set timestamps
+        now = datetime.now(UTC)
+        self.created_at = kwargs.get('created_at', now)
+        self.updated_at = kwargs.get('updated_at', now)
+    
+    def __repr__(self):
+        return f"<SyncWatermark(query_key='{self.query_key}', last_edat='{self.last_edat}')>"
+
+
 @dataclass
 class DatabaseConfig:
     """Configuration for database connections."""
@@ -370,6 +408,135 @@ class DatabaseManager:
                 
         except Exception as e:
             logger.error("Failed to check document existence", pmid=pmid, error=str(e))
+            raise
+    
+    # Sync Watermark Methods for Incremental Sync
+    
+    async def get_sync_watermark(self, query_key: str) -> SyncWatermark | None:
+        """Get sync watermark for a query key."""
+        logger.debug("Getting sync watermark", query_key=query_key)
+        
+        try:
+            async with self.get_session() as session:
+                result = await session.execute(
+                    text("SELECT * FROM sync_watermarks WHERE query_key = :query_key"),
+                    {"query_key": query_key}
+                )
+                
+                row = result.fetchone()
+                if row:
+                    watermark = SyncWatermark(
+                        query_key=row.query_key,
+                        last_edat=row.last_edat,
+                        total_synced=row.total_synced,
+                        last_sync_count=row.last_sync_count,
+                        created_at=row.created_at,
+                        updated_at=row.updated_at
+                    )
+                    logger.debug("Sync watermark found", query_key=query_key, last_edat=watermark.last_edat)
+                    return watermark
+                
+                logger.debug("No sync watermark found", query_key=query_key)
+                return None
+                
+        except Exception as e:
+            logger.error("Failed to get sync watermark", query_key=query_key, error=str(e))
+            raise
+    
+    async def create_or_update_sync_watermark(
+        self,
+        query_key: str,
+        last_edat: str | None = None,
+        total_synced: str | None = None,
+        last_sync_count: str | None = None
+    ) -> SyncWatermark:
+        """Create or update sync watermark for a query key."""
+        logger.debug("Creating/updating sync watermark", query_key=query_key, last_edat=last_edat)
+        
+        try:
+            async with self.get_session() as session:
+                # Check if watermark exists
+                result = await session.execute(
+                    text("SELECT * FROM sync_watermarks WHERE query_key = :query_key"),
+                    {"query_key": query_key}
+                )
+                
+                existing = result.fetchone()
+                now = datetime.now(UTC)
+                
+                if existing:
+                    # Update existing watermark
+                    update_data = {"query_key": query_key, "updated_at": now}
+                    if last_edat is not None:
+                        update_data["last_edat"] = last_edat
+                    if total_synced is not None:
+                        update_data["total_synced"] = total_synced
+                    if last_sync_count is not None:
+                        update_data["last_sync_count"] = last_sync_count
+                    
+                    await session.execute(
+                        text("""
+                        UPDATE sync_watermarks 
+                        SET last_edat = COALESCE(:last_edat, last_edat),
+                            total_synced = COALESCE(:total_synced, total_synced),
+                            last_sync_count = COALESCE(:last_sync_count, last_sync_count),
+                            updated_at = :updated_at
+                        WHERE query_key = :query_key
+                        """),
+                        update_data
+                    )
+                    
+                    # Fetch updated record
+                    result = await session.execute(
+                        text("SELECT * FROM sync_watermarks WHERE query_key = :query_key"),
+                        {"query_key": query_key}
+                    )
+                    row = result.fetchone()
+                    
+                    watermark = SyncWatermark(
+                        query_key=row.query_key,
+                        last_edat=row.last_edat,
+                        total_synced=row.total_synced,
+                        last_sync_count=row.last_sync_count,
+                        created_at=row.created_at,
+                        updated_at=row.updated_at
+                    )
+                    
+                    logger.info("Sync watermark updated", query_key=query_key, last_edat=watermark.last_edat)
+                    
+                else:
+                    # Create new watermark
+                    watermark = SyncWatermark(
+                        query_key=query_key,
+                        last_edat=last_edat,
+                        total_synced=total_synced or "0",
+                        last_sync_count=last_sync_count or "0",
+                        created_at=now,
+                        updated_at=now
+                    )
+                    
+                    await session.execute(
+                        text("""
+                        INSERT INTO sync_watermarks (query_key, last_edat, total_synced, last_sync_count, created_at, updated_at)
+                        VALUES (:query_key, :last_edat, :total_synced, :last_sync_count, :created_at, :updated_at)
+                        """),
+                        {
+                            "query_key": watermark.query_key,
+                            "last_edat": watermark.last_edat,
+                            "total_synced": watermark.total_synced,
+                            "last_sync_count": watermark.last_sync_count,
+                            "created_at": watermark.created_at,
+                            "updated_at": watermark.updated_at
+                        }
+                    )
+                    
+                    logger.info("Sync watermark created", query_key=query_key, last_edat=watermark.last_edat)
+                
+                await session.commit()
+                return watermark
+                
+        except Exception as e:
+            logger.error("Failed to create/update sync watermark", query_key=query_key, error=str(e))
             raise
 
 
