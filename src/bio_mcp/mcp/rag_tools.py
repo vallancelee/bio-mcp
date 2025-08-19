@@ -13,11 +13,11 @@ from typing import Any
 
 from mcp.types import TextContent
 
-from .database import get_database_manager
-from .logging_config import get_logger
-from .quality_scoring import JournalQualityScorer
-from .search_config import RESPONSE_CONFIG, SEARCH_CONFIG
-from .weaviate_client import get_weaviate_client
+from ..clients.database import get_database_manager
+from ..config.logging_config import get_logger
+from ..core.quality_scoring import JournalQualityScorer
+from ..config.search_config import RESPONSE_CONFIG, SEARCH_CONFIG
+from ..clients.weaviate_client import get_weaviate_client
 
 logger = get_logger(__name__)
 

@@ -5,10 +5,10 @@ Focused service classes that follow Single Responsibility Principle.
 
 from typing import Any
 
-from .database import DatabaseConfig, DatabaseManager
-from .logging_config import get_logger
-from .pubmed_client import PubMedClient, PubMedConfig
-from .weaviate_client import WeaviateClient, get_weaviate_client
+from ..clients.database import DatabaseConfig, DatabaseManager
+from ..config.logging_config import get_logger
+from ..clients.pubmed_client import PubMedClient, PubMedConfig
+from ..clients.weaviate_client import WeaviateClient, get_weaviate_client
 
 logger = get_logger(__name__)
 

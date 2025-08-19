@@ -8,10 +8,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.bio_mcp.pubmed_client import PubMedDocument
-from src.bio_mcp.pubmed_tools import PubMedToolsManager
-from src.bio_mcp.rag_tools import RAGToolsManager
-from src.bio_mcp.weaviate_client import WeaviateClient
+from src.bio_mcp.clients.pubmed_client import PubMedDocument
+from src.bio_mcp.mcp.pubmed_tools import PubMedToolsManager
+from src.bio_mcp.mcp.rag_tools import RAGToolsManager
+from src.bio_mcp.clients.weaviate_client import WeaviateClient
 
 
 class TestWeaviateLocalEmbeddings:
@@ -42,7 +42,7 @@ class TestWeaviateLocalEmbeddings:
     @pytest.mark.asyncio
     async def test_weaviate_document_storage_mock(self):
         """Test document storage with mocked Weaviate."""
-        with patch('src.bio_mcp.weaviate_client.weaviate') as mock_weaviate:
+        with patch('src.bio_mcp.clients.weaviate_client.weaviate') as mock_weaviate:
             # Create properly configured async mocks
             mock_client = AsyncMock()
             mock_collection = AsyncMock()
@@ -89,7 +89,7 @@ class TestRAGToolsIntegration:
     """Test RAG tools with new local embeddings architecture."""
     
     @pytest.mark.asyncio
-    @patch('src.bio_mcp.rag_tools.get_weaviate_client')
+    @patch('src.bio_mcp.mcp.rag_tools.get_weaviate_client')
     async def test_rag_search_no_openai_dependency(self, mock_get_weaviate):
         """Test that RAG search doesn't depend on OpenAI embeddings."""
         # Mock Weaviate client
@@ -122,9 +122,9 @@ class TestRAGToolsIntegration:
     @pytest.mark.asyncio 
     async def test_rag_search_tool_integration(self):
         """Test the RAG search tool end-to-end with mocked components."""
-        from src.bio_mcp.rag_tools import RAGSearchResult, rag_search_tool
+        from src.bio_mcp.mcp.rag_tools import RAGSearchResult, rag_search_tool
         
-        with patch('src.bio_mcp.rag_tools.RAGToolsManager') as mock_manager_class:
+        with patch('src.bio_mcp.mcp.rag_tools.RAGToolsManager') as mock_manager_class:
             # Mock manager instance
             mock_manager = AsyncMock()
             mock_manager_class.return_value = mock_manager
@@ -164,7 +164,7 @@ class TestPubMedWeaviateIntegration:
     """Test PubMed sync integration with Weaviate storage."""
     
     @pytest.mark.asyncio
-    @patch('src.bio_mcp.pubmed_tools.get_weaviate_client')
+    @patch('src.bio_mcp.mcp.pubmed_tools.get_weaviate_client')
     async def test_pubmed_sync_stores_in_weaviate(self, mock_get_weaviate):
         """Test that PubMed sync stores documents in Weaviate."""
         # Mock Weaviate client
@@ -173,19 +173,19 @@ class TestPubMedWeaviateIntegration:
         mock_weaviate.store_document.return_value = "test-uuid-123"
         
         # Mock database manager
-        with patch('src.bio_mcp.pubmed_tools.DatabaseManager') as mock_db_class:
+        with patch('src.bio_mcp.mcp.pubmed_tools.DatabaseManager') as mock_db_class:
             mock_db = AsyncMock()
             mock_db_class.return_value = mock_db
             mock_db.document_exists.return_value = False
             mock_db.create_document.return_value = None
             
             # Mock PubMed client
-            with patch('src.bio_mcp.pubmed_tools.PubMedClient') as mock_client_class:
+            with patch('src.bio_mcp.mcp.pubmed_tools.PubMedClient') as mock_client_class:
                 mock_client = AsyncMock()
                 mock_client_class.return_value = mock_client
                 
                 # Mock search result
-                from src.bio_mcp.pubmed_client import PubMedSearchResult
+                from src.bio_mcp.clients.pubmed_client import PubMedSearchResult
                 mock_search_result = PubMedSearchResult(
                     query="test query",
                     total_count=1,
@@ -235,9 +235,9 @@ class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_weaviate_connection_failure_graceful(self):
         """Test graceful handling of Weaviate connection failures."""
-        from src.bio_mcp.rag_tools import RAGToolsManager
+        from src.bio_mcp.mcp.rag_tools import RAGToolsManager
         
-        with patch('src.bio_mcp.rag_tools.get_weaviate_client') as mock_get_weaviate:
+        with patch('src.bio_mcp.mcp.rag_tools.get_weaviate_client') as mock_get_weaviate:
             # Mock Weaviate client that fails to initialize
             mock_weaviate = AsyncMock()
             mock_get_weaviate.return_value = mock_weaviate
@@ -255,26 +255,26 @@ class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_pubmed_sync_weaviate_error_fails_correctly(self):
         """Test that PubMed sync fails when Weaviate storage fails (current behavior)."""
-        with patch('src.bio_mcp.pubmed_tools.get_weaviate_client') as mock_get_weaviate:
+        with patch('src.bio_mcp.mcp.pubmed_tools.get_weaviate_client') as mock_get_weaviate:
             # Mock Weaviate client that fails during document storage
             mock_weaviate = AsyncMock()
             mock_get_weaviate.return_value = mock_weaviate
             mock_weaviate.store_document.side_effect = Exception("Weaviate storage failed")
             
             # Mock database manager (should still work)
-            with patch('src.bio_mcp.pubmed_tools.DatabaseManager') as mock_db_class:
+            with patch('src.bio_mcp.mcp.pubmed_tools.DatabaseManager') as mock_db_class:
                 mock_db = AsyncMock()
                 mock_db_class.return_value = mock_db
                 mock_db.document_exists.return_value = False
                 mock_db.create_document.return_value = None
                 
                 # Mock PubMed client
-                with patch('src.bio_mcp.pubmed_tools.PubMedClient') as mock_client_class:
+                with patch('src.bio_mcp.mcp.pubmed_tools.PubMedClient') as mock_client_class:
                     mock_client = AsyncMock()
                     mock_client_class.return_value = mock_client
                     
                     # Mock minimal successful response
-                    from src.bio_mcp.pubmed_client import (
+                    from src.bio_mcp.clients.pubmed_client import (
                         PubMedDocument,
                         PubMedSearchResult,
                     )
@@ -308,7 +308,7 @@ class TestPerformanceAndScaling:
     
     def test_chunk_size_optimization(self):
         """Test that chunk sizes are optimized for the transformer model."""
-        from src.bio_mcp.embeddings import ChunkingConfig
+        from src.bio_mcp.core.embeddings import ChunkingConfig
         
         # Verify chunking configuration is reasonable for local transformers
         config = ChunkingConfig()

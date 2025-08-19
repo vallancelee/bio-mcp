@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
-from .config import config
+from ..config.config import config
 from .metrics import get_metrics_dict
 
 

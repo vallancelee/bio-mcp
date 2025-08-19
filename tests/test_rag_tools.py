@@ -7,11 +7,11 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.bio_mcp.embeddings import (
+from src.bio_mcp.core.embeddings import (
     AbstractChunker,
     DocumentChunk,
 )
-from src.bio_mcp.rag_tools import RAGToolsManager, rag_get_tool, rag_search_tool
+from src.bio_mcp.mcp.rag_tools import RAGToolsManager, rag_get_tool, rag_search_tool
 
 
 class TestAbstractChunker:
@@ -173,7 +173,7 @@ class TestRAGTools:
         assert "Error: doc_id parameter is required" in result[0].text
     
     @pytest.mark.asyncio
-    @patch('src.bio_mcp.rag_tools.get_rag_manager')
+    @patch('src.bio_mcp.mcp.rag_tools.get_rag_manager')
     async def test_rag_search_tool_no_results(self, mock_get_manager):
         """Test RAG search tool when no results found."""
         # Mock manager
@@ -181,7 +181,7 @@ class TestRAGTools:
         mock_get_manager.return_value = mock_manager
         
         # Mock search result with no documents
-        from src.bio_mcp.rag_tools import RAGSearchResult
+        from src.bio_mcp.mcp.rag_tools import RAGSearchResult
         mock_result = RAGSearchResult(
             query="test query",
             total_results=0,
@@ -197,7 +197,7 @@ class TestRAGTools:
         assert "test query" in result[0].text
     
     @pytest.mark.asyncio
-    @patch('src.bio_mcp.rag_tools.get_rag_manager')
+    @patch('src.bio_mcp.mcp.rag_tools.get_rag_manager')
     async def test_rag_get_tool_document_not_found(self, mock_get_manager):
         """Test RAG get tool when document is not found."""
         # Mock manager
@@ -205,7 +205,7 @@ class TestRAGTools:
         mock_get_manager.return_value = mock_manager
         
         # Mock get result with document not found
-        from src.bio_mcp.rag_tools import RAGGetResult
+        from src.bio_mcp.mcp.rag_tools import RAGGetResult
         mock_result = RAGGetResult(
             doc_id="pmid:123",
             found=False

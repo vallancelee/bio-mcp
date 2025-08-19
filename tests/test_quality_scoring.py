@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from src.bio_mcp.quality_scoring import JournalQualityScorer, QualityConfig
+from src.bio_mcp.core.quality_scoring import JournalQualityScorer, QualityConfig
 
 
 class TestQualityConfig:

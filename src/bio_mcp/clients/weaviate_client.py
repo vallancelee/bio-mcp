@@ -9,8 +9,8 @@ import weaviate
 from weaviate.classes.config import Configure, DataType, Property
 from weaviate.classes.query import MetadataQuery
 
-from .config import config
-from .logging_config import get_logger
+from ..config.config import config
+from ..config.logging_config import get_logger
 
 logger = get_logger(__name__)
 

@@ -13,17 +13,17 @@ from typing import Any
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 
-from .config import config
-from .error_handling import error_boundary, validate_tool_arguments
-from .logging_config import auto_configure_logging, get_logger
-from .metrics import record_tool_call
-from .pubmed_tools import (
+from .config.config import config
+from .core.error_handling import error_boundary, validate_tool_arguments
+from .config.logging_config import auto_configure_logging, get_logger
+from .monitoring.metrics import record_tool_call
+from .mcp.pubmed_tools import (
     pubmed_get_tool,
     pubmed_search_tool,
     pubmed_sync_tool,
 )
-from .rag_tools import rag_get_tool, rag_search_tool
-from .tool_definitions import get_all_tool_definitions
+from .mcp.rag_tools import rag_get_tool, rag_search_tool
+from .mcp.tool_definitions import get_all_tool_definitions
 
 # Configure structured logging
 auto_configure_logging()

@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from threading import Lock
 from typing import Any
 
-from .config import config
+from ..config.config import config
 
 
 @dataclass

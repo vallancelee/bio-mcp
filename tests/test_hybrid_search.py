@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.bio_mcp.rag_tools import RAGToolsManager, rag_search_tool
+from src.bio_mcp.mcp.rag_tools import RAGToolsManager, rag_search_tool
 
 
 class TestHybridSearchFunctionality:
@@ -18,7 +18,7 @@ class TestHybridSearchFunctionality:
     @pytest.mark.asyncio
     async def test_rag_search_tool_hybrid_mode(self):
         """Test RAG search tool with hybrid search mode."""
-        with patch('src.bio_mcp.rag_tools.get_rag_manager') as mock_get_manager:
+        with patch('src.bio_mcp.mcp.rag_tools.get_rag_manager') as mock_get_manager:
             # Mock the manager and its search method
             mock_manager = AsyncMock(spec=RAGToolsManager)
             mock_get_manager.return_value = mock_manager
@@ -94,7 +94,7 @@ class TestHybridSearchFunctionality:
     @pytest.mark.asyncio
     async def test_rag_search_tool_bm25_mode(self):
         """Test RAG search tool with BM25-only mode."""
-        with patch('src.bio_mcp.rag_tools.get_rag_manager') as mock_get_manager:
+        with patch('src.bio_mcp.mcp.rag_tools.get_rag_manager') as mock_get_manager:
             mock_manager = AsyncMock(spec=RAGToolsManager)
             mock_get_manager.return_value = mock_manager
             
@@ -148,7 +148,7 @@ class TestHybridSearchFunctionality:
     @pytest.mark.asyncio
     async def test_rag_search_tool_semantic_mode(self):
         """Test RAG search tool with semantic-only mode."""
-        with patch('src.bio_mcp.rag_tools.get_rag_manager') as mock_get_manager:
+        with patch('src.bio_mcp.mcp.rag_tools.get_rag_manager') as mock_get_manager:
             mock_manager = AsyncMock(spec=RAGToolsManager)
             mock_get_manager.return_value = mock_manager
             
@@ -195,7 +195,7 @@ class TestHybridSearchFunctionality:
     @pytest.mark.asyncio
     async def test_search_mode_validation(self):
         """Test that invalid search modes default to hybrid."""
-        with patch('src.bio_mcp.rag_tools.get_rag_manager') as mock_get_manager:
+        with patch('src.bio_mcp.mcp.rag_tools.get_rag_manager') as mock_get_manager:
             mock_manager = AsyncMock(spec=RAGToolsManager)
             mock_get_manager.return_value = mock_manager
             
@@ -296,7 +296,7 @@ class TestSearchModeParameters:
     @pytest.mark.asyncio 
     async def test_default_parameters(self):
         """Test that default parameters are applied correctly."""
-        with patch('src.bio_mcp.rag_tools.get_rag_manager') as mock_get_manager:
+        with patch('src.bio_mcp.mcp.rag_tools.get_rag_manager') as mock_get_manager:
             mock_manager = AsyncMock(spec=RAGToolsManager)
             mock_get_manager.return_value = mock_manager
             
@@ -324,7 +324,7 @@ class TestSearchModeParameters:
     @pytest.mark.asyncio
     async def test_parameter_bounds(self):
         """Test that parameter bounds are enforced.""" 
-        with patch('src.bio_mcp.rag_tools.get_rag_manager') as mock_get_manager:
+        with patch('src.bio_mcp.mcp.rag_tools.get_rag_manager') as mock_get_manager:
             mock_manager = AsyncMock(spec=RAGToolsManager)
             mock_get_manager.return_value = mock_manager
             

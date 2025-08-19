@@ -11,12 +11,12 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from weaviate.classes.query import Filter
 
-from src.bio_mcp.pubmed_client import PubMedDocument, PubMedSearchResult
-from src.bio_mcp.pubmed_tools import (
+from src.bio_mcp.clients.pubmed_client import PubMedDocument, PubMedSearchResult
+from src.bio_mcp.mcp.pubmed_tools import (
     PubMedToolsManager,
 )
-from src.bio_mcp.rag_tools import rag_search_tool
-from src.bio_mcp.weaviate_client import get_weaviate_client
+from src.bio_mcp.mcp.rag_tools import rag_search_tool
+from src.bio_mcp.clients.weaviate_client import get_weaviate_client
 
 
 class TestEndToEndRAGWorkflow:
@@ -46,13 +46,13 @@ class TestEndToEndRAGWorkflow:
             keywords=["cancer", "immunotherapy", "treatment"]
         )
         
-        with patch('src.bio_mcp.pubmed_tools.PubMedClient') as mock_client_class:
+        with patch('src.bio_mcp.mcp.pubmed_tools.PubMedClient') as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value = mock_client
             mock_client.search.return_value = mock_search_result
             mock_client.fetch_documents.return_value = [mock_document]
             
-            with patch('src.bio_mcp.pubmed_tools.DatabaseManager') as mock_db_class:
+            with patch('src.bio_mcp.mcp.pubmed_tools.DatabaseManager') as mock_db_class:
                 mock_db = AsyncMock()
                 mock_db_class.return_value = mock_db
                 mock_db.document_exists.return_value = False
@@ -140,13 +140,13 @@ class TestEndToEndRAGWorkflow:
             doi="10.1000/diabetes.2024.67890"
         )
         
-        with patch('src.bio_mcp.pubmed_tools.PubMedClient') as mock_client_class:
+        with patch('src.bio_mcp.mcp.pubmed_tools.PubMedClient') as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value = mock_client
             mock_client.search.return_value = mock_search_result
             mock_client.fetch_documents.return_value = [mock_document]
             
-            with patch('src.bio_mcp.pubmed_tools.DatabaseManager') as mock_db_class:
+            with patch('src.bio_mcp.mcp.pubmed_tools.DatabaseManager') as mock_db_class:
                 mock_db = AsyncMock()
                 mock_db_class.return_value = mock_db
                 mock_db.document_exists.return_value = False

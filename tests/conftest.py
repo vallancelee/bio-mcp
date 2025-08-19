@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from bio_mcp.config import Config
+from bio_mcp.config.config import Config
 
 
 @pytest.fixture
