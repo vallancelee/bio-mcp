@@ -171,6 +171,39 @@ async def main():
     """Main entry point for the MCP server."""
     logger.info("Starting Bio-MCP server...")
 
+    # Initialize database with migrations
+    try:
+        from .clients.database import DatabaseConfig, DatabaseManager
+        from .clients.migrations import run_migrations
+        
+        logger.info("Initializing database connection...")
+        db_config = DatabaseConfig.from_env()
+        
+        # Run migrations to ensure schema is up to date
+        if db_config.url and db_config.url != "sqlite:///:memory:":
+            logger.info("Running database migrations...")
+            migration_success = await run_migrations(db_config.url)
+            if not migration_success:
+                raise Exception("Database migrations failed")
+            logger.info("Database migrations completed successfully")
+        
+        # Initialize database manager (without schema creation since migrations handle it)
+        db_manager = DatabaseManager(db_config)
+        # Create engine and session factory but skip schema creation
+        db_manager.config = db_config
+        db_manager.engine = None  # Will be created on first use
+        db_manager.session_factory = None
+        
+        # Store database manager globally for access by tools
+        import bio_mcp.clients.database as db_module
+        db_module._database_manager = db_manager
+        
+        logger.info("Database initialization completed successfully")
+        
+    except Exception as e:
+        logger.error(f"Database initialization failed: {e}")
+        logger.warning("Continuing without database - some tools may not work properly")
+
     # Set up signal handlers for graceful shutdown
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
@@ -217,6 +250,15 @@ async def main():
         logger.error(f"Server error: {e}")
         sys.exit(1)
     finally:
+        # Cleanup database connection
+        try:
+            import bio_mcp.clients.database as db_module
+            if db_module._database_manager:
+                await db_module._database_manager.close()
+                logger.info("Database connections closed")
+        except Exception as e:
+            logger.warning(f"Error closing database: {e}")
+        
         logger.info("Bio-MCP server stopped")
 
 

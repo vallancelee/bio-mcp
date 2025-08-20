@@ -10,6 +10,13 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
+  default_tags {
+    tags = {
+      Project = "bio-mcp"
+      Owner   = "vallance"
+      Env     = var.env
+    }
+  }
 }
 
 variable "aws_region" {

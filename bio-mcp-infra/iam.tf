@@ -20,7 +20,9 @@ resource "aws_iam_role_policy" "ecs_task_policy" {
     Version = "2012-10-17",
     Statement = [
       { Effect="Allow", Action=["ssm:GetParameter","ssm:GetParameters","kms:Decrypt"], Resource="*" },
-      { Effect="Allow", Action=["s3:*"], Resource=[aws_s3_bucket.raw.arn, "${aws_s3_bucket.raw.arn}/*"] }
+      { Effect="Allow", Action=["s3:*"], Resource=[aws_s3_bucket.raw.arn, "${aws_s3_bucket.raw.arn}/*"] },
+      { Effect="Allow", Action=["ecr:GetAuthorizationToken","ecr:BatchCheckLayerAvailability","ecr:GetDownloadUrlForLayer","ecr:BatchGetImage"], Resource="*" },
+      { Effect="Allow", Action=["logs:CreateLogGroup","logs:CreateLogStream","logs:PutLogEvents"], Resource="*" }
     ]
   })
 }

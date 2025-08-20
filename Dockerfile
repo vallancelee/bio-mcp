@@ -10,8 +10,9 @@ WORKDIR /app
 RUN pip install uv
 
 # Copy project files
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock alembic.ini ./
 COPY src/ src/
+COPY migrations/ migrations/
 
 # Install dependencies
 RUN uv sync --frozen

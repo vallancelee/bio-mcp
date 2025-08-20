@@ -11,3 +11,8 @@ variable "app_db_password"     { sensitive = true }
 
 variable "pubmed_api_key" { sensitive = true }
 variable "openai_api_key" { sensitive = true }
+
+variable "account_id" {
+  description = "AWS Account ID"
+  type        = string
+}

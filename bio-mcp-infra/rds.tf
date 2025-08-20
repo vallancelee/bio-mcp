@@ -1,13 +1,4 @@
-data "aws_vpc" "default" {
-  default = true
-}
-
-data "aws_subnets" "default" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
-}
+# VPC and subnet data sources are defined in main.tf
 
 resource "aws_security_group" "rds" {
   name   = "bio-mcp-rds-sg-${var.env}"

@@ -42,7 +42,7 @@ class SecurityConfig:
         
         # Path traversal
         r"\.\.\/",
-        r"\.\.\\\",
+        r"\.\.\\\\",
         
         # Command injection
         r"[;&|`$(){}[\]]",
@@ -185,7 +185,7 @@ class SecurityValidator:
     
     def _validate_number(self, field_name: str, value: Any) -> None:
         """Validate numeric input."""
-        if not isinstance(value, (int, float)):
+        if not isinstance(value, int | float):
             raise MCPError(
                 f"Field '{field_name}' must be a number",
                 ErrorCode.VALIDATION,

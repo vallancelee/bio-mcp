@@ -1,0 +1,7 @@
+env                  = "dev"
+aws_region           = "us-west-2"
+my_ip_cidr           = "YOUR.IP.ADDR.XXX/32"
+rds_master_password  = "STRONG_DEV_PASSWORD"
+app_db_password      = "STRONG_DEV_APP_PASSWORD"
+pubmed_api_key       = "YOUR_DEV_PUBMED_KEY"
+openai_api_key       = "YOUR_DEV_OPENAI_KEY"

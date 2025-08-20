@@ -2,7 +2,7 @@ terraform {
   required_version = ">= 1.6.0"
 
   backend "s3" {
-    bucket               = "bio-mcp-tfstate-<account-id>-us-west-2"
+    bucket               = "bio-mcp-tfstate-298367968337-us-west-2"
     key                  = "terraform.tfstate"   # constant filename
     workspace_key_prefix = "envs"                # puts states under envs/<workspace>/
     region               = "us-west-2"
@@ -19,17 +19,16 @@ locals {
   }
 }
 
-# (Provider block can also live in providers.tf if you already have it)
-provider "aws" {
-  region = var.aws_region
-  default_tags { tags = local.common_tags }
-}
+# Provider configuration is in providers.tf
 
 # Default VPC + subnets as shared data sources
 data "aws_vpc" "default" { default = true }
 
 data "aws_subnets" "default" {
-  filter { name = "vpc-id" values = [data.aws_vpc.default.id] }
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
 }
 
 # Helpful outputs
