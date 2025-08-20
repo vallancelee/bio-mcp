@@ -136,7 +136,7 @@ class WeaviateClient:
         return str(uuid)
 
     async def search_documents(self, query: str, limit: int = 5, search_mode: str = "semantic", 
-                             alpha: float = 0.5) -> list[dict[str, Any]]:
+                             alpha: float = 0.5, filters: dict | None = None) -> list[dict[str, Any]]:
         """Search documents using different search modes.
         
         Args:
@@ -144,6 +144,7 @@ class WeaviateClient:
             limit: Maximum number of results to return
             search_mode: 'semantic', 'bm25', or 'hybrid'
             alpha: Weighting for hybrid search (0.0=pure BM25, 1.0=pure vector)
+            filters: Metadata filters for date ranges, journals, etc.
             
         Returns:
             List of search results with scores and metadata
@@ -153,13 +154,17 @@ class WeaviateClient:
         
         collection = self.client.collections.get(self.collection_name)
         
-        logger.debug("Performing search", query=query[:50], limit=limit, mode=search_mode, alpha=alpha)
+        logger.debug("Performing search", query=query[:50], limit=limit, mode=search_mode, alpha=alpha, filters=filters)
+        
+        # Build Weaviate filters if provided
+        weaviate_filter = self._build_weaviate_filter(filters) if filters else None
         
         if search_mode == "bm25":
             # Pure BM25 keyword search
             response = collection.query.bm25(
                 query=query,
                 limit=limit,
+                where=weaviate_filter,
                 return_metadata=MetadataQuery(score=True)
             )
         elif search_mode == "hybrid":
@@ -168,6 +173,7 @@ class WeaviateClient:
                 query=query,
                 alpha=alpha,  # 0.0=pure BM25, 1.0=pure vector
                 limit=limit,
+                where=weaviate_filter,
                 return_metadata=MetadataQuery(score=True, explain_score=True)
             )
         else:  # semantic (default)
@@ -175,6 +181,7 @@ class WeaviateClient:
             response = collection.query.near_text(
                 query=query,
                 limit=limit,
+                where=weaviate_filter,
                 return_metadata=MetadataQuery(score=True, distance=True)
             )
         
@@ -200,6 +207,64 @@ class WeaviateClient:
         
         logger.info("Search completed", query=query[:50], mode=search_mode, results_count=len(results))
         return results
+
+    def _build_weaviate_filter(self, filters: dict) -> Any:
+        """Build Weaviate filter from metadata filters."""
+        from weaviate.classes.query import Filter
+        
+        filter_conditions = []
+        
+        # Date range filters
+        if filters.get("date_from"):
+            try:
+                # Convert YYYY-MM-DD to RFC3339 format for Weaviate
+                date_from = f"{filters['date_from']}T00:00:00Z"
+                filter_conditions.append(
+                    Filter.by_property("publication_date").greater_or_equal(date_from)
+                )
+            except Exception as e:
+                logger.warning("Invalid date_from filter", date_from=filters.get("date_from"), error=str(e))
+        
+        if filters.get("date_to"):
+            try:
+                # Convert YYYY-MM-DD to RFC3339 format for Weaviate
+                date_to = f"{filters['date_to']}T23:59:59Z"
+                filter_conditions.append(
+                    Filter.by_property("publication_date").less_or_equal(date_to)
+                )
+            except Exception as e:
+                logger.warning("Invalid date_to filter", date_to=filters.get("date_to"), error=str(e))
+        
+        # Journal filters
+        if filters.get("journals") and isinstance(filters["journals"], list):
+            # Create OR condition for multiple journals
+            journal_conditions = []
+            for journal in filters["journals"]:
+                if journal and isinstance(journal, str):
+                    journal_conditions.append(
+                        Filter.by_property("journal").contains_any([journal])
+                    )
+            
+            if journal_conditions:
+                if len(journal_conditions) == 1:
+                    filter_conditions.append(journal_conditions[0])
+                else:
+                    # Combine multiple journal conditions with OR
+                    combined_journal_filter = journal_conditions[0]
+                    for condition in journal_conditions[1:]:
+                        combined_journal_filter = combined_journal_filter | condition
+                    filter_conditions.append(combined_journal_filter)
+        
+        # Combine all conditions with AND
+        if not filter_conditions:
+            return None
+        elif len(filter_conditions) == 1:
+            return filter_conditions[0]
+        else:
+            combined_filter = filter_conditions[0]
+            for condition in filter_conditions[1:]:
+                combined_filter = combined_filter & condition
+            return combined_filter
 
     async def get_document_by_pmid(self, pmid: str) -> dict[str, Any] | None:
         """Get a document by its PMID."""

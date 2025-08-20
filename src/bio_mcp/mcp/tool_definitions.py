@@ -122,7 +122,7 @@ def get_rag_tool_definitions() -> list[Tool]:
     return [
         Tool(
             name="rag.search",
-            description="Hybrid search combining BM25 keyword search with vector similarity for biomedical documents",
+            description="Advanced hybrid search combining BM25 keyword search with vector similarity, optimized for biotech investment research",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -140,10 +140,27 @@ def get_rag_tool_definitions() -> list[Tool]:
                         "description": "Search strategy: 'hybrid' (BM25+vector), 'semantic' (vector only), 'bm25' (keyword only)",
                         "default": "hybrid"
                     },
+                    "alpha": {
+                        "type": "number",
+                        "description": "Hybrid search weighting: 0.0=pure BM25 keyword, 1.0=pure vector semantic, 0.5=balanced",
+                        "default": 0.5,
+                        "minimum": 0.0,
+                        "maximum": 1.0
+                    },
                     "rerank_by_quality": {
                         "type": "boolean",
-                        "description": "Boost results by PubMed quality metrics and journal impact",
+                        "description": "Boost results by PubMed quality metrics, journal impact, and investment relevance",
                         "default": True
+                    },
+                    "filters": {
+                        "type": "object",
+                        "description": "Metadata filters for date ranges, journals, etc.",
+                        "properties": {
+                            "date_from": {"type": "string", "description": "Filter results from this date (YYYY-MM-DD)"},
+                            "date_to": {"type": "string", "description": "Filter results to this date (YYYY-MM-DD)"},
+                            "journals": {"type": "array", "items": {"type": "string"}, "description": "Filter by specific journals"}
+                        },
+                        "additionalProperties": False
                     },
                 },
                 "required": ["query"],

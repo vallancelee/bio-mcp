@@ -26,6 +26,17 @@ class QualityConfig:
     TIER_1_JOURNALS: frozenset[str] = frozenset([
         "nature", "science", "cell", "lancet", "nejm", "new england journal of medicine"
     ])
+    
+    # Investment relevance keywords for biotech research
+    INVESTMENT_KEYWORDS: frozenset[str] = frozenset([
+        "clinical trial", "phase i", "phase ii", "phase iii", "fda approval", "market", 
+        "commercial", "therapeutic", "drug development", "pipeline", "biotech", "pharma",
+        "revenue", "patent", "intellectual property", "regulatory", "approval", "indication",
+        "companion diagnostic", "personalized medicine", "precision medicine", "biomarker"
+    ])
+    
+    # Investment relevance boost
+    INVESTMENT_BOOST_FACTOR: float = 0.08  # 8% boost for investment-relevant content
 
 
 class JournalQualityScorer:
@@ -60,6 +71,11 @@ class JournalQualityScorer:
         legacy_boost = self._calculate_legacy_boost(document.get("quality_total", 0))
         if legacy_boost > 0:
             quality_factors.append(legacy_boost)
+        
+        # Investment relevance boost for biotech research
+        investment_boost = self._calculate_investment_boost(document)
+        if investment_boost > 0:
+            quality_factors.append(investment_boost)
         
         return sum(quality_factors)
     
@@ -106,6 +122,33 @@ class JournalQualityScorer:
             return 0.0
         
         return quality_total / self.config.LEGACY_QUALITY_DIVISOR
+    
+    def _calculate_investment_boost(self, document: dict[str, Any]) -> float:
+        """Calculate boost based on investment relevance for biotech research."""
+        # Combine searchable text fields
+        searchable_text = " ".join([
+            document.get("title", ""),
+            document.get("abstract", ""),
+            " ".join(document.get("keywords", [])),
+            " ".join(document.get("mesh_terms", []))
+        ]).lower()
+        
+        if not searchable_text:
+            return 0.0
+        
+        # Count investment-relevant keywords
+        keyword_matches = sum(
+            1 for keyword in self.config.INVESTMENT_KEYWORDS 
+            if keyword in searchable_text
+        )
+        
+        # Apply boost if investment-relevant content found
+        if keyword_matches > 0:
+            # Scale boost by number of matches (up to 3x boost)
+            boost_multiplier = min(keyword_matches / 3.0, 1.0)
+            return self.config.INVESTMENT_BOOST_FACTOR * boost_multiplier
+        
+        return 0.0
     
     def apply_quality_boost(self, results: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """

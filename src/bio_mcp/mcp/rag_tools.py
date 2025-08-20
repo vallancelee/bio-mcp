@@ -7,6 +7,7 @@ Implements MCP tools for:
 - rag.get: Retrieve specific document by ID
 """
 
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -29,6 +30,7 @@ class RAGSearchResult:
     total_results: int
     documents: list[dict[str, Any]]
     search_type: str  # "semantic" or "text"
+    performance: dict[str, float] | None = None  # Performance metrics
 
 
 @dataclass
@@ -73,20 +75,37 @@ class RAGToolsManager:
         """
         logger.info("RAG hybrid search", query=query[:50], top_k=top_k, mode=search_mode, alpha=alpha)
         
+        search_start_time = time.time()
+        
         try:
             await self.weaviate.initialize()
             
             # Perform search with specified mode
+            search_time_start = time.time()
             results = await self.weaviate.search_documents(
                 query=query,
                 limit=top_k,
                 search_mode=search_mode,
-                alpha=alpha
+                alpha=alpha,
+                filters=filters
             )
+            search_time_ms = (time.time() - search_time_start) * 1000
             
             # Apply quality-based reranking if enabled
+            quality_time_start = time.time()
             if rerank_by_quality:
                 results = self.quality_scorer.apply_quality_boost(results)
+            quality_time_ms = (time.time() - quality_time_start) * 1000
+            
+            # Calculate total processing time
+            total_time_ms = (time.time() - search_start_time) * 1000
+            
+            # Log performance metrics
+            logger.info("RAG search performance", 
+                       search_time_ms=f"{search_time_ms:.1f}",
+                       quality_time_ms=f"{quality_time_ms:.1f}",
+                       total_time_ms=f"{total_time_ms:.1f}",
+                       results_count=len(results))
             
             # Format results for consistent output
             formatted_results = []
@@ -110,12 +129,23 @@ class RAGToolsManager:
                     
                 formatted_results.append(formatted_result)
             
-            return RAGSearchResult(
+            # Add performance metadata to the result
+            search_result = RAGSearchResult(
                 query=query,
                 total_results=len(formatted_results),
                 documents=formatted_results,
                 search_type=search_mode
             )
+            
+            # Add performance data for display
+            search_result.performance = {
+                "search_time_ms": search_time_ms,
+                "quality_time_ms": quality_time_ms,
+                "total_time_ms": total_time_ms,
+                "target_time_ms": 200.0  # Phase 4B.1 target
+            }
+            
+            return search_result
             
         except Exception as e:
             logger.error("RAG search failed", query=query, mode=search_mode, error=str(e))
@@ -206,7 +236,9 @@ async def rag_search_tool(name: str, arguments: dict[str, Any]) -> Sequence[Text
         query: Search query string
         top_k: Number of results to return (default: 10, max: 50)
         search_mode: 'hybrid' (default), 'semantic', or 'bm25'
+        alpha: Hybrid search weighting (0.0=pure BM25, 1.0=pure vector, 0.5=balanced)
         rerank_by_quality: Whether to boost results by quality (default: true)
+        filters: Metadata filters for date ranges, journals, etc.
         
     Returns:
         Formatted search results with hybrid scoring
@@ -217,7 +249,12 @@ async def rag_search_tool(name: str, arguments: dict[str, Any]) -> Sequence[Text
         SEARCH_CONFIG.MAX_TOP_K
     )
     search_mode = arguments.get("search_mode", "hybrid").lower()
+    alpha = float(arguments.get("alpha", 0.5))
     rerank_by_quality = arguments.get("rerank_by_quality", True)
+    filters = arguments.get("filters", {})
+    
+    # Validate alpha parameter
+    alpha = max(0.0, min(1.0, alpha))  # Clamp to [0.0, 1.0]
     
     # Validate search mode
     valid_modes = ["hybrid", "semantic", "bm25"]
@@ -230,7 +267,7 @@ async def rag_search_tool(name: str, arguments: dict[str, Any]) -> Sequence[Text
             text="❌ Error: Query parameter is required"
         )]
     
-    logger.info("RAG hybrid search tool called", query=query, top_k=top_k, mode=search_mode)
+    logger.info("RAG hybrid search tool called", query=query, top_k=top_k, mode=search_mode, alpha=alpha)
     
     try:
         manager = get_rag_manager()
@@ -238,7 +275,9 @@ async def rag_search_tool(name: str, arguments: dict[str, Any]) -> Sequence[Text
             query=query, 
             top_k=top_k,
             search_mode=search_mode,
-            rerank_by_quality=rerank_by_quality
+            filters=filters,
+            rerank_by_quality=rerank_by_quality,
+            alpha=alpha
         )
         
         if result.total_results == 0:
@@ -277,19 +316,50 @@ Try different keywords, search modes ('hybrid', 'semantic', 'bm25'), or check if
             
             # Add search statistics
             mode_description = {
-                "hybrid": "Hybrid (BM25 + Vector)",
-                "semantic": "Semantic (Vector)",
-                "bm25": "Keyword (BM25)"
+                "hybrid": f"Hybrid (BM25 + Vector, alpha={alpha:.1f})",
+                "semantic": "Semantic (Vector Only)",
+                "bm25": "Keyword (BM25 Only)"
             }.get(result.search_type, result.search_type.title())
             
             quality_note = "Quality boosting: ON" if rerank_by_quality else "Quality boosting: OFF"
+            
+            # Add performance information
+            performance_info = ""
+            if result.performance:
+                total_ms = result.performance["total_time_ms"]
+                target_ms = result.performance["target_time_ms"]
+                performance_status = "✅" if total_ms <= target_ms else "⚠️"
+                performance_info = f"**{performance_status} Performance:** {total_ms:.1f}ms (target: {target_ms:.0f}ms)\n"
+            
+            # Add filter information if any
+            filter_info = ""
+            if filters:
+                filter_parts = []
+                if filters.get("date_from") or filters.get("date_to"):
+                    date_from = filters.get("date_from", "")
+                    date_to = filters.get("date_to", "")
+                    if date_from and date_to:
+                        filter_parts.append(f"Date: {date_from} to {date_to}")
+                    elif date_from:
+                        filter_parts.append(f"Date: from {date_from}")
+                    elif date_to:
+                        filter_parts.append(f"Date: until {date_to}")
+                if filters.get("journals"):
+                    journals = filters["journals"]
+                    if len(journals) <= 3:
+                        filter_parts.append(f"Journals: {', '.join(journals)}")
+                    else:
+                        filter_parts.append(f"Journals: {', '.join(journals[:3])} +{len(journals)-3} more")
+                
+                if filter_parts:
+                    filter_info = f"**Filters:** {' | '.join(filter_parts)}\n"
             
             response_text = f"""🔍 **Hybrid RAG Search Results**
 
 **Query:** {query}
 **Search Mode:** {mode_description}
 **{quality_note}**
-**Results:** {result.total_results} documents found
+{performance_info}{filter_info}**Results:** {result.total_results} documents found
 
 {chr(10).join(results_text)}"""
         
