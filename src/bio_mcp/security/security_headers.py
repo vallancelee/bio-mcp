@@ -8,8 +8,8 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from ..config.logging_config import get_logger
-from ..core.error_handling import ErrorCode, MCPError
+from bio_mcp.config.logging_config import get_logger
+from bio_mcp.core.error_handling import ErrorCode, MCPError
 
 logger = get_logger(__name__)
 

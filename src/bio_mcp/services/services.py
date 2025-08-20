@@ -6,10 +6,11 @@ Focused service classes that follow Single Responsibility Principle.
 
 from typing import Any
 
-from ..clients.database import DatabaseConfig, DatabaseManager
-from ..clients.pubmed_client import PubMedClient, PubMedConfig
-from ..clients.weaviate_client import WeaviateClient, get_weaviate_client
-from ..config.logging_config import get_logger
+from bio_mcp.config.logging_config import get_logger
+from bio_mcp.shared.clients.database import DatabaseConfig, DatabaseManager
+from bio_mcp.shared.clients.weaviate_client import WeaviateClient, get_weaviate_client
+from bio_mcp.sources.pubmed.client import PubMedClient
+from bio_mcp.sources.pubmed.config import PubMedConfig
 
 logger = get_logger(__name__)
 

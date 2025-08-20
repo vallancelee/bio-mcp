@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from mcp.types import Resource
 
-from src.bio_mcp.mcp.resources import (
+from bio_mcp.mcp.resources import (
     BioMCPResourceManager,
     ResourceResult,
     get_resource_manager,

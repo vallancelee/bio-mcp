@@ -7,11 +7,11 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.bio_mcp.core.embeddings import (
+from bio_mcp.mcp.rag_tools import RAGToolsManager, rag_get_tool, rag_search_tool
+from bio_mcp.shared.core.embeddings import (
     AbstractChunker,
     DocumentChunk,
 )
-from src.bio_mcp.mcp.rag_tools import RAGToolsManager, rag_get_tool, rag_search_tool
 
 
 class TestAbstractChunker:

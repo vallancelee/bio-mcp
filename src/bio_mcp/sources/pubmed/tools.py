@@ -11,9 +11,9 @@ from typing import Any
 
 from mcp.types import TextContent
 
-from ..config.logging_config import get_logger
-from ..config.search_config import RESPONSE_CONFIG
-from ..services.services import DocumentService, PubMedService, SyncOrchestrator
+from bio_mcp.config.logging_config import get_logger
+from bio_mcp.config.search_config import RESPONSE_CONFIG
+from bio_mcp.services.services import DocumentService, PubMedService, SyncOrchestrator
 
 logger = get_logger(__name__)
 

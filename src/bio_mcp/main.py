@@ -13,25 +13,25 @@ from typing import Any
 from mcp.server import Server
 from mcp.types import Resource, TextContent, Tool
 
-from .config.config import config
-from .config.logging_config import auto_configure_logging, get_logger
-from .core.error_handling import error_boundary, validate_tool_arguments
-from .mcp.corpus_tools import (
+from bio_mcp.config.config import config
+from bio_mcp.config.logging_config import auto_configure_logging, get_logger
+from bio_mcp.mcp.corpus_tools import (
     corpus_checkpoint_create_tool,
     corpus_checkpoint_delete_tool,
     corpus_checkpoint_get_tool,
     corpus_checkpoint_list_tool,
 )
-from .mcp.pubmed_tools import (
+from bio_mcp.mcp.rag_tools import rag_get_tool, rag_search_tool
+from bio_mcp.mcp.resources import list_resources, read_resource
+from bio_mcp.mcp.tool_definitions import get_all_tool_definitions
+from bio_mcp.monitoring.metrics import record_tool_call
+from bio_mcp.shared.core.error_handling import error_boundary, validate_tool_arguments
+from bio_mcp.sources.pubmed.tools import (
     pubmed_get_tool,
     pubmed_search_tool,
     pubmed_sync_incremental_tool,
     pubmed_sync_tool,
 )
-from .mcp.rag_tools import rag_get_tool, rag_search_tool
-from .mcp.resources import list_resources, read_resource
-from .mcp.tool_definitions import get_all_tool_definitions
-from .monitoring.metrics import record_tool_call
 
 # Configure structured logging
 auto_configure_logging()

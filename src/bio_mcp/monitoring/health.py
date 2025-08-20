@@ -12,8 +12,8 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
-from ..config.config import config
-from .metrics import get_metrics_dict
+from bio_mcp.config.config import config
+from bio_mcp.metrics import get_metrics_dict
 
 
 class HealthStatus(str, Enum):

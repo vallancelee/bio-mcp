@@ -14,7 +14,7 @@ from uuid import UUID
 
 import tiktoken
 
-from ..config.logging_config import get_logger
+from bio_mcp.config.logging_config import get_logger
 
 logger = get_logger(__name__)
 

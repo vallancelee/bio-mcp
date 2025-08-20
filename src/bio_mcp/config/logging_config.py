@@ -10,7 +10,7 @@ import sys
 from datetime import UTC, datetime
 from typing import Any
 
-from .config import config
+from bio_mcp.config.config import config
 
 
 class JSONFormatter(logging.Formatter):

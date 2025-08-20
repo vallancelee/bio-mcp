@@ -48,13 +48,19 @@ Core dependencies include:
 - **Linting & Formatting**: `uv run ruff check` and `uv run ruff format` for fast Python linting and formatting
 - **Type Checking**: `uv run mypy .` for static type analysis
 - **Testing**: `uv run pytest` (includes testcontainers for integration tests)
+- **Code Coverage**: `uv run python scripts/coverage.py` for comprehensive coverage analysis
 - **MCP Testing**: `uv run python clients/cli.py list-tools` to verify server works
 - **Pre-commit**: Automated code quality checks
 
 ## Testing
-- Run tests: `uv run pytest`
-- Test directory: `tests/`
-- Async test support enabled
+- **Run all tests**: `uv run pytest`
+- **Run with coverage**: `uv run python scripts/coverage.py`
+- **Unit tests only**: `uv run pytest tests/unit/`
+- **Integration tests only**: `uv run pytest tests/integration/`
+- **E2E tests only**: `uv run pytest tests/e2e/`
+- **Test directory structure**: `tests/unit/`, `tests/integration/`, `tests/e2e/`
+- **Coverage reports**: Generated in `htmlcov/` directory
+- **Current coverage**: ~20% (baseline established)
 
 ## Code Standards
 - Line length: 88 characters
@@ -69,3 +75,4 @@ All tool contracts are defined in `contracts.md` with JSON schemas for:
 - Versioning policy (semver)
 - Internal adapter boundaries
 - always lint before committing
+- Always use absolute imports starting from the top-level package (the one defined in pyproject.toml/setup.cfg), never including build directories like `src` in the path.

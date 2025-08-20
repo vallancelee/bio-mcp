@@ -12,6 +12,11 @@ wheels/
 # Configuration files with secrets
 .env
 
+# Coverage reports
+.coverage
+htmlcov/
+.coverage.*
+
 # terraform
 *.tfvars
 terraform.tfstate*

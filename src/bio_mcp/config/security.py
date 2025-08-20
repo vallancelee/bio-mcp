@@ -10,8 +10,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from ..core.error_handling import ValidationError
-from .logging_config import get_logger
+from bio_mcp.core.error_handling import ValidationError
+from bio_mcp.logging_config import get_logger
 
 logger = get_logger(__name__)
 

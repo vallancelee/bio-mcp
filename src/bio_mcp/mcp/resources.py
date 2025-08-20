@@ -9,8 +9,8 @@ from typing import Any
 
 from mcp.types import Resource
 
-from ..config.logging_config import get_logger
-from ..services.services import CorpusCheckpointService, DocumentService
+from bio_mcp.config.logging_config import get_logger
+from bio_mcp.services.services import CorpusCheckpointService, DocumentService
 
 logger = get_logger(__name__)
 

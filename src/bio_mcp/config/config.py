@@ -7,7 +7,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from .. import __build__, __commit__, __version__
+from bio_mcp import __build__, __commit__, __version__
 
 # Try to load .env file if it exists
 try:

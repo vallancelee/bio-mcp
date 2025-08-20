@@ -9,15 +9,15 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.bio_mcp.clients.database import CorpusCheckpoint
-from src.bio_mcp.mcp.corpus_tools import (
+from bio_mcp.mcp.corpus_tools import (
     CorpusCheckpointManager,
     corpus_checkpoint_create_tool,
     corpus_checkpoint_delete_tool,
     corpus_checkpoint_get_tool,
     corpus_checkpoint_list_tool,
 )
-from src.bio_mcp.services.services import CorpusCheckpointService
+from bio_mcp.services.services import CorpusCheckpointService
+from bio_mcp.shared.models.database_models import CorpusCheckpoint
 
 
 class TestCorpusCheckpointDatabase:

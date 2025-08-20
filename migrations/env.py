@@ -11,7 +11,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
 # Import your models here
-from src.bio_mcp.clients.database import Base
+from bio_mcp.shared.clients.database import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

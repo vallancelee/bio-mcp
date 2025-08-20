@@ -10,8 +10,8 @@ from typing import Any
 
 from mcp.types import TextContent
 
-from ..config.logging_config import get_logger
-from ..services.services import CorpusCheckpointService
+from bio_mcp.config.logging_config import get_logger
+from bio_mcp.services.services import CorpusCheckpointService
 
 logger = get_logger(__name__)
 

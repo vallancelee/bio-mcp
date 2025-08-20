@@ -5,7 +5,7 @@ Centralized location for all MCP tool schemas and metadata.
 
 from mcp.types import Tool
 
-from ..config.search_config import SEARCH_CONFIG
+from bio_mcp.config.search_config import SEARCH_CONFIG
 
 
 def get_ping_tool_definition() -> Tool:

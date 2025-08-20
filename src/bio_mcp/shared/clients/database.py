@@ -27,8 +27,8 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import declarative_base
 
-from ..config.logging_config import get_logger
-from ..core.error_handling import ValidationError
+from bio_mcp.config.logging_config import get_logger
+from bio_mcp.shared.core.error_handling import ValidationError
 
 logger = get_logger(__name__)
 
@@ -905,7 +905,7 @@ def get_database_manager() -> DatabaseManager:
     """Get the global database manager instance."""
     global _database_manager
     if _database_manager is None:
-        from ..config.config import config
+        from bio_mcp.config.config import config
         db_config = DatabaseConfig.from_url(config.database_url)
         _database_manager = DatabaseManager(db_config)
     return _database_manager

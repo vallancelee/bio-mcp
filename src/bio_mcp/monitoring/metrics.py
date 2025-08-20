@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from threading import Lock
 from typing import Any
 
-from ..config.config import config
+from bio_mcp.config.config import config
 
 
 @dataclass

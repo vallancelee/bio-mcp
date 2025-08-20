@@ -9,7 +9,7 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 
-from ..config.logging_config import get_logger
+from bio_mcp.config.logging_config import get_logger
 
 logger = get_logger(__name__)
 

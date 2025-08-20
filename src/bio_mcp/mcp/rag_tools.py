@@ -14,11 +14,11 @@ from typing import Any
 
 from mcp.types import TextContent
 
-from ..clients.database import get_database_manager
-from ..clients.weaviate_client import get_weaviate_client
-from ..config.logging_config import get_logger
-from ..config.search_config import RESPONSE_CONFIG, SEARCH_CONFIG
-from ..core.quality_scoring import JournalQualityScorer
+from bio_mcp.config.logging_config import get_logger
+from bio_mcp.config.search_config import RESPONSE_CONFIG, SEARCH_CONFIG
+from bio_mcp.shared.clients.database import get_database_manager
+from bio_mcp.shared.clients.weaviate_client import get_weaviate_client
+from bio_mcp.sources.pubmed.quality import JournalQualityScorer
 
 logger = get_logger(__name__)
 
