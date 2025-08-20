@@ -173,7 +173,7 @@ class CorpusCheckpointManager:
 
         start_time = time.time()
         
-        logger.info("Creating corpus checkpoint", checkpoint_id=checkpoint_id, name=name)
+        logger.info("Creating corpus checkpoint", checkpoint_id=checkpoint_id, checkpoint_name=name)
 
         try:
             checkpoint = await self.checkpoint_service.create_checkpoint(

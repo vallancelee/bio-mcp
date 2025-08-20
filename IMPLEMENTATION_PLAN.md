@@ -348,6 +348,30 @@ curl bio-mcp.company.com/metrics
 
 ---
 
+## 🔧 Technical Debt & Known Issues
+
+### Testing Infrastructure
+- **TODO**: Fix integration tests requiring external services
+  - Currently skipped: `test_incremental_sync.py` (requires Weaviate connection)
+  - Removed broken tests: `test_end_to_end_rag_workflow.py`, `test_real_weaviate_integration.py`, `test_local_embeddings_integration.py`, `test_hybrid_search.py`
+  - **Action needed**: Implement proper testcontainers for Weaviate integration tests
+  - **Action needed**: Create better mocking strategy for service layer tests
+  - **Priority**: Medium - tests exist but need external services running
+
+### Migration System Status
+- **DONE**: ✅ Added comprehensive Alembic migration system with PostgreSQL testcontainers
+- **DONE**: ✅ Database migrations run automatically on application startup  
+- **DONE**: ✅ Full test coverage for migration upgrade/downgrade cycles with pytest-alembic
+- **DONE**: ✅ Production-ready schema versioning and rollback capabilities
+
+### Infrastructure  
+- **DONE**: ✅ AWS ECS deployment working with proper environment variable management
+- **DONE**: ✅ RDS PostgreSQL database with automated schema migrations
+- **TODO**: Add Weaviate deployment to AWS infrastructure for production RAG capabilities
+- **TODO**: Set up testcontainers-based CI/CD pipeline for integration tests
+
+---
+
 ## 🎯 SUCCESS METRICS
 
 ### Foundation Layer Goals ✅ ACHIEVED
