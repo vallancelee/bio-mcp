@@ -30,7 +30,7 @@ def mock_env_clean():
     """Provide a clean environment for testing."""
     # Remove Bio-MCP related environment variables
     bio_mcp_vars = [key for key in os.environ.keys() if key.startswith('BIO_MCP_')]
-    other_vars = ['DATABASE_URL', 'WEAVIATE_URL', 'PUBMED_API_KEY', 'OPENAI_API_KEY']
+    other_vars = ['DATABASE_URL', 'WEAVIATE_URL', 'PUBMED_API_KEY', 'OPENAI_API_KEY']  # Legacy vars for compatibility
     
     all_vars = bio_mcp_vars + other_vars
     
@@ -50,10 +50,10 @@ def mock_env_with_values():
         'BIO_MCP_VERSION': '1.0.0-test',
         'BIO_MCP_BUILD': 'test-123',
         'BIO_MCP_COMMIT': 'abc123def456',
-        'DATABASE_URL': 'postgresql://test:test@localhost/testdb',
-        'WEAVIATE_URL': 'http://test-weaviate:8080',
-        'PUBMED_API_KEY': 'test-pubmed-key',
-        'OPENAI_API_KEY': 'test-openai-key'
+        'BIO_MCP_DATABASE_URL': 'postgresql://test:test@localhost/testdb',
+        'BIO_MCP_WEAVIATE_URL': 'http://test-weaviate:8080',
+        'BIO_MCP_PUBMED_API_KEY': 'test-pubmed-key',
+        'BIO_MCP_OPENAI_API_KEY': 'test-openai-key'
     }
     
     with patch.dict(os.environ, test_env, clear=False):

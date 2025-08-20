@@ -62,10 +62,10 @@ class Config:
             # Server config
             server_name=os.getenv("BIO_MCP_SERVER_NAME", "bio-mcp"),
             log_level=os.getenv("BIO_MCP_LOG_LEVEL", "INFO"),
-            pubmed_api_key=os.getenv("PUBMED_API_KEY"),
-            openai_api_key=os.getenv("OPENAI_API_KEY"),
-            database_url=os.getenv("DATABASE_URL", "sqlite:///:memory:"),
-            weaviate_url=os.getenv("WEAVIATE_URL", "http://localhost:8080"),
+            pubmed_api_key=os.getenv("BIO_MCP_PUBMED_API_KEY"),
+            openai_api_key=os.getenv("BIO_MCP_OPENAI_API_KEY"),
+            database_url=os.getenv("BIO_MCP_DATABASE_URL", "sqlite:///:memory:"),
+            weaviate_url=os.getenv("BIO_MCP_WEAVIATE_URL", "http://localhost:8080"),
         )
     
     def validate(self) -> None:

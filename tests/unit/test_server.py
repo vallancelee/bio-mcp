@@ -199,7 +199,7 @@ class TestMCPServerConfig:
     
     def test_server_imports_config(self):
         """Test that server properly imports and uses config."""
-        from bio_mcp.config import config
+        from bio_mcp.config.config import config
         from bio_mcp.main import server
         
         # Server should be created with config name
