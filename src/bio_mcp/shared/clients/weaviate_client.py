@@ -33,7 +33,27 @@ class WeaviateClient:
         
         try:
             logger.debug("Connecting to Weaviate", url=self.url)
-            self.client = weaviate.connect_to_local()
+            # Use the provided URL instead of hardcoded localhost
+            if self.url.startswith("http://localhost:8080"):
+                self.client = weaviate.connect_to_local()
+            else:
+                # Parse URL components
+                host = self.url.split("://")[1].split(":")[0]
+                port = int(self.url.split(":")[-1])
+                secure = self.url.startswith("https")
+                
+                # Use dynamic gRPC settings if available (for testcontainers)
+                grpc_host = getattr(self, '_grpc_host', host)
+                grpc_port = getattr(self, '_grpc_port', 50051)
+                
+                self.client = weaviate.connect_to_custom(
+                    http_host=host,
+                    http_port=port,
+                    http_secure=secure,
+                    grpc_host=grpc_host,
+                    grpc_port=grpc_port,
+                    grpc_secure=secure
+                )
             
             logger.debug("Testing Weaviate connection")
             meta = self.client.get_meta()
@@ -71,9 +91,20 @@ class WeaviateClient:
         # Create collection with schema
         logger.info("Creating Weaviate collection", collection=collection_name)
         
-        self.client.collections.create(
-            collection_name,
-            properties=[
+        # Check if we should use vectorizer (disable for test containers without transformers)
+        vectorizer_config = None
+        try:
+            # Test if transformers module is available
+            meta = self.client.get_meta()
+            modules = meta.get("modules", {})
+            if "text2vec-transformers" in modules:
+                vectorizer_config = Configure.Vectorizer.text2vec_transformers()
+        except Exception:
+            pass  # Use no vectorizer for basic testcontainers
+        
+        create_args = {
+            "name": collection_name,
+            "properties": [
                 Property(name="pmid", data_type=DataType.TEXT),
                 Property(name="title", data_type=DataType.TEXT),
                 Property(name="abstract", data_type=DataType.TEXT),
@@ -84,9 +115,13 @@ class WeaviateClient:
                 Property(name="keywords", data_type=DataType.TEXT_ARRAY),
                 Property(name="content", data_type=DataType.TEXT),  # Combined searchable content
             ],
-            vectorizer_config=Configure.Vectorizer.text2vec_transformers(),  # Use local transformers
-            description="PubMed documents for biomedical research"
-        )
+            "description": "PubMed documents for biomedical research"
+        }
+        
+        if vectorizer_config:
+            create_args["vectorizer_config"] = vectorizer_config
+        
+        self.client.collections.create(**create_args)
         
         logger.info("Weaviate collection created successfully", collection=collection_name)
 
@@ -161,29 +196,51 @@ class WeaviateClient:
         
         if search_mode == "bm25":
             # Pure BM25 keyword search
-            response = collection.query.bm25(
-                query=query,
-                limit=limit,
-                where=weaviate_filter,
-                return_metadata=MetadataQuery(score=True)
-            )
+            if weaviate_filter:
+                response = collection.query.bm25(
+                    query=query,
+                    limit=limit,
+                    filters=weaviate_filter,
+                    return_metadata=MetadataQuery(score=True)
+                )
+            else:
+                response = collection.query.bm25(
+                    query=query,
+                    limit=limit,
+                    return_metadata=MetadataQuery(score=True)
+                )
         elif search_mode == "hybrid":
             # Hybrid search combining BM25 and vector similarity
-            response = collection.query.hybrid(
-                query=query,
-                alpha=alpha,  # 0.0=pure BM25, 1.0=pure vector
-                limit=limit,
-                where=weaviate_filter,
-                return_metadata=MetadataQuery(score=True, explain_score=True)
-            )
+            if weaviate_filter:
+                response = collection.query.hybrid(
+                    query=query,
+                    alpha=alpha,  # 0.0=pure BM25, 1.0=pure vector
+                    limit=limit,
+                    filters=weaviate_filter,
+                    return_metadata=MetadataQuery(score=True, explain_score=True)
+                )
+            else:
+                response = collection.query.hybrid(
+                    query=query,
+                    alpha=alpha,  # 0.0=pure BM25, 1.0=pure vector
+                    limit=limit,
+                    return_metadata=MetadataQuery(score=True, explain_score=True)
+                )
         else:  # semantic (default)
             # Pure semantic search with vectors
-            response = collection.query.near_text(
-                query=query,
-                limit=limit,
-                where=weaviate_filter,
-                return_metadata=MetadataQuery(score=True, distance=True)
-            )
+            if weaviate_filter:
+                response = collection.query.near_text(
+                    query=query,
+                    limit=limit,
+                    filters=weaviate_filter,
+                    return_metadata=MetadataQuery(score=True, distance=True)
+                )
+            else:
+                response = collection.query.near_text(
+                    query=query,
+                    limit=limit,
+                    return_metadata=MetadataQuery(score=True, distance=True)
+                )
         
         # Convert response to list of dictionaries
         results = []

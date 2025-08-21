@@ -3,14 +3,12 @@ Base service class for data source services.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Generic, TypeVar
+from typing import Any
 
 from bio_mcp.shared.models.base_models import BaseClient, BaseDocument, BaseSyncStrategy
 
-T = TypeVar('T', bound=BaseDocument)
 
-
-class BaseSourceService(ABC, Generic[T]):
+class BaseSourceService[T: BaseDocument](ABC):
     """Abstract base class for all data source services."""
     
     def __init__(self, source_name: str):

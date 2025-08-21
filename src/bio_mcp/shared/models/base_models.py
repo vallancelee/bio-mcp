@@ -5,7 +5,7 @@ Abstract base classes for multi-source biomedical data.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Generic, TypeVar
+from typing import Any
 
 
 @dataclass
@@ -34,10 +34,7 @@ class BaseDocument(ABC):
         pass
 
 
-T = TypeVar('T', bound=BaseDocument)
-
-
-class BaseClient(ABC, Generic[T]):
+class BaseClient[T: BaseDocument](ABC):
     """Abstract base for all external API clients."""
     
     @abstractmethod
@@ -80,7 +77,7 @@ class BaseSyncStrategy(ABC):
         pass
 
 
-class BaseService(ABC, Generic[T]):
+class BaseService[T: BaseDocument](ABC):
     """Abstract base for all data source services."""
     
     def __init__(self, source_name: str):

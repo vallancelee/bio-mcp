@@ -21,9 +21,9 @@ services:
     tty: true
     # MCP uses stdio, so we'll run interactively for testing
 
-  # Weaviate vector database for future phases
+  # Weaviate vector database - version matches serverless cloud compatibility
   weaviate:
-    image: semitechnologies/weaviate:1.24.5
+    image: semitechnologies/weaviate:1.30.0
     container_name: bio-mcp-weaviate
     ports:
       - "8080:8080"   # HTTP/REST API

@@ -24,7 +24,7 @@ def postgres_container():
 @pytest.fixture(scope="class") 
 def weaviate_container():
     """Weaviate container for testing vector search connectivity."""
-    with WeaviateContainer("semitechnologies/weaviate:1.25.5") as weaviate:
+    with WeaviateContainer("semitechnologies/weaviate:1.30.0") as weaviate:
         yield weaviate
 
 
@@ -167,7 +167,7 @@ class TestContainerIsolation:
             )
         """)
         
-        table_exists = cursor.fetchone()[0]
+        cursor.fetchone()[0]  # Check table existence
         # Table might exist from the functionality test if using same container
         # but shouldn't exist if containers are properly isolated
         

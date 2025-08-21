@@ -260,8 +260,29 @@ class SyncOrchestrator:
                         logger.debug("Document successfully synced", pmid=doc.pmid)
                     
                     except Exception as e:
-                        logger.error("Failed to store document", pmid=doc.pmid, error=str(e))
-                        failed_pmids.append(doc.pmid)
+                        # Check if this is an "already exists" error (integrity constraint)
+                        error_str = str(e).lower()
+                        if any(keyword in error_str for keyword in ["integrity", "duplicate", "unique", "already exists"]):
+                            # Document already exists - check if it's actually in the database
+                            try:
+                                exists = await self.document_service.document_exists(doc.pmid)
+                                if exists:
+                                    # Document exists, treat as "already existed" rather than failure
+                                    existing_pmids.append(doc.pmid)
+                                    logger.debug("Document already exists, skipping", pmid=doc.pmid)
+                                    continue
+                                else:
+                                    # Integrity error but document doesn't exist - this is a real problem
+                                    logger.error("Integrity error but document not found", pmid=doc.pmid, error=str(e))
+                                    failed_pmids.append(doc.pmid)
+                            except Exception as check_error:
+                                # Error checking existence - treat as failure
+                                logger.error("Failed to check document existence after integrity error", pmid=doc.pmid, error=str(check_error))
+                                failed_pmids.append(doc.pmid)
+                        else:
+                            # Real failure (network, validation, etc.)
+                            logger.error("Failed to store document", pmid=doc.pmid, error=str(e))
+                            failed_pmids.append(doc.pmid)
             
             except Exception as e:
                 logger.error("Failed to fetch documents from PubMed", error=str(e))
