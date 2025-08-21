@@ -5,8 +5,9 @@ from datetime import UTC, datetime
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bio_mcp.http.jobs.models import JobData, JobRecord, JobStatus
+from bio_mcp.http.jobs.models import JobData
 from bio_mcp.http.jobs.service import JobNotFoundError, JobRepository
+from bio_mcp.shared.models.database_models import JobRecord, JobStatus
 
 
 class SQLAlchemyJobRepository(JobRepository):

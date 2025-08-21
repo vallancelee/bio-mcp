@@ -2,9 +2,11 @@
 Universal database models for multi-source documents.
 """
 
+import enum
 from datetime import datetime
 
-from sqlalchemy import JSON, Column, DateTime, Integer, String, Text
+from sqlalchemy import JSON, Column, DateTime, Enum, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
@@ -62,3 +64,76 @@ class CorpusCheckpoint(Base):
     total_vectors = Column(String(50))
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class JobStatus(enum.Enum):
+    """Job execution status enumeration."""
+    
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class JobRecord(Base):
+    """SQLAlchemy model for async job persistence."""
+    
+    __tablename__ = "jobs"
+    
+    # Primary identifier
+    id = Column(UUID(as_uuid=True), primary_key=True, nullable=False)
+    
+    # Job metadata
+    tool_name = Column(String(100), nullable=False, index=True)
+    status = Column(Enum(JobStatus), nullable=False, default=JobStatus.PENDING, index=True)
+    trace_id = Column(String(36), nullable=False, index=True)
+    
+    # Job data (stored as JSONB for PostgreSQL, JSON for others)
+    parameters = Column(JSONB, nullable=False)
+    result = Column(JSONB, nullable=True)
+    error_message = Column(Text, nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    
+    def to_job_data(self):
+        """Convert SQLAlchemy record to business logic model."""
+        from bio_mcp.http.jobs.models import JobData
+        return JobData(
+            id=str(self.id),
+            tool_name=self.tool_name,
+            status=self.status,
+            parameters=self.parameters,
+            result=self.result,
+            error_message=self.error_message,
+            trace_id=self.trace_id,
+            created_at=self.created_at,
+            started_at=self.started_at,
+            completed_at=self.completed_at,
+            expires_at=self.expires_at
+        )
+    
+    @classmethod
+    def from_job_data(cls, job_data):
+        """Create SQLAlchemy record from business logic model."""
+        import uuid
+        return cls(
+            id=uuid.UUID(job_data.id),
+            tool_name=job_data.tool_name,
+            status=job_data.status,
+            parameters=job_data.parameters,
+            result=job_data.result,
+            error_message=job_data.error_message,
+            trace_id=job_data.trace_id,
+            created_at=job_data.created_at,
+            started_at=job_data.started_at,
+            completed_at=job_data.completed_at,
+            expires_at=job_data.expires_at
+        )
+    
+    def __repr__(self) -> str:
+        return f"<JobRecord(id='{self.id}', tool='{self.tool_name}', status='{self.status.value}')>"

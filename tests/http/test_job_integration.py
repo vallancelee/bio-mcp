@@ -4,16 +4,16 @@ from datetime import UTC
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import text
 from testcontainers.postgres import PostgresContainer
 
-from bio_mcp.http.jobs.models import JobData, JobRecord, JobStatus
+from bio_mcp.http.jobs.models import JobData
 from bio_mcp.http.jobs.service import JobService
 from bio_mcp.http.jobs.storage import SQLAlchemyJobRepository
 from bio_mcp.shared.clients.database import (
     DatabaseConfig,
     init_database,
 )
+from bio_mcp.shared.models.database_models import JobRecord, JobStatus
 
 
 @pytest.fixture(scope="session")
@@ -31,6 +31,7 @@ def postgres_container():
 @pytest_asyncio.fixture
 async def database_manager(postgres_container):
     """Create database manager with jobs table for tests."""
+    # Use the testcontainer database directly - each test will be isolated
     connection_url = postgres_container.get_connection_url()
     async_url = connection_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
     
@@ -43,46 +44,16 @@ async def database_manager(postgres_container):
     
     manager = await init_database(config)
     
-    # Create jobs table explicitly since it's not in the main schema yet
-    async with manager.get_session() as session:
-        # Create enum type first - note: PostgreSQL enum values must match Python enum values exactly
-        await session.execute(text("""
-            CREATE TYPE jobstatus AS ENUM ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED', 'CANCELLED')
-        """))
-        
-        # Create table
-        await session.execute(text("""
-            CREATE TABLE IF NOT EXISTS jobs (
-                id UUID PRIMARY KEY,
-                tool_name VARCHAR(100) NOT NULL,
-                status jobstatus NOT NULL DEFAULT 'PENDING',
-                parameters JSONB NOT NULL,
-                result JSONB,
-                error_message TEXT,
-                created_at TIMESTAMPTZ NOT NULL,
-                started_at TIMESTAMPTZ,
-                completed_at TIMESTAMPTZ,
-                expires_at TIMESTAMPTZ NOT NULL,
-                trace_id VARCHAR(36)
-            )
-        """))
-        
-        # Create indexes separately
-        await session.execute(text("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)"))
-        await session.execute(text("CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at)"))
-        await session.execute(text("CREATE INDEX IF NOT EXISTS idx_jobs_tool_name ON jobs(tool_name)"))
-        await session.execute(text("CREATE INDEX IF NOT EXISTS idx_jobs_trace_id ON jobs(trace_id)"))
-        await session.execute(text("CREATE INDEX IF NOT EXISTS idx_jobs_expires_at ON jobs(expires_at)"))
-        
-        await session.commit()
+    # Create tables using SQLAlchemy metadata (simulates what migrations do)
+    from bio_mcp.shared.models.database_models import Base
+    async with manager.engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     
     yield manager
     
-    # Clean up
-    async with manager.get_session() as session:
-        await session.execute(text("DROP TABLE IF EXISTS jobs CASCADE"))
-        await session.execute(text("DROP TYPE IF EXISTS jobstatus CASCADE"))
-        await session.commit()
+    # Clean up - drop all tables to ensure test isolation  
+    async with manager.engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
     
     await manager.close()
 

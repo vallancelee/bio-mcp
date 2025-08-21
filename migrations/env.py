@@ -10,8 +10,10 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
-# Import your models here
-from bio_mcp.shared.clients.database import Base
+# Import your models here - use the Base from database_models where JobRecord is defined
+from bio_mcp.shared.models.database_models import Base
+# Import all models so Alembic can detect them
+from bio_mcp.shared.models import database_models  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

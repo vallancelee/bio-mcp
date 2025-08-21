@@ -71,30 +71,44 @@ class DatabaseHealthChecker(HealthChecker):
                 # Check migration status
                 migration_status = await self._check_migration_status(connection)
                 
+                # Check for jobs table specifically (required for job API)
+                jobs_table_exists = await self._check_jobs_table_exists(connection)
+                
                 # Dispose engine
                 await engine.dispose()
                 
                 duration_ms = (time.time() - start_time) * 1000
                 
-                if migration_status["up_to_date"]:
+                # Determine overall health status
+                all_good = migration_status["up_to_date"] and jobs_table_exists
+                
+                if all_good:
                     return HealthCheckResult(
                         healthy=True,
-                        message="Database connection healthy and migrations up to date",
+                        message="Database connection healthy, migrations up to date, jobs table ready",
                         details={
                             "migration_status": "up_to_date",
-                            "current_version": migration_status["current_version"]
+                            "current_version": migration_status["current_version"],
+                            "jobs_table_exists": jobs_table_exists
                         },
                         check_duration_ms=duration_ms,
                         checker_name=self.name
                     )
                 else:
+                    issues = []
+                    if not migration_status["up_to_date"]:
+                        issues.append("migrations outdated")
+                    if not jobs_table_exists:
+                        issues.append("jobs table missing")
+                    
                     return HealthCheckResult(
                         healthy=False,
-                        message="Database connection healthy but migrations outdated",
+                        message=f"Database issues detected: {', '.join(issues)}",
                         details={
-                            "migration_status": "outdated",
+                            "migration_status": "outdated" if not migration_status["up_to_date"] else "up_to_date",
                             "current_version": migration_status["current_version"],
-                            "expected_version": migration_status["expected_version"]
+                            "expected_version": migration_status["expected_version"],
+                            "jobs_table_exists": jobs_table_exists
                         },
                         check_duration_ms=duration_ms,
                         checker_name=self.name
@@ -144,3 +158,44 @@ class DatabaseHealthChecker(HealthChecker):
                 "current_version": None,
                 "expected_version": get_expected_alembic_head()
             }
+    
+    async def _check_jobs_table_exists(self, connection) -> bool:
+        """Check if jobs table exists and has required schema.
+        
+        Args:
+            connection: Database connection
+            
+        Returns:
+            True if jobs table exists with required columns
+        """
+        try:
+            # Check if jobs table exists and has key columns
+            result = await connection.execute(text("""
+                SELECT COUNT(*) FROM information_schema.tables 
+                WHERE table_name = 'jobs'
+            """))
+            table_exists = result.scalar() > 0
+            
+            if not table_exists:
+                return False
+            
+            # Check for key columns
+            result = await connection.execute(text("""
+                SELECT COUNT(*) FROM information_schema.columns 
+                WHERE table_name = 'jobs' 
+                AND column_name IN ('id', 'tool_name', 'status', 'parameters', 'created_at')
+            """))
+            required_columns = result.scalar()
+            
+            return required_columns >= 5  # All key columns present
+            
+        except Exception:
+            # For SQLite or other databases that don't support information_schema
+            try:
+                # Try to query the jobs table directly
+                await connection.execute(text(
+                    "SELECT id, tool_name, status, parameters, created_at FROM jobs LIMIT 0"
+                ))
+                return True
+            except Exception:
+                return False

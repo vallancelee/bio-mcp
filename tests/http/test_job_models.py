@@ -3,7 +3,8 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from bio_mcp.http.jobs.models import JobData, JobRecord, JobStatus
+from bio_mcp.http.jobs.models import JobData
+from bio_mcp.shared.models.database_models import JobRecord, JobStatus
 
 
 class TestJobStatus:
