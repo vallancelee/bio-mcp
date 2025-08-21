@@ -1,13 +1,15 @@
 """FastAPI application for Bio-MCP HTTP adapter."""
 
-import uuid
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel
 
+from bio_mcp.http.adapters import invoke_tool_safely
+from bio_mcp.http.errors import ErrorCode, classify_exception, create_error_envelope
 from bio_mcp.http.lifecycle import check_readiness
 from bio_mcp.http.registry import ToolRegistry, build_registry
+from bio_mcp.http.tracing import TraceContext, generate_trace_id
 
 
 class InvokeRequest(BaseModel):
@@ -50,7 +52,7 @@ def create_error_response(
     trace_id: str, 
     tool: str | None = None
 ) -> ErrorResponse:
-    """Create a standardized error response."""
+    """Create a standardized error response (legacy compatibility)."""
     return ErrorResponse(
         error_code=error_code,
         message=message,
@@ -102,45 +104,68 @@ def create_app(registry: ToolRegistry | None = None) -> FastAPI:
     
     @app.post("/v1/mcp/invoke")
     async def invoke_tool(request: InvokeRequest):
-        """Invoke a tool with given parameters."""
-        trace_id = str(uuid.uuid4())
+        """Invoke a tool with given parameters using async-safe execution."""
+        trace_id = generate_trace_id()
         
-        try:
-            # Get tool from registry
-            tool_func = app.state.registry.get_tool(request.tool)
-            if tool_func is None:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=create_error_response(
-                        error_code="TOOL_NOT_FOUND",
+        # Create trace context for this request
+        with TraceContext(trace_id, request.tool) as trace:
+            # Add request metadata to trace
+            trace.add_metadata("params", request.params)
+            if request.idempotency_key:
+                trace.add_metadata("idempotency_key", request.idempotency_key)
+            
+            try:
+                # Get tool from registry
+                tool_func = app.state.registry.get_tool(request.tool)
+                if tool_func is None:
+                    error_envelope = create_error_envelope(
+                        error_code=ErrorCode.TOOL_NOT_FOUND,
                         message=f"Tool '{request.tool}' not found",
                         trace_id=trace_id,
-                        tool=request.tool
-                    ).model_dump()
+                        tool_name=request.tool
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=error_envelope.model_dump()
+                    )
+                
+                # Execute tool with async-safe adapter
+                result = await invoke_tool_safely(
+                    tool_func=tool_func,
+                    tool_name=request.tool,
+                    params=request.params,
+                    trace_id=trace_id
                 )
-            
-            # Execute tool
-            result = tool_func(request.tool, request.params)
-            
-            return InvokeResponse(
-                tool=request.tool,
-                result=result,
-                trace_id=trace_id
-            )
-            
-        except HTTPException:
-            # Re-raise HTTP exceptions (like 404) as-is
-            raise
-        except Exception as e:
-            # Handle tool execution errors
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=create_error_response(
-                    error_code="TOOL_EXECUTION_ERROR",
+                
+                # Mark trace as successful
+                trace.set_success(result)
+                
+                return InvokeResponse(
+                    tool=request.tool,
+                    result=result,
+                    trace_id=trace_id
+                )
+                
+            except HTTPException:
+                # Re-raise HTTP exceptions (like 404) as-is
+                raise
+            except Exception as e:
+                # Classify exception and create proper error envelope
+                error_code = classify_exception(e, request.tool)
+                error_envelope = create_error_envelope(
+                    error_code=error_code,
                     message=str(e),
                     trace_id=trace_id,
-                    tool=request.tool
-                ).model_dump()
-            )
+                    tool_name=request.tool,
+                    exception=e
+                )
+                
+                # Mark trace as failed
+                trace.set_error(e)
+                
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=error_envelope.model_dump()
+                )
     
     return app
