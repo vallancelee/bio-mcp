@@ -24,6 +24,7 @@ dependencies = [
     "fastapi>=0.116.1",
     "uvicorn[standard]>=0.35.0",
     "anyio>=4.10.0",
+    "structlog>=25.4.0",
 ]
 
 [project.optional-dependencies]
