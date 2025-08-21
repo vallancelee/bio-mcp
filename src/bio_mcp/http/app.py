@@ -7,9 +7,13 @@ from pydantic import BaseModel
 
 from bio_mcp.http.adapters import invoke_tool_safely
 from bio_mcp.http.errors import ErrorCode, classify_exception, create_error_envelope
+from bio_mcp.http.jobs.api import create_job_router
+from bio_mcp.http.jobs.service import JobService
+from bio_mcp.http.jobs.storage import SQLAlchemyJobRepository
 from bio_mcp.http.lifecycle import check_readiness, get_health_status
 from bio_mcp.http.registry import ToolRegistry, build_registry
 from bio_mcp.http.tracing import TraceContext, generate_trace_id
+from bio_mcp.shared.clients.database import get_database_manager
 
 
 class InvokeRequest(BaseModel):
@@ -79,6 +83,18 @@ def create_app(registry: ToolRegistry | None = None) -> FastAPI:
     
     # Store registry in app state
     app.state.registry = registry
+    
+    # Create a job service factory
+    def create_job_service() -> JobService:
+        """Create job service instance with database session."""
+        db_manager = get_database_manager()
+        session = db_manager.get_session()
+        repository = SQLAlchemyJobRepository(session)
+        return JobService(repository)
+    
+    # Create and include job router with service factory
+    job_router = create_job_router(job_service_factory=create_job_service)
+    app.include_router(job_router)
     
     @app.get("/healthz", response_model=HealthResponse)
     async def healthz():
