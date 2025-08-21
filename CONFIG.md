@@ -29,7 +29,7 @@ code .env
 ### Required for RAG Features
 ```bash
 # OpenAI API key for embeddings and semantic search
-OPENAI_API_KEY=sk-your-actual-openai-key-here
+OPENAI_API_KEY=your-new-openai-api-key-here
 ```
 
 ### Optional Enhancements

@@ -11,6 +11,13 @@ wheels/
 
 # Configuration files with secrets
 .env
+.env.*
+!.env.example
+**/secrets/
+**/*secret*
+**/*api*key*
+**/*password*
+**/*token*
 
 # Coverage reports
 .coverage
