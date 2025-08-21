@@ -73,7 +73,7 @@ class TestStructuredLogging:
             redact_sensitive,
         )
         
-        logger = get_structured_logger("test")
+        _logger = get_structured_logger("test")
         
         sensitive_data = {
             "api_key": "sk-1234567890abcdef",
@@ -293,7 +293,7 @@ class TestObservabilityIntegration:
             return {"results": ["result1", "result2"]}
         
         # Execute tool
-        result = await mock_tool(query="test query")
+        _result = await mock_tool(query="test query")
         
         # Check metrics were recorded
         collector = get_global_collector()

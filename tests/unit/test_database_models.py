@@ -268,75 +268,111 @@ class TestCorpusCheckpoint:
 
 
 class TestDatabaseIntegration:
-    """Test model integration with SQLAlchemy."""
+    """Test model integration with PostgreSQL via testcontainers."""
     
-    def test_in_memory_database_creation(self):
-        """Test creating models in an in-memory SQLite database."""
-        # Create in-memory SQLite database
-        engine = create_engine("sqlite:///:memory:")
+    @pytest.mark.asyncio
+    async def test_postgresql_database_creation(self):
+        """Test creating models in PostgreSQL database."""
+        from testcontainers.postgres import PostgresContainer
+        import asyncpg
+        from sqlalchemy.ext.asyncio import create_async_engine
         
-        # Create all tables
-        Base.metadata.create_all(engine)
-        
-        # Verify tables were created
-        assert 'documents_universal' in Base.metadata.tables
-        assert 'sync_watermarks' in Base.metadata.tables
-        assert 'corpus_checkpoints' in Base.metadata.tables
+        # Use testcontainer PostgreSQL instead of SQLite
+        with PostgresContainer("postgres:13") as postgres:
+            # Convert psycopg2 URL to asyncpg URL
+            database_url = postgres.get_connection_url()
+            database_url = database_url.replace("postgresql://", "postgresql+asyncpg://")
+            database_url = database_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
+            engine = create_async_engine(database_url)
+            
+            # Create all tables
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            
+            # Verify tables were created by checking metadata
+            assert 'documents_universal' in Base.metadata.tables
+            assert 'sync_watermarks' in Base.metadata.tables
+            assert 'corpus_checkpoints' in Base.metadata.tables
+            assert 'jobs' in Base.metadata.tables
+            
+            await engine.dispose()
     
-    def test_model_relationships(self):
-        """Test that models can coexist in the same database."""
-        # Create in-memory database and session
-        engine = create_engine("sqlite:///:memory:")
-        Base.metadata.create_all(engine)
-        session_factory = sessionmaker(bind=engine)
-        session = session_factory()
+    @pytest.mark.asyncio
+    async def test_model_relationships(self):
+        """Test that models can coexist in PostgreSQL database."""
+        from testcontainers.postgres import PostgresContainer
+        from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+        from sqlalchemy.orm import sessionmaker
         
-        try:
-            # Create instances of each model
-            doc = UniversalDocument(
-                id="test:123",
-                source="test",
-                source_id="123",
-                title="Test Document"
-            )
+        # Use testcontainer PostgreSQL
+        with PostgresContainer("postgres:13") as postgres:
+            # Convert psycopg2 URL to asyncpg URL
+            database_url = postgres.get_connection_url()
+            database_url = database_url.replace("postgresql://", "postgresql+asyncpg://")
+            database_url = database_url.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
+            engine = create_async_engine(database_url)
             
-            watermark = SyncWatermark(
-                source="test",
-                query_key="test_query",
-                last_sync=datetime.now()
-            )
+            # Create all tables
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
             
-            checkpoint = CorpusCheckpoint(
-                checkpoint_id="test_checkpoint",
-                name="Test Checkpoint"
-            )
+            # Create async session
+            session_factory = sessionmaker(bind=engine, class_=AsyncSession)
+            session = session_factory()
             
-            # Add to session
-            session.add(doc)
-            session.add(watermark)
-            session.add(checkpoint)
-            session.commit()
-            
-            # Verify they were saved
-            assert session.query(UniversalDocument).count() == 1
-            assert session.query(SyncWatermark).count() == 1
-            assert session.query(CorpusCheckpoint).count() == 1
-            
-            # Verify data integrity
-            saved_doc = session.query(UniversalDocument).first()
-            assert saved_doc.id == "test:123"
-            assert saved_doc.source == "test"
-            
-            saved_watermark = session.query(SyncWatermark).first()
-            assert saved_watermark.source == "test"
-            assert saved_watermark.query_key == "test_query"
-            
-            saved_checkpoint = session.query(CorpusCheckpoint).first()
-            assert saved_checkpoint.checkpoint_id == "test_checkpoint"
-            assert saved_checkpoint.name == "Test Checkpoint"
-            
-        finally:
-            session.close()
+            try:
+                # Create instances of each model
+                doc = UniversalDocument(
+                    id="test:123",
+                    source="test",
+                    source_id="123",
+                    title="Test Document"
+                )
+                
+                watermark = SyncWatermark(
+                    source="test",
+                    query_key="test_query",
+                    last_sync=datetime.now()
+                )
+                
+                checkpoint = CorpusCheckpoint(
+                    checkpoint_id="test_checkpoint",
+                    name="Test Checkpoint"
+                )
+                
+                # Add to session and commit
+                session.add(doc)
+                session.add(watermark)
+                session.add(checkpoint)
+                await session.commit()
+                
+                # Verify they were saved using async queries
+                from sqlalchemy import select, func
+                
+                doc_count = await session.scalar(select(func.count(UniversalDocument.id)))
+                watermark_count = await session.scalar(select(func.count(SyncWatermark.id)))
+                checkpoint_count = await session.scalar(select(func.count(CorpusCheckpoint.checkpoint_id)))
+                
+                assert doc_count == 1
+                assert watermark_count == 1
+                assert checkpoint_count == 1
+                
+                # Verify data integrity
+                saved_doc = await session.scalar(select(UniversalDocument))
+                assert saved_doc.id == "test:123"
+                assert saved_doc.source == "test"
+                
+                saved_watermark = await session.scalar(select(SyncWatermark))
+                assert saved_watermark.source == "test"
+                assert saved_watermark.query_key == "test_query"
+                
+                saved_checkpoint = await session.scalar(select(CorpusCheckpoint))
+                assert saved_checkpoint.checkpoint_id == "test_checkpoint"
+                assert saved_checkpoint.name == "Test Checkpoint"
+                
+            finally:
+                await session.close()
+                await engine.dispose()
 
 
 # Mark as unit tests

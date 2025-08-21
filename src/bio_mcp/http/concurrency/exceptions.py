@@ -8,7 +8,7 @@ class ConcurrencyError(Exception):
     pass
 
 
-class RateLimitExceeded(ConcurrencyError):
+class RateLimitExceededError(ConcurrencyError):
     """Exception raised when rate limits are exceeded."""
     
     def __init__(

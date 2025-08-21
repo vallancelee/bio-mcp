@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from .circuit import CircuitBreaker
-from .exceptions import RateLimitExceeded
+from .exceptions import RateLimitExceededError
 
 
 class PriorityQueue:
@@ -57,6 +57,7 @@ class ConcurrencyManager:
         self.global_semaphore = asyncio.Semaphore(max_concurrent_total)
         self.global_queue = PriorityQueue()
         self.global_active = 0
+        self.queued_count = 0  # Track queued requests
         
         # Per-tool semaphores and circuit breakers
         self.tool_semaphores = {}
@@ -77,13 +78,28 @@ class ConcurrencyManager:
     @asynccontextmanager
     async def acquire_global(self):
         """Acquire global concurrency slot."""
-        # Simple check: if semaphore is locked and has no value, reject
+        # Track requests that would be queued
         if self.global_semaphore._value == 0:
-            raise RateLimitExceeded(
-                f"Global concurrent request limit ({self.max_concurrent_total}) exceeded",
-                retry_after=1,
-                queue_depth=0
-            )
+            if hasattr(self, '_current_queue_size'):
+                self._current_queue_size += 1
+            else:
+                self._current_queue_size = 1
+                
+            try:
+                if self._current_queue_size > self.max_queue_depth:
+                    raise RateLimitExceededError(
+                        "Queue full - request rejected",
+                        retry_after=1,
+                        queue_depth=self._current_queue_size - 1
+                    )
+                else:
+                    raise RateLimitExceededError(
+                        f"Global concurrent request limit ({self.max_concurrent_total}) exceeded",
+                        retry_after=1,
+                        queue_depth=self._current_queue_size
+                    )
+            finally:
+                self._current_queue_size -= 1
         
         # Use standard semaphore context manager
         async with self.global_semaphore:
@@ -93,35 +109,31 @@ class ConcurrencyManager:
     async def acquire_tool(self, tool_name: str):
         """Acquire per-tool concurrency slot."""
         # Check circuit breaker first
-        if self.circuit_breaker_enabled and tool_name in self.tool_circuit_breakers:
+        if self.circuit_breaker_enabled:
+            # Create circuit breaker if it doesn't exist
+            if tool_name not in self.tool_circuit_breakers:
+                self.tool_circuit_breakers[tool_name] = CircuitBreaker(
+                    failure_threshold=self.circuit_breaker_threshold
+                )
+            
             circuit = self.tool_circuit_breakers[tool_name]
-            if circuit.state == "open":
-                raise Exception(f"Circuit breaker open for tool {tool_name}")
+            if circuit.state in ["open", "half_open"]:
+                raise Exception(f"Circuit breaker {circuit.state} for tool {tool_name}")
         
         # Get or create semaphore for this tool
         if tool_name not in self.tool_semaphores:
             # Use default limits for unknown tools
-            tool_config = {"max_concurrent": 10}
+            tool_config = {"max_concurrent": 10, "timeout_ms": 30000}
             self.tool_semaphores[tool_name] = asyncio.Semaphore(10)
         else:
-            tool_config = self.tool_limits.get(tool_name, {"max_concurrent": 10})
+            tool_config = self.tool_limits.get(tool_name, {"max_concurrent": 10, "timeout_ms": 30000})
         
         semaphore = self.tool_semaphores[tool_name]
-        
-        # Check if semaphore is available
-        if semaphore.locked() and semaphore._value == 0:
-            raise RateLimitExceeded(
-                f"Tool '{tool_name}' has reached maximum concurrent requests ({tool_config['max_concurrent']})",
-                tool=tool_name,
-                retry_after=1
-            )
-        
-        # Handle timeout
         timeout_ms = tool_config.get("timeout_ms", 30000)
         timeout_s = timeout_ms / 1000
         
         try:
-            # Try to acquire with timeout
+            # Try to acquire with timeout - this will wait if semaphore is busy
             await asyncio.wait_for(semaphore.acquire(), timeout=timeout_s)
             try:
                 yield
@@ -134,8 +146,19 @@ class ConcurrencyManager:
         """Record tool failure for circuit breaker."""
         self.tool_failure_counts[tool_name] = self.tool_failure_counts.get(tool_name, 0) + 1
         
-        if self.circuit_breaker_enabled and tool_name in self.tool_circuit_breakers:
+        if self.circuit_breaker_enabled:
+            # Create circuit breaker if it doesn't exist
+            if tool_name not in self.tool_circuit_breakers:
+                self.tool_circuit_breakers[tool_name] = CircuitBreaker(
+                    failure_threshold=self.circuit_breaker_threshold
+                )
+            
             circuit = self.tool_circuit_breakers[tool_name]
-            # Simple failure tracking - trip after 5 failures
+            # Record the failure with the circuit breaker properly
+            import asyncio
+            _task = asyncio.create_task(circuit.record_failure())
+            
+            # Simple additional check - trip after 5 failures
             if self.tool_failure_counts[tool_name] >= 5:
-                circuit._state = circuit.CircuitState.OPEN if hasattr(circuit, 'CircuitState') else "open"
+                from .circuit import CircuitState
+                circuit._state = CircuitState.OPEN

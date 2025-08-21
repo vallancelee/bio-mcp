@@ -32,7 +32,12 @@ class CircuitBreaker:
     
     @property
     def state(self) -> str:
-        """Get current state as string."""
+        """Get current state as string, checking for timeout transitions."""
+        # Check if we should transition from open to half-open
+        if self._state == CircuitState.OPEN:
+            if time.time() - self.last_failure_time >= self.timeout_s:
+                self._state = CircuitState.HALF_OPEN
+        
         return self._state.value
     
     @state.setter
