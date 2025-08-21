@@ -30,14 +30,29 @@ class TestDatabaseHealthChecker:
         """Test successful database health check."""
         # Mock database connection and query
         mock_connection = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.scalar.return_value = 1
         
-        # Mock the migration check too
+        # Mock basic connectivity check (SELECT 1)
+        mock_basic_result = MagicMock()
+        mock_basic_result.scalar.return_value = 1
+        
+        # Mock the migration check 
         mock_migration_result = MagicMock()
         mock_migration_result.scalar.return_value = "latest"
         
-        mock_connection.execute.side_effect = [mock_result, mock_migration_result]
+        # Mock the jobs table existence check  
+        mock_jobs_table_result = MagicMock()
+        mock_jobs_table_result.scalar.return_value = 1  # Table exists
+        
+        # Mock the jobs table columns check
+        mock_jobs_columns_result = MagicMock()
+        mock_jobs_columns_result.scalar.return_value = 5  # All required columns exist
+        
+        mock_connection.execute.side_effect = [
+            mock_basic_result,           # SELECT 1
+            mock_migration_result,       # Migration version check
+            mock_jobs_table_result,      # Jobs table existence check
+            mock_jobs_columns_result     # Jobs table columns check
+        ]
         
         # Create proper async context manager mock
         @asynccontextmanager
