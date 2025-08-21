@@ -238,7 +238,151 @@ invoke:
 
 ---
 
-## 16) Acceptance checklist
+## 16) Implementation plan (TDD + Clean Code)
+
+### P0 — Foundation (Test-First)
+
+#### T0: HTTP Skeleton
+**TDD Approach:**
+1. Write failing test for tool registry discovery
+2. Write failing test for `/v1/mcp/tools` endpoint
+3. Write failing test for basic `/v1/mcp/invoke` with mock tool
+4. Implement minimal FastAPI app to make tests pass
+5. Refactor: extract registry, clean separation of concerns
+
+**Clean Code Principles:**
+- Single Responsibility: separate registry, adapters, lifecycle
+- Dependency Injection: registry injected into app
+- Clear naming: `build_registry()`, `invoke_tool()`, `health_check()`
+- No magic strings: use enums for tool names and states
+
+#### T1: Error Handling  
+**TDD Approach:**
+1. Write tests for sync/async tool detection
+2. Write tests for standard error envelope format
+3. Write tests for trace_id generation and propagation
+4. Implement async wrapper with proper error handling
+5. Refactor: extract error helpers, consolidate trace handling
+
+**Clean Code Principles:**
+- Don't Repeat Yourself: single error envelope factory
+- Fail Fast: validate inputs early, explicit error types
+- Composition over inheritance: error envelope builder pattern
+
+#### T2: Health Checks
+**TDD Approach:**
+1. Write tests for individual dependency checks (DB, Weaviate, schema)
+2. Write tests for health check caching (5s TTL)
+3. Write tests for `/readyz` aggregation logic
+4. Implement dependency checkers with clear interfaces
+5. Refactor: extract health check strategies
+
+**Clean Code Principles:**
+- Interface Segregation: separate DB, Weaviate, Schema checkers
+- Open/Closed: extensible health check system
+- Command Query Separation: health checks are queries
+
+### P1 — Reliability (Behavior-Driven)
+
+#### T3: Job API
+**TDD Approach:**
+1. Write tests for job creation with idempotency
+2. Write tests for job state transitions
+3. Write tests for background job execution
+4. Write tests for result persistence and retrieval
+5. Implement job runner with clear state machine
+
+**Clean Code Principles:**
+- State Pattern: explicit job state transitions
+- Repository Pattern: abstract job persistence
+- Factory Pattern: job creation based on tool type
+- SOLID: separate job creation, execution, persistence
+
+#### T4: Concurrency Control
+**TDD Approach:**
+1. Write tests for per-tool semaphore limits
+2. Write tests for 429 responses with Retry-After
+3. Write tests for concurrent request handling
+4. Implement semaphore-based rate limiting
+5. Refactor: extract concurrency policy configuration
+
+**Clean Code Principles:**
+- Strategy Pattern: pluggable concurrency policies
+- Configuration over hardcoding: externalize limits
+- Graceful degradation: meaningful 429 responses
+
+### P2 — Observability (Property-Based)
+
+#### T5: Structured Logging
+**TDD Approach:**
+1. Write tests for log format consistency
+2. Write tests for trace_id propagation
+3. Write tests for structured field extraction
+4. Write property-based tests for log parsing
+5. Implement structured logger with consistent schema
+
+**Clean Code Principles:**
+- Adapter Pattern: abstract logging backend
+- Builder Pattern: structured log entry construction
+- Immutable objects: log entries are value objects
+
+#### T6: Security
+**TDD Approach:**
+1. Write tests for auth middleware behavior
+2. Write tests for secret injection (no plaintext)
+3. Write tests for unauthorized request rejection
+4. Implement auth layer with clear boundaries
+5. Refactor: extract auth strategies
+
+**Clean Code Principles:**
+- Decorator Pattern: auth middleware as cross-cutting concern
+- Principle of Least Privilege: default-deny auth
+- Secure by Default: VPC-only unless explicitly public
+
+### P3 — Developer Experience (Integration-Focused)
+
+#### T7: Local Development
+**TDD Approach:**
+1. Write smoke tests for Make targets
+2. Write integration tests for Docker health checks
+3. Write tests for compose service dependencies
+4. Implement Make targets with clear contracts
+5. Document setup and troubleshooting
+
+**Clean Code Principles:**
+- Convention over Configuration: sensible defaults
+- Self-Documenting Code: clear Make target names
+- Fail Fast: early validation of environment
+
+#### T8: Contract Testing
+**TDD Approach:**
+1. Write contract tests comparing HTTP vs stdio behavior
+2. Write chaos tests for dependency failures
+3. Write property-based tests for idempotency
+4. Implement test doubles for external dependencies
+5. Create test data factories for consistent fixtures
+
+**Clean Code Principles:**
+- Test Pyramid: unit → integration → e2e
+- Test Data Builders: readable, maintainable fixtures
+- Consumer-Driven Contracts: explicit API agreements
+
+---
+
+## 17) Code quality gates
+
+Each stage must pass:
+- **Unit test coverage ≥ 90%** for new code
+- **Integration tests** for all external dependencies
+- **Property-based tests** for business invariants
+- **Mutation testing** to verify test quality
+- **Static analysis** (mypy, ruff) with zero violations
+- **Security scanning** for vulnerabilities
+- **Performance benchmarks** within SLO targets
+
+---
+
+## 18) Acceptance checklist
 
 * [ ] `/healthz` returns 200; Docker/ECS healthchecks pass.
 * [ ] `/readyz` gates until DB + Weaviate + schema ready.
@@ -248,3 +392,6 @@ invoke:
 * [ ] Structured logs + basic latency/error metrics emitted.
 * [ ] Terraform deployed behind ALB with sane timeouts.
 * [ ] Documentation (this file) linked from README.
+* [ ] Test coverage ≥ 90% for all new HTTP modules.
+* [ ] Contract tests verify HTTP/stdio parity.
+* [ ] Chaos tests demonstrate graceful failure handling.

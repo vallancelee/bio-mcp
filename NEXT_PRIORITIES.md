@@ -1,250 +1,279 @@
-# HTTP\_APPROACH.md
+Here’s a crisp, **prioritized implementation plan** to take the repo from “stdio MCP” to an **ops-ready HTTP service**, while keeping stdio support. Each task has concrete steps, code targets, and acceptance criteria.
 
-A pragmatic plan to expose the bio‑mcp server over HTTP while preserving stdio MCP for compatibility. Optimized for cloud ops (health checks, autoscaling, observability) with a thin adapter that maps existing tool functions to HTTP endpoints.
+# Goals
+
+* Add an HTTP surface (`/healthz`, `/readyz`, `/v1/mcp/invoke`, jobs API) without rewriting business logic.
+* Make long operations reliable (job model + idempotency).
+* Add back-pressure, structured errors, and basic observability.
+* Keep the current stdio MCP entrypoint for compatibility.
+
+# Assumptions
+
+* Repo root: `bio-mcp` with Python package `src/bio_mcp`.
+* Env vars per README: `BIO_MCP_DATABASE_URL`, `BIO_MCP_WEAVIATE_URL`, `BIO_MCP_PUBMED_API_KEY`, `BIO_MCP_OPENAI_API_KEY`, `BIO_MCP_LOG_LEVEL`, `BIO_MCP_JSON_LOGS`.
 
 ---
 
-## 1) Objectives
+## P0 — Must land first
 
-* **Ops‑friendly**: native HTTP surface with `/healthz` and `/readyz`, ALB/NLB health checks, and autoscaling.
-* **Non‑intrusive**: reuse existing MCP tool implementations; no rewrite of business logic.
-* **Safe at scale**: concurrency caps, back‑pressure, job pattern for long‑running tasks, structured errors.
-* **Dual transport**: keep stdio entrypoint for MCP‑native clients while adding HTTP for cloud.
+### T0. Create HTTP skeleton (FastAPI + uvicorn)
+
+**Files**
+
+* `src/bio_mcp/http/app.py`
+* `src/bio_mcp/http/adapters.py`
+* `src/bio_mcp/http/lifecycle.py`
+* `src/bio_mcp/http/registry.py`
+* `src/bio_mcp/main_http.py`
+
+**Steps**
+
+1. Implement `registry.build_registry()` mapping tool names → callables:
+
+   * `pubmed.search|get|sync|sync_incremental`
+   * `rag.search|get`
+   * `corpus.checkpoint.create|list|get|delete`
+2. Adapter endpoint:
+
+   * `POST /v1/mcp/invoke {tool, params, idempotency_key?}` → `{ok,result,trace_id,tool}`
+   * `GET /v1/mcp/tools` → list
+3. Health endpoints:
+
+   * `/healthz` (liveness)
+   * `/readyz` (DB ping + Weaviate ping + schema/migrations check stub)
+4. `main_http.py` runs uvicorn on `0.0.0.0:8080` with sensible `limit_concurrency`.
+
+**Acceptance**
+
+* `make run-http` starts server.
+* `curl :8080/healthz` → 200; `curl :8080/v1/mcp/tools` lists tools.
+* Invoking a fast tool (e.g., `rag.get` with dummy id) round-trips.
 
 ---
 
-## 2) Architecture (delta from today)
+### T1. Async-safe invocation & error envelope
 
+**Files**
+
+* `adapters.py` (update)
+* `http/app.py` (add error helpers)
+
+**Steps**
+
+1. Detect `async` vs sync tool functions; wrap sync with `anyio.to_thread.run_sync`.
+2. Return standardized errors:
+
+   ```json
+   {"ok": false, "error_code": "WEAVIATE_TIMEOUT", "message": "...", "trace_id": "...", "tool": "rag.search"}
+   ```
+3. Generate a `trace_id` per request (UUID4) and include in logs + responses.
+
+**Acceptance**
+
+* A forced error (e.g., invalid params) returns the envelope with `ok:false`.
+* Logs contain `trace_id`, `tool`, `latency_ms`.
+
+---
+
+### T2. Readiness that gates on real dependencies
+
+**Files**
+
+* `lifecycle.py`, `app.py`
+* Optionally `clients/` ping helpers
+
+**Steps**
+
+1. DB check: connect using `BIO_MCP_DATABASE_URL`; run `SELECT 1`.
+2. Weaviate check: GET `${BIO_MCP_WEAVIATE_URL}/v1/.well-known/ready`.
+3. Schema/migration check:
+
+   * Confirm Alembic head applied (inspect alembic version table).
+   * Confirm required Weaviate classes exist.
+4. Cache readiness for \~5s to avoid probe storms.
+
+**Acceptance**
+
+* With DB/Weaviate down, `/readyz` returns **503**.
+* After dependencies up + migrated, `/readyz` returns **200**.
+
+---
+
+## P1 — Reliability under load
+
+### T3. Job API for long-running tools (e.g., `pubmed.sync`)
+
+**Files**
+
+* `http/app.py` (routes: `POST /v1/jobs`, `GET /v1/jobs/{id}`)
+* `services/` (job runner/background task)
+* DB migration for job table
+
+**Steps**
+
+1. Add table:
+
+   ```
+   jobs(id uuid pk, tool text, params_hash text, idempotency_key text null,
+        state text check in ('queued','running','succeeded','failed'),
+        progress jsonb, result_ref text, error text, created_at, updated_at)
+   unique (tool, params_hash, coalesce(idempotency_key,''))
+   ```
+2. `POST /v1/jobs` enqueues; returns `job_id`.
+3. Background runner executes tool with periodic `progress` updates.
+4. Store result (or ref) and final state; retries safe via idempotency key.
+
+**Acceptance**
+
+* Kicking off `pubmed.sync` returns a job id quickly.
+* Polling job shows state transitions; final result stored.
+* Re-posting same request with same idempotency key **does not** duplicate work.
+
+---
+
+### T4. Back-pressure & per-tool concurrency
+
+**Files**
+
+* `app.py` (dependency-injected semaphores)
+* Config (env) for limits: `BIO_MCP_MAX_CONCURRENCY`, per-tool overrides
+
+**Steps**
+
+1. Global concurrency cap (uvicorn) + per-tool semaphores:
+
+   * `rag.search`: e.g., 50
+   * `pubmed.sync`: e.g., 8
+2. If semaphore exhausted → return **429** with `Retry-After`.
+
+**Acceptance**
+
+* Synthetic load that exceeds limits yields 429, not 5xx or timeouts.
+* DB/Weaviate pools are not saturated (monitor connections).
+
+---
+
+## P2 — Ops hardening
+
+### T5. Structured JSON logging & basic metrics
+
+**Files**
+
+* Logging config (JSON)
+* Optional: Prometheus/CloudWatch EMF emitter
+
+**Steps**
+
+1. Emit JSON logs with fields:
+
+   * `ts, level, trace_id, tool, route, status, latency_ms, tenant_id?`
+2. Add counters/histograms:
+
+   * `requests_total{tool}`, `errors_total{tool}`, `latency_ms{tool}`, `inflight{tool}`.
+
+**Acceptance**
+
+* Logs are machine-parseable.
+* Metrics visible locally (or exported).
+
+---
+
+### T6. Auth posture & secrets hygiene
+
+**Files**
+
+* `app.py` (auth middleware)
+* Terraform task definition (secrets)
+* README updates
+
+**Steps**
+
+1. Default VPC-only; if public, require bearer tokens or OIDC on `/v1/*`.
+2. Don’t expose `/v1/mcp/tools` without auth in public mode.
+3. Pull secrets from AWS Secrets Manager/SSM in task definition (no plaintext env in TF).
+
+**Acceptance**
+
+* Requests without auth (public mode) are rejected with 401/403.
+* Secrets never appear in logs/env dumps.
+
+---
+
+## P3 — Developer experience & tests
+
+### T7. Make targets + local parity
+
+**Files**
+
+* `Makefile`, `docker-compose.yml`, `Dockerfile`
+
+**Steps**
+
+* `make run-http`, `make smoke-http`, `make invoke`
+* Docker `HEALTHCHECK` → `/healthz`
+* Compose exposes `:8080` and depends on Postgres + Weaviate.
+
+**Acceptance**
+
+* One command brings up a full local stack and passes smoke tests.
+
+---
+
+### T8. Tests: contract, failure injection, idempotency
+
+**Files**
+
+* `tests/http/test_invoke.py`, `tests/http/test_jobs.py`, `tests/http/test_readyz.py`
+
+**Cases**
+
+* Golden I/O per tool over HTTP and stdio.
+* PubMed 429 → retry/backoff path surfaces meaningful `error_code`.
+* Weaviate 5xx → structured error; no crash.
+* Idempotency: duplicate `POST /v1/jobs` returns same `job_id`.
+
+**Acceptance**
+
+* Tests pass locally and in CI.
+* Regressions bubble clear error codes, not stack traces.
+
+---
+
+## Branching & PR checklist (for Claude)
+
+* Create feature branches per task: `feat/http-skeleton`, `feat/job-api`, etc.
+* Each PR must include:
+
+  * Code + **unit tests** for changed area.
+  * **Docs update**: `HTTP_APPROACH.md` or README snippets if behavior changed.
+  * **Smoke script**/Make target adjusted.
+* Run `make smoke-http` before marking ready for review.
+
+---
+
+## Rollout order (apply sequentially)
+
+1. **T0–T2** (HTTP skeleton, errors, readiness)
+2. **T3–T4** (jobs + back-pressure)
+3. **T5–T6** (observability, auth/secrets)
+4. **T7–T8** (DX & tests)
+
+---
+
+## Quick command snippets (for Claude to use in PRs)
+
+```bash
+# new files
+git checkout -b feat/http-skeleton
+touch src/bio_mcp/http/{__init__.py,app.py,adapters.py,lifecycle.py,registry.py} src/bio_mcp/main_http.py
+
+# deps
+pip install fastapi "uvicorn[standard]" anyio httpx
+
+# run
+make run-http
+make smoke-http
 ```
-[Clients (agents, workers)]
-          │
-          ▼
-   HTTP Adapter (FastAPI)
-    • /v1/mcp/invoke
-    • /v1/mcp/tools
-    • /v1/jobs, /v1/jobs/{id}
-    • /healthz, /readyz
-          │
-          ▼
-   Tool Registry  ─────────► Services ─────────► Clients (DB, Weaviate, PubMed, LLM)
-          ▲                                 (pooled connections)
-          │
-   stdio MCP main.py (unchanged for local / MCP‑native)
-```
-
-### Key modules to add
-
-* `bio_mcp/http/app.py`: FastAPI app, routes, health/readiness, wiring.
-* `bio_mcp/http/adapters.py`: tool registry → HTTP endpoints.
-* `bio_mcp/http/lifecycle.py`: startup/shutdown hooks, dependency pings.
-* `bio_mcp/main_http.py`: uvicorn entrypoint.
 
 ---
 
-## 3) API surface (v1)
-
-### 3.1 Invoke a tool
-
-`POST /v1/mcp/invoke`
-
-```json
-{
-  "tool": "pubmed.search",
-  "params": { "q": "glioblastoma", "limit": 3 },
-  "idempotency_key": "<optional-guid>"
-}
-```
-
-**Response**
-
-```json
-{ "ok": true, "tool": "pubmed.search", "result": { /* tool-specific */ }, "trace_id": "..." }
-```
-
-### 3.2 List tools
-
-`GET /v1/mcp/tools` → `["pubmed.search", "pubmed.get", ...]`
-
-### 3.3 Jobs (for long‑running operations)
-
-* `POST /v1/jobs` with `{ "tool": "pubmed.sync", "params": {...}, "idempotency_key": "..." }`
-* `GET /v1/jobs/{id}` → `{ "state": "queued|running|succeeded|failed", "result": {...}, "error": {...} }`
-* Optional `GET /v1/jobs/stream/{id}` (SSE) for progress.
-
-### 3.4 Health
-
-* `GET /healthz` → liveness (process up).
-* `GET /readyz` → readiness (DB ping, Weaviate ping, schema/migrations check).
-
-> **Versioning**: Prefix routes with `/v1/`. Bump on breaking changes.
-
----
-
-## 4) Adapter design (async‑safe)
-
-* Detect coroutine vs sync functions; wrap sync calls with `anyio.to_thread.run_sync`.
-* Per‑tool Pydantic models for **inputs/outputs**; OpenAPI auto‑docs.
-* Standard error envelope:
-
-```json
-{
-  "ok": false,
-  "error_code": "WEAVIATE_TIMEOUT",
-  "message": "...",
-  "trace_id": "...",
-  "tool": "pubmed.sync"
-}
-```
-
----
-
-## 5) Concurrency & back‑pressure
-
-* **Global limit**: uvicorn `limit_concurrency=200` (tune per CPU/RAM).
-* **Per‑tool caps** (semaphores): e.g., `rag.search` 50, `pubmed.sync` 8.
-* **DB pool**: set max pool size and overflow; match to concurrency.
-* On overload: return **429** with `Retry‑After`.
-
----
-
-## 6) Long‑running jobs
-
-* Avoid LB timeouts by moving `pubmed.sync`/bulk ingest into the **job API**.
-* Persist **job rows** (id, tool, params hash, idempotency\_key, state, progress, result\_ref, timestamps).
-* Workers: in‑process task queue (background tasks) or a tiny side worker container; store progress checkpoints.
-* **Idempotency**: dedupe by `idempotency_key` + tool + params hash.
-
----
-
-## 7) Health & readiness
-
-* `/livez`: always 200 when process is alive.
-* `/healthz`: simple OK—used by container healthcheck.
-* `/readyz`: returns 200 only when:
-
-  1. DB reachable **and** required tables exist (migrations applied),
-  2. Weaviate reachable **and** required classes exist.
-* Cache readiness results for \~5s to reduce probe amplification.
-
----
-
-## 8) Observability
-
-* **Structured JSON logs** with fields: `ts, level, trace_id, tool, route, status, latency_ms, tenant_id`.
-* **Tracing** (optional initially): OTEL spans around tool invocations and dependency calls.
-* **Metrics**: per‑tool `requests_total`, `latency_ms` histogram, `errors_total`, `inflight`, `429_total`.
-
----
-
-## 9) Security
-
-* Default private (VPC‑only). If public:
-
-  * Bearer tokens or OIDC; per‑tenant **rate limiting** & quotas.
-  * Do **not** expose `/v1/mcp/tools` without auth.
-* Secrets via AWS Secrets Manager/SSM; never log secret values.
-
----
-
-## 10) Deployment (ECS Fargate + ALB)
-
-* Container listens on `:8080`; add Docker `HEALTHCHECK` hitting `/healthz`.
-* ALB target group health check path `/healthz`; idle timeout ≥ 120s unless all long ops use jobs.
-* ECS service **deregistration delay** ≥ app shutdown grace (30–60s).
-* Autoscaling on CPU/RAM + `5xx` alarms.
-
-**Terraform excerpts**
-
-* Task definition: container port 8080, awslogs, healthCheck `curl http://localhost:8080/healthz`.
-* Target group: HTTP:8080, health check `/healthz`.
-* Listener rule: route `/`, `/v1/*`, `/healthz`, `/readyz` to TG.
-
----
-
-## 11) Testing strategy
-
-* **Contract tests**: golden inputs/outputs per tool over HTTP and stdio.
-* **Load tests**: realistic RPS, verify back‑pressure and latency SLOs.
-* **Failure injection**: DB/Weaviate timeouts, PubMed rate limits, verify retries & error envelopes.
-* **Migration test**: start with empty DB; run `alembic upgrade` (pre‑deploy job or on startup gate) and assert `/readyz` gates until done.
-
----
-
-## 12) Migration & rollout plan
-
-1. Land HTTP code paths behind feature flags; keep stdio intact.
-2. Local `docker‑compose` parity; add `make run-http`, `make smoke-http`.
-3. Deploy to staging ECS; verify health, readiness, and job API.
-4. Backfill dashboards (logs, metrics); set alarms.
-5. Gradual traffic ramp; keep stdio path for MCP clients indefinitely.
-
----
-
-## 13) Known risks & mitigations
-
-* **Protocol mismatch**: HTTP wrapper is not MCP session; keep stdio entrypoint.
-* **Long requests**: move to job API; set ALB idle timeout appropriately.
-* **Blocking code**: wrap sync I/O via `anyio.to_thread.run_sync` or make tools async.
-* **Readiness flapping**: cache checks; verify schema/migrations, not just pings.
-* **Overload**: per‑tool semaphores + 429; size DB/Weaviate pools conservatively.
-
----
-
-## 14) Minimal stubs (illustrative)
-
-**Adapter invocation boundary**
-
-```python
-import inspect, anyio
-
-async def invoke(fn, params):
-    if inspect.iscoroutinefunction(fn):
-        return await fn(params)
-    return await anyio.to_thread.run_sync(fn, params)
-```
-
-**Error envelope helper**
-
-```python
-def err(code, msg, trace_id, tool):
-    return {"ok": False, "error_code": code, "message": msg, "trace_id": trace_id, "tool": tool}
-```
-
-**Health wiring sketch**
-
-```python
-@app.get("/readyz")
-async def readyz():
-    ok = await db_ready() and await weaviate_ready() and await schema_ready()
-    return ({"ok": True}, 200) if ok else ({"ok": False}, 503)
-```
-
----
-
-## 15) Makefile targets
-
-```
-run-http:
-	UVICORN_LIMIT=200 LOG_LEVEL=info python -m bio_mcp.main_http
-
-smoke-http:
-	curl -fsS localhost:8080/healthz && curl -fsS localhost:8080/readyz
-
-invoke:
-	curl -s -X POST localhost:8080/v1/mcp/invoke \
-	  -H 'content-type: application/json' \
-	  -d '{"tool":"pubmed.search","params":{"q":"glioblastoma","limit":3}}' | jq .
-```
-
----
-
-## 16) Acceptance checklist
-
-* [ ] `/healthz` returns 200; Docker/ECS healthchecks pass.
-* [ ] `/readyz` gates until DB + Weaviate + schema ready.
-* [ ] All tools callable via `/v1/mcp/invoke`; parity with stdio behavior.
-* [ ] Back‑pressure returns 429 with `Retry‑After`.
-* [ ] Job API completes `pubmed.sync` end‑to‑end with idempotency.
-* [ ] Structured logs + basic latency/error metrics emitted.
-* [ ] Terraform deployed behind ALB with sane timeouts.
-* [ ] Documentation (this file) linked from README.

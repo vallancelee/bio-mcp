@@ -1,0 +1,146 @@
+"""FastAPI application for Bio-MCP HTTP adapter."""
+
+import uuid
+from typing import Any
+
+from fastapi import FastAPI, HTTPException, status
+from pydantic import BaseModel
+
+from bio_mcp.http.lifecycle import check_readiness
+from bio_mcp.http.registry import ToolRegistry, build_registry
+
+
+class InvokeRequest(BaseModel):
+    """Request model for tool invocation."""
+    tool: str
+    params: dict[str, Any] = {}
+    idempotency_key: str | None = None
+
+
+class InvokeResponse(BaseModel):
+    """Response model for successful tool invocation."""
+    ok: bool = True
+    tool: str
+    result: Any
+    trace_id: str
+
+
+class ErrorResponse(BaseModel):
+    """Response model for errors."""
+    ok: bool = False
+    error_code: str
+    message: str
+    trace_id: str
+    tool: str | None = None
+
+
+class HealthResponse(BaseModel):
+    """Response model for health checks."""
+    status: str
+
+
+class ToolsResponse(BaseModel):
+    """Response model for tools listing."""
+    tools: list[str]
+
+
+def create_error_response(
+    error_code: str, 
+    message: str, 
+    trace_id: str, 
+    tool: str | None = None
+) -> ErrorResponse:
+    """Create a standardized error response."""
+    return ErrorResponse(
+        error_code=error_code,
+        message=message,
+        trace_id=trace_id,
+        tool=tool
+    )
+
+
+def create_app(registry: ToolRegistry | None = None) -> FastAPI:
+    """Create and configure the FastAPI application.
+    
+    Args:
+        registry: Optional tool registry. If None, builds default registry.
+    """
+    app = FastAPI(
+        title="Bio-MCP HTTP Adapter",
+        description="HTTP adapter for Bio-MCP server tools",
+        version="1.0.0"
+    )
+    
+    # Use provided registry or build default
+    if registry is None:
+        registry = build_registry()
+    
+    # Store registry in app state
+    app.state.registry = registry
+    
+    @app.get("/healthz", response_model=HealthResponse)
+    async def healthz():
+        """Liveness check - returns 200 if process is alive."""
+        return HealthResponse(status="healthy")
+    
+    @app.get("/readyz", response_model=HealthResponse)
+    async def readyz():
+        """Readiness check - returns 200 if dependencies are ready."""
+        if await check_readiness():
+            return HealthResponse(status="ready")
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=HealthResponse(status="not_ready").model_dump()
+            )
+    
+    @app.get("/v1/mcp/tools", response_model=ToolsResponse)
+    async def list_tools():
+        """List available tools."""
+        tools = app.state.registry.list_tool_names()
+        return ToolsResponse(tools=tools)
+    
+    @app.post("/v1/mcp/invoke")
+    async def invoke_tool(request: InvokeRequest):
+        """Invoke a tool with given parameters."""
+        trace_id = str(uuid.uuid4())
+        
+        try:
+            # Get tool from registry
+            tool_func = app.state.registry.get_tool(request.tool)
+            if tool_func is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=create_error_response(
+                        error_code="TOOL_NOT_FOUND",
+                        message=f"Tool '{request.tool}' not found",
+                        trace_id=trace_id,
+                        tool=request.tool
+                    ).model_dump()
+                )
+            
+            # Execute tool
+            result = tool_func(request.tool, request.params)
+            
+            return InvokeResponse(
+                tool=request.tool,
+                result=result,
+                trace_id=trace_id
+            )
+            
+        except HTTPException:
+            # Re-raise HTTP exceptions (like 404) as-is
+            raise
+        except Exception as e:
+            # Handle tool execution errors
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=create_error_response(
+                    error_code="TOOL_EXECUTION_ERROR",
+                    message=str(e),
+                    trace_id=trace_id,
+                    tool=request.tool
+                ).model_dump()
+            )
+    
+    return app

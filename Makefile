@@ -105,6 +105,23 @@ run: ## Run the MCP server locally
 	@echo "$(YELLOW)Starting Bio-MCP server...$(NC)"
 	$(UV) run python -m bio_mcp.main
 
+run-http: ## Run the HTTP server locally
+	@echo "$(YELLOW)Starting Bio-MCP HTTP server...$(NC)"
+	UVICORN_LIMIT=200 LOG_LEVEL=info $(UV) run python -m bio_mcp.main_http
+
+smoke-http: ## Basic HTTP health checks
+	@echo "$(YELLOW)Running HTTP smoke tests...$(NC)"
+	curl -fsS localhost:8080/healthz && echo " - Health OK" || echo " - Health FAILED"
+	curl -fsS localhost:8080/readyz && echo " - Readiness OK" || echo " - Readiness FAILED"
+	@echo "$(GREEN)✓ HTTP smoke tests completed$(NC)"
+
+invoke-test: ## Test tool invocation via HTTP
+	@echo "$(YELLOW)Testing tool invocation...$(NC)"
+	curl -s -X POST localhost:8080/v1/mcp/invoke \
+	  -H 'content-type: application/json' \
+	  -d '{"tool":"ping","params":{"message":"test"}}' | jq .
+	@echo "$(GREEN)✓ Tool invocation test completed$(NC)"
+
 # Docker Commands
 docker-build: ## Build Docker image
 	@echo "$(YELLOW)Building Docker image...$(NC)"
