@@ -1,6 +1,6 @@
 """Tests for HTTP FastAPI application endpoints."""
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -49,7 +49,7 @@ class TestHealthEndpoints:
     def test_readyz_returns_200_when_ready(self, client):
         """Test /readyz endpoint returns 200 when dependencies ready."""
         # Mock all dependencies as ready
-        with patch("bio_mcp.http.lifecycle.check_readiness", return_value=True):
+        with patch("bio_mcp.http.app.check_readiness", new_callable=AsyncMock, return_value=True):
             response = client.get("/readyz")
             
             assert response.status_code == 200
@@ -59,7 +59,7 @@ class TestHealthEndpoints:
     def test_readyz_returns_503_when_not_ready(self, client):
         """Test /readyz endpoint returns 503 when dependencies not ready."""
         # Mock dependencies as not ready
-        with patch("bio_mcp.http.app.check_readiness", return_value=False):
+        with patch("bio_mcp.http.app.check_readiness", new_callable=AsyncMock, return_value=False):
             response = client.get("/readyz")
             
             assert response.status_code == 503

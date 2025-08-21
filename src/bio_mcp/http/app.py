@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from bio_mcp.http.adapters import invoke_tool_safely
 from bio_mcp.http.errors import ErrorCode, classify_exception, create_error_envelope
-from bio_mcp.http.lifecycle import check_readiness
+from bio_mcp.http.lifecycle import check_readiness, get_health_status
 from bio_mcp.http.registry import ToolRegistry, build_registry
 from bio_mcp.http.tracing import TraceContext, generate_trace_id
 
@@ -94,6 +94,29 @@ def create_app(registry: ToolRegistry | None = None) -> FastAPI:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=HealthResponse(status="not_ready").model_dump()
+            )
+    
+    @app.get("/health")
+    async def health_detailed():
+        """Detailed health check with all dependency status."""
+        health_status = await get_health_status()
+        
+        if health_status.healthy:
+            return {
+                "status": "healthy",
+                "message": health_status.message,
+                "details": health_status.details,
+                "duration_ms": health_status.check_duration_ms
+            }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={
+                    "status": "unhealthy",
+                    "message": health_status.message,
+                    "details": health_status.details,
+                    "duration_ms": health_status.check_duration_ms
+                }
             )
     
     @app.get("/v1/mcp/tools", response_model=ToolsResponse)
