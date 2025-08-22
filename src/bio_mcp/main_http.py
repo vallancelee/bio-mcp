@@ -20,7 +20,7 @@ def main():
     uvicorn.run(
         "bio_mcp.main_http:app",
         host="0.0.0.0",
-        port=8080,
+        port=8000,
         log_config=None,  # Use our own logging configuration
         access_log=False,  # We'll handle access logging ourselves
         limit_concurrency=200,  # Reasonable default for T0

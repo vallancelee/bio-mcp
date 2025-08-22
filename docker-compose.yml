@@ -1,4 +1,4 @@
-version: '3.8'
+# Docker Compose for Bio-MCP Development Environment
 
 services:
   bio-mcp:
@@ -26,8 +26,8 @@ services:
     image: semitechnologies/weaviate:1.30.0
     container_name: bio-mcp-weaviate
     ports:
-      - "8090:8080"   # HTTP/REST API - use 8090 to avoid conflicts
-      - "50061:50051" # gRPC API - use 50061 to avoid conflicts
+      - "8080:8080"   # HTTP/REST API - standard port for local dev
+      - "50051:50051" # gRPC API - standard port for local dev
     environment:
       QUERY_DEFAULTS_LIMIT: 25
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
@@ -53,14 +53,34 @@ services:
     image: postgres:15-alpine
     container_name: bio-mcp-postgres
     environment:
-      POSTGRES_DB: biomcp
-      POSTGRES_USER: biomcp
-      POSTGRES_PASSWORD: biomcp_password
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
     ports:
-      - "5433:5432"  # Use different port to avoid conflict
+      - "5433:5432"  # Use 5433 to avoid conflicts with existing PostgreSQL
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+  # MinIO for S3-compatible storage
+  minio:
+    image: minio/minio:latest
+    container_name: bio-mcp-minio
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # MinIO Console
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
 
 volumes:
   weaviate_data:
   postgres_data:
+  minio_data:

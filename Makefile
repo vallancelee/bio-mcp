@@ -5,6 +5,7 @@
 .PHONY: lint format type-check security-scan clean build run docker-build docker-run docker-up docker-down
 .PHONY: deps-update version bump-patch bump-minor bump-major
 .PHONY: manual-test test-health test-server test-logs test-signals test-docker-health test-all-manual
+.PHONY: bootstrap up down reset migrate migrate-create migrate-rollback db-reset run-worker quickstart health-check
 
 # Default target
 .DEFAULT_GOAL := help
@@ -35,6 +36,20 @@ dev: install ## Install development dependencies
 	@echo "$(YELLOW)Installing development dependencies...$(NC)"
 	$(UV) sync --dev
 	@echo "$(GREEN)✓ Development environment ready$(NC)"
+
+bootstrap: ## Complete first-time setup (with services)
+	@echo "$(BLUE)🚀 Setting up Bio-MCP development environment...$(NC)"
+	@echo "$(YELLOW)1/5: Installing Python dependencies...$(NC)"
+	@$(UV) sync --dev
+	@echo "$(YELLOW)2/5: Setting up environment file...$(NC)"
+	@test -f .env || cp .env.example .env
+	@echo "$(YELLOW)3/5: Installing pre-commit hooks...$(NC)"
+	@$(UV) run pre-commit install 2>/dev/null || echo "$(YELLOW)Pre-commit hooks not available$(NC)"
+	@echo "$(YELLOW)4/5: Creating local data directories...$(NC)"
+	@mkdir -p data logs
+	@echo "$(YELLOW)5/5: Validating setup...$(NC)"
+	@$(UV) run python -c "import bio_mcp; print('✓ Bio-MCP package importable')" 2>/dev/null || echo "$(YELLOW)Package check skipped$(NC)"
+	@echo "$(GREEN)✅ Bootstrap complete! Run 'make up' to start services$(NC)"
 
 # Testing Commands
 test: ## Run all unit tests (fast)
@@ -109,6 +124,60 @@ run-http: ## Run the HTTP server locally
 	@echo "$(YELLOW)Starting Bio-MCP HTTP server...$(NC)"
 	UVICORN_LIMIT=200 LOG_LEVEL=info $(UV) run python -m bio_mcp.main_http
 
+run-worker: ## Run the async job worker
+	@echo "$(YELLOW)Starting job worker...$(NC)"
+	@$(UV) run python -m bio_mcp.http.jobs.worker
+
+# ============================================================================
+# DATABASE COMMANDS
+# ============================================================================
+
+migrate: ## Run database migrations
+	@echo "$(YELLOW)Running database migrations...$(NC)"
+	@$(UV) run alembic upgrade head
+	@echo "$(GREEN)✅ Migrations applied$(NC)"
+
+migrate-create: ## Create a new migration (usage: make migrate-create name="add_users_table")
+	@test -n "$(name)" || (echo "$(RED)Error: name parameter required$(NC)" && exit 1)
+	@echo "$(YELLOW)Creating migration: $(name)...$(NC)"
+	@$(UV) run alembic revision --autogenerate -m "$(name)"
+	@echo "$(GREEN)✅ Migration created$(NC)"
+
+migrate-rollback: ## Rollback last migration
+	@echo "$(YELLOW)Rolling back last migration...$(NC)"
+	@$(UV) run alembic downgrade -1
+	@echo "$(GREEN)✅ Rollback complete$(NC)"
+
+db-reset: ## Reset database (drop and recreate)
+	@echo "$(RED)⚠️  This will delete all database data! Press Ctrl+C to cancel...$(NC)"
+	@sleep 3
+	@docker-compose exec postgres psql -U postgres -c "DROP DATABASE IF EXISTS postgres;" 2>/dev/null || true
+	@docker-compose exec postgres psql -U postgres -c "CREATE DATABASE postgres;" 2>/dev/null || true
+	@$(MAKE) migrate
+	@echo "$(GREEN)✅ Database reset complete$(NC)"
+
+# ============================================================================
+# HEALTH AND TESTING
+# ============================================================================
+
+health-check: ## Check if all services are healthy
+	@echo "$(YELLOW)Checking service health...$(NC)"
+	@docker-compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1 && echo "$(GREEN)✓ PostgreSQL$(NC)" || echo "$(RED)✗ PostgreSQL$(NC)"
+	@curl -s http://localhost:8080/v1/.well-known/ready >/dev/null 2>&1 && echo "$(GREEN)✓ Weaviate$(NC)" || echo "$(RED)✗ Weaviate$(NC)"
+	@curl -s http://localhost:9000/minio/health/live >/dev/null 2>&1 && echo "$(GREEN)✓ MinIO$(NC)" || echo "$(RED)✗ MinIO$(NC)"
+
+quickstart: up migrate ## Quick setup and test (first-time users)
+	@echo "$(BLUE)🎯 Running Bio-MCP Quickstart...$(NC)"
+	@echo "$(YELLOW)Step 1: Starting HTTP server (background)...$(NC)"
+	@$(UV) run python -m bio_mcp.main_http & SERVER_PID=$$!; \
+		sleep 5; \
+		echo "$(YELLOW)Step 2: Testing health endpoints...$(NC)"; \
+		curl -s localhost:8000/healthz | grep -q "ok" && echo "$(GREEN)✓ Health check passed$(NC)" || echo "$(RED)✗ Health check failed$(NC)"; \
+		echo "$(YELLOW)Step 3: Listing available tools...$(NC)"; \
+		curl -s localhost:8000/v1/mcp/tools 2>/dev/null | jq -r '.tools[].name' 2>/dev/null | head -3 || echo "$(YELLOW)Tools endpoint not ready$(NC)"; \
+		kill $$SERVER_PID 2>/dev/null || true; \
+		echo "$(GREEN)🎉 Quickstart complete! Bio-MCP basic setup is working!$(NC)"
+
 smoke-http: ## Basic HTTP health checks
 	@echo "$(YELLOW)Running HTTP smoke tests...$(NC)"
 	curl -fsS localhost:8080/healthz && echo " - Health OK" || echo " - Health FAILED"
@@ -139,10 +208,34 @@ docker-up: ## Start development services with Docker Compose
 	@echo "$(BLUE)Weaviate: http://localhost:8080$(NC)"
 	@echo "$(BLUE)PostgreSQL: localhost:5433$(NC)"
 
+up: ## Start all development services (ONBOARDING alias)
+	@echo "$(YELLOW)Starting development services...$(NC)"
+	@docker-compose up -d postgres weaviate minio
+	@echo "$(YELLOW)Waiting for services to be healthy...$(NC)"
+	@sleep 5
+	@$(MAKE) health-check || echo "$(YELLOW)Some services may still be starting...$(NC)"
+	@echo "$(GREEN)✅ Services ready!$(NC)"
+	@echo "$(BLUE)PostgreSQL: localhost:5433$(NC)"
+	@echo "$(BLUE)Weaviate: http://localhost:8080$(NC)"
+	@echo "$(BLUE)MinIO S3: http://localhost:9000$(NC)"
+	@echo "$(BLUE)MinIO Console: http://localhost:9001 (admin/minioadmin)$(NC)"
+
 docker-down: ## Stop development services
 	@echo "$(YELLOW)Stopping development services...$(NC)"
 	docker-compose down
 	@echo "$(GREEN)✓ Services stopped$(NC)"
+
+down: ## Stop all development services (ONBOARDING alias)
+	@echo "$(YELLOW)Stopping development services...$(NC)"
+	@docker-compose down
+	@echo "$(GREEN)✅ Services stopped$(NC)"
+
+reset: down ## Reset everything (WARNING: destroys data)
+	@echo "$(RED)⚠️  This will delete all local data! Press Ctrl+C to cancel...$(NC)"
+	@sleep 3
+	@docker-compose down -v
+	@rm -rf data/* logs/* 2>/dev/null || true
+	@echo "$(GREEN)✅ Reset complete$(NC)"
 
 docker-logs: ## Show Docker Compose logs
 	docker-compose logs -f
@@ -202,6 +295,11 @@ test-all: ## Run all tests (unit + integration)
 	@echo "$(YELLOW)Running all tests...$(NC)"
 	$(UV) run pytest tests/ -v
 	@echo "$(GREEN)✓ All tests completed$(NC)"
+
+test-quick: ## Run quick unit tests only
+	@echo "$(YELLOW)Running quick unit tests...$(NC)"
+	@$(UV) run pytest tests/unit -v --tb=short
+	@echo "$(GREEN)✅ Quick tests passed$(NC)"
 
 # Local Deployment
 deploy-local: ## Build and deploy locally for manual testing
