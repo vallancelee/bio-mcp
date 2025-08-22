@@ -7,6 +7,7 @@ consistent API contracts and better programmatic usage.
 
 import json
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -25,7 +26,7 @@ class MCPResponseBuilder:
         self,
         data: Any = None,
         format_type: str = "json",
-        human_formatter: callable | None = None,
+        human_formatter: Callable[[dict], str] | None = None,
     ) -> list[TextContent]:
         """Build a successful response."""
         execution_time_ms = (time.time() - self.start_time) * 1000

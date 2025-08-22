@@ -11,7 +11,7 @@ services:
     image: semitechnologies/weaviate:1.27.3
     ports:
     - "18080:8080"  # Use port 18080 to avoid conflicts  
-    - "50051:50051" # gRPC port
+    - "15005:50051" # gRPC port - use 15005 to avoid conflicts with default 50051
     restart: on-failure:0
     environment:
       TRANSFORMERS_INFERENCE_API: 'http://t2v-transformers:8080'
