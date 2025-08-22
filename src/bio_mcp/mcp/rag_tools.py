@@ -17,14 +17,14 @@ from mcp.types import TextContent
 from bio_mcp.config.logging_config import get_logger
 from bio_mcp.config.search_config import RESPONSE_CONFIG, SEARCH_CONFIG
 from bio_mcp.mcp.response_builder import (
-    MCPResponseBuilder,
     ErrorCodes,
-    get_format_preference,
+    MCPResponseBuilder,
+    format_rag_get_human,
     format_rag_search_human,
-    format_rag_get_human
+    get_format_preference,
 )
-from bio_mcp.shared.clients.database import get_database_manager
 from bio_mcp.services.embedding_service import EmbeddingService
+from bio_mcp.shared.clients.database import get_database_manager
 from bio_mcp.sources.pubmed.quality import JournalQualityScorer
 
 logger = get_logger(__name__)
@@ -136,16 +136,18 @@ class RAGToolsManager:
 
                 # Handle date serialization
                 pub_date = result.get("published_at", "")
-                if hasattr(pub_date, 'isoformat'):
+                if hasattr(pub_date, "isoformat"):
                     pub_date = pub_date.isoformat()
                 elif pub_date is None:
                     pub_date = ""
-                
+
                 formatted_result = {
                     "uuid": result["uuid"],
                     "pmid": pmid,
                     "title": result.get("title", ""),
-                    "abstract": result.get("text", ""),  # chunks have 'text' not 'abstract'
+                    "abstract": result.get(
+                        "text", ""
+                    ),  # chunks have 'text' not 'abstract'
                     "journal": "",  # journal info not stored in chunks currently
                     "publication_date": pub_date,
                     "score": result.get("score", 0.0),
@@ -215,8 +217,11 @@ class RAGToolsManager:
 
             # Search for all chunks belonging to this document
             from weaviate.classes.query import Filter
-            collection = self.embedding_service.weaviate_client.client.collections.get("DocumentChunk")
-            
+
+            collection = self.embedding_service.weaviate_client.client.collections.get(
+                "DocumentChunk"
+            )
+
             response = collection.query.fetch_objects(
                 filters=Filter.by_property("parent_uid").equal(parent_uid)
             )
@@ -228,12 +233,14 @@ class RAGToolsManager:
             first_chunk = response.objects[0]
             document = {
                 "uuid": str(first_chunk.uuid),
-                "pmid": parent_uid.replace("pubmed:", "") if parent_uid.startswith("pubmed:") else parent_uid,
+                "pmid": parent_uid.replace("pubmed:", "")
+                if parent_uid.startswith("pubmed:")
+                else parent_uid,
                 "title": first_chunk.properties.get("title", ""),
                 "abstract": "",  # We'll combine all chunk texts
                 "journal": "",  # Not available in chunks
                 "publication_date": first_chunk.properties.get("published_at", ""),
-                "parent_uid": parent_uid
+                "parent_uid": parent_uid,
             }
 
             chunks = []
@@ -244,11 +251,11 @@ class RAGToolsManager:
                     "text": obj.properties.get("text", ""),
                     "section": obj.properties.get("section", ""),
                     "tokens": obj.properties.get("tokens", 0),
-                    "chunk_idx": obj.properties.get("chunk_idx", 0)
+                    "chunk_idx": obj.properties.get("chunk_idx", 0),
                 }
                 chunks.append(chunk)
                 combined_text.append(obj.properties.get("text", ""))
-            
+
             # Combine all chunk texts to form the full abstract
             document["abstract"] = " ".join(combined_text)
 
@@ -311,7 +318,7 @@ async def rag_search_tool(
         return builder.error(
             ErrorCodes.MISSING_PARAMETER,
             "Query parameter is required",
-            format_type=format_type
+            format_type=format_type,
         )
 
     top_k = min(
@@ -363,9 +370,9 @@ async def rag_search_tool(
                 "journal": doc.get("journal", ""),
                 "publication_date": doc.get("publication_date", ""),
                 "score": doc.get("score", 0.0),
-                "content": doc.get("content", "")
+                "content": doc.get("content", ""),
             }
-            
+
             # Add optional fields if present
             if "boosted_score" in doc:
                 formatted_result["boosted_score"] = doc["boosted_score"]
@@ -375,7 +382,7 @@ async def rag_search_tool(
                 formatted_result["distance"] = doc["distance"]
             if "explain_score" in doc:
                 formatted_result["explain_score"] = doc["explain_score"]
-            
+
             formatted_results.append(formatted_result)
 
         # Build response data
@@ -388,8 +395,8 @@ async def rag_search_tool(
                 "top_k": top_k,
                 "alpha": alpha,
                 "quality_bias": rerank_by_quality,
-                "filters": filters
-            }
+                "filters": filters,
+            },
         }
 
         # Add performance data if available
@@ -399,7 +406,7 @@ async def rag_search_tool(
         return builder.success(
             data=response_data,
             format_type=format_type,
-            human_formatter=format_rag_search_human
+            human_formatter=format_rag_search_human,
         )
 
     except Exception as e:
@@ -408,9 +415,9 @@ async def rag_search_tool(
         )
         return builder.error(
             ErrorCodes.OPERATION_FAILED,
-            f"RAG search failed: {str(e)}",
+            f"RAG search failed: {e!s}",
             details={"query": query, "search_mode": search_mode},
-            format_type=format_type
+            format_type=format_type,
         )
 
 
@@ -428,14 +435,14 @@ async def rag_get_tool(name: str, arguments: dict[str, Any]) -> Sequence[TextCon
     # Initialize response builder
     builder = MCPResponseBuilder("rag.get")
     format_type = get_format_preference(arguments)
-    
+
     doc_id = arguments.get("doc_id", "").strip()
 
     if not doc_id:
         return builder.error(
             ErrorCodes.MISSING_PARAMETER,
             "doc_id parameter is required",
-            format_type=format_type
+            format_type=format_type,
         )
 
     logger.info("RAG get tool called", doc_id=doc_id)
@@ -449,11 +456,11 @@ async def rag_get_tool(name: str, arguments: dict[str, Any]) -> Sequence[TextCon
                 ErrorCodes.NOT_FOUND,
                 f"Document not found: {doc_id}",
                 details="The document may not be synced to the corpus yet",
-                format_type=format_type
+                format_type=format_type,
             )
 
         doc = result.document
-        
+
         # Format document for JSON response
         document_data = {
             "doc_id": doc_id,
@@ -469,7 +476,7 @@ async def rag_get_tool(name: str, arguments: dict[str, Any]) -> Sequence[TextCon
                 "keywords": doc.get("keywords", []),
                 "pub_types": doc.get("pub_types", []),
                 "quality": doc.get("quality"),
-            }
+            },
         }
 
         # Add optional fields if present
@@ -485,7 +492,7 @@ async def rag_get_tool(name: str, arguments: dict[str, Any]) -> Sequence[TextCon
                     "chunk_id": chunk["chunk_id"],
                     "text": chunk.get("text", ""),
                     "section": chunk.get("section", ""),
-                    "tokens": chunk.get("tokens", 0)
+                    "tokens": chunk.get("tokens", 0),
                 }
                 for chunk in result.chunks
             ]
@@ -493,14 +500,14 @@ async def rag_get_tool(name: str, arguments: dict[str, Any]) -> Sequence[TextCon
         return builder.success(
             data=document_data,
             format_type=format_type,
-            human_formatter=format_rag_get_human
+            human_formatter=format_rag_get_human,
         )
 
     except Exception as e:
         logger.error("RAG get tool failed", doc_id=doc_id, error=str(e))
         return builder.error(
             ErrorCodes.OPERATION_FAILED,
-            f"Failed to retrieve document: {str(e)}",
+            f"Failed to retrieve document: {e!s}",
             details={"doc_id": doc_id},
-            format_type=format_type
+            format_type=format_type,
         )

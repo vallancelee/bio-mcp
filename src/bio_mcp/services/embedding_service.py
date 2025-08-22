@@ -18,7 +18,7 @@ logger = get_logger(__name__)
 class EmbeddingService:
     """
     Service for embedding and storing document chunks in vector store.
-    
+
     Supports both new Document/Chunk workflow and legacy backward compatibility.
     """
 
@@ -33,13 +33,13 @@ class EmbeddingService:
             return
 
         logger.info("Initializing embedding service")
-        
+
         if not self.weaviate_client:
             self.weaviate_client = get_weaviate_client()
-        
+
         await self.weaviate_client.initialize()
         await self._ensure_chunk_collection_exists()
-        
+
         self._initialized = True
         logger.info("Embedding service initialized successfully")
 
@@ -57,15 +57,17 @@ class EmbeddingService:
             raise RuntimeError("Weaviate client not initialized")
 
         collection_name = "DocumentChunk"
-        
+
         # Check if collection exists
         if self.weaviate_client.client.collections.exists(collection_name):
-            logger.debug("DocumentChunk collection already exists", collection=collection_name)
+            logger.debug(
+                "DocumentChunk collection already exists", collection=collection_name
+            )
             return
 
         # Create collection with schema for chunks
         logger.info("Creating DocumentChunk collection", collection=collection_name)
-        
+
         from weaviate.classes.config import Configure, DataType, Property
 
         # Check if we should use vectorizer
@@ -73,13 +75,15 @@ class EmbeddingService:
         try:
             # Check if text2vec-transformers is available in Weaviate meta
             meta = self.weaviate_client.client.get_meta()
-            if 'text2vec-transformers' in meta.get('modules', {}):
+            if "text2vec-transformers" in meta.get("modules", {}):
                 logger.info("Using text2vec-transformers vectorizer")
                 vectorizer_config = Configure.Vectorizer.text2vec_transformers(
                     pooling_strategy="masked_mean"
                 )
             else:
-                logger.warning("text2vec-transformers not available, creating collection without vectorizer")
+                logger.warning(
+                    "text2vec-transformers not available, creating collection without vectorizer"
+                )
         except Exception as e:
             logger.warning(f"Failed to check vectorizer availability: {e}")
             pass  # Use no vectorizer for basic testcontainers
@@ -92,21 +96,17 @@ class EmbeddingService:
                 Property(name="parent_uid", data_type=DataType.TEXT),
                 Property(name="source", data_type=DataType.TEXT),
                 Property(name="chunk_idx", data_type=DataType.INT),
-                
                 # Content
                 Property(name="text", data_type=DataType.TEXT),
-                
                 # Inherited metadata from parent
                 Property(name="title", data_type=DataType.TEXT),
                 Property(name="published_at", data_type=DataType.DATE),
-                
                 # Chunking metadata
                 Property(name="tokens", data_type=DataType.INT),
                 Property(name="section", data_type=DataType.TEXT),
-                
                 # Additional metadata (generic for multi-source compatibility)
                 Property(
-                    name="meta", 
+                    name="meta",
                     data_type=DataType.OBJECT,
                     nested_properties=[
                         # Chunking metadata (common to all sources)
@@ -115,32 +115,34 @@ class EmbeddingService:
                         Property(name="n_sentences", data_type=DataType.INT),
                         Property(name="legacy_chunk_id", data_type=DataType.TEXT),
                         Property(name="quality_total", data_type=DataType.NUMBER),
-                        
                         # Generic temporal metadata (compatible across sources)
                         Property(name="year", data_type=DataType.INT),
                         Property(name="language", data_type=DataType.TEXT),
-                        
                         # Source-specific metadata stored as flexible fields
-                        Property(name="source_detail", data_type=DataType.TEXT),  # JSON string for source-specific data
-                    ]
+                        Property(
+                            name="source_detail", data_type=DataType.TEXT
+                        ),  # JSON string for source-specific data
+                    ],
                 ),
-            ]
+            ],
         }
 
         if vectorizer_config:
             create_args["vectorizer_config"] = vectorizer_config
 
         self.weaviate_client.client.collections.create(**create_args)
-        
-        logger.info("DocumentChunk collection created successfully", collection=collection_name)
+
+        logger.info(
+            "DocumentChunk collection created successfully", collection=collection_name
+        )
 
     async def store_document_chunks(self, document: Document) -> list[str]:
         """
         Store document as chunks in vector store.
-        
+
         Args:
             document: Document to chunk and store
-            
+
         Returns:
             List of Weaviate UUIDs for stored chunks
         """
@@ -148,18 +150,20 @@ class EmbeddingService:
             await self.initialize()
 
         logger.info("Storing document chunks", document_uid=document.uid)
-        
+
         # Chunk the document
         chunks = self.chunker.chunk_document(document)
-        
+
         if not chunks:
-            logger.warning("No chunks generated for document", document_uid=document.uid)
+            logger.warning(
+                "No chunks generated for document", document_uid=document.uid
+            )
             return []
 
         # Store chunks in Weaviate
         collection = self.weaviate_client.client.collections.get("DocumentChunk")
         chunk_uuids = []
-        
+
         for chunk in chunks:
             chunk_data = {
                 "chunk_id": chunk.chunk_id,
@@ -168,25 +172,31 @@ class EmbeddingService:
                 "chunk_idx": chunk.chunk_idx,
                 "text": chunk.text,
                 "title": chunk.title,
-                "published_at": chunk.published_at.isoformat() if chunk.published_at else None,
+                "published_at": chunk.published_at.isoformat()
+                if chunk.published_at
+                else None,
                 "tokens": chunk.tokens,
                 "section": chunk.section,
-                "meta": chunk.meta
+                "meta": chunk.meta,
             }
-            
+
             # Store chunk - Weaviate will automatically generate embeddings
             uuid = collection.data.insert(properties=chunk_data)
             chunk_uuids.append(str(uuid))
-            
-            logger.debug("Chunk stored in Weaviate", 
-                        chunk_id=chunk.chunk_id, 
-                        uuid=str(uuid),
-                        tokens=chunk.tokens)
 
-        logger.info("Document chunks stored successfully", 
-                   document_uid=document.uid,
-                   chunk_count=len(chunk_uuids))
-        
+            logger.debug(
+                "Chunk stored in Weaviate",
+                chunk_id=chunk.chunk_id,
+                uuid=str(uuid),
+                tokens=chunk.tokens,
+            )
+
+        logger.info(
+            "Document chunks stored successfully",
+            document_uid=document.uid,
+            chunk_count=len(chunk_uuids),
+        )
+
         return chunk_uuids
 
     async def search_chunks(
@@ -199,14 +209,14 @@ class EmbeddingService:
     ) -> list[dict[str, Any]]:
         """
         Search chunks using different search modes.
-        
+
         Args:
             query: Search query text
             limit: Maximum number of chunks to return
             search_mode: 'semantic', 'bm25', or 'hybrid'
             alpha: Hybrid search balance (0.0=BM25, 1.0=semantic)
             filters: Additional filters for search
-            
+
         Returns:
             List of matching chunk results with metadata
         """
@@ -214,7 +224,7 @@ class EmbeddingService:
             await self.initialize()
 
         collection = self.weaviate_client.client.collections.get("DocumentChunk")
-        
+
         logger.debug(
             "Performing chunk search",
             query=query,
@@ -242,9 +252,7 @@ class EmbeddingService:
                 )
             else:
                 response = collection.query.bm25(
-                    query=query, 
-                    limit=limit, 
-                    return_metadata=MetadataQuery(score=True)
+                    query=query, limit=limit, return_metadata=MetadataQuery(score=True)
                 )
         elif search_mode == "hybrid":
             # Hybrid search combining BM25 and vector similarity
@@ -306,19 +314,17 @@ class EmbeddingService:
 
             results.append(result)
 
-        logger.debug("Chunk search completed", 
-                    query=query, 
-                    results_found=len(results))
-        
+        logger.debug("Chunk search completed", query=query, results_found=len(results))
+
         return results
 
     async def get_chunk_by_id(self, chunk_id: str) -> dict[str, Any] | None:
         """
         Get a specific chunk by its chunk_id.
-        
+
         Args:
             chunk_id: The chunk_id to search for
-            
+
         Returns:
             Chunk data if found, None otherwise
         """
@@ -326,12 +332,11 @@ class EmbeddingService:
             await self.initialize()
 
         collection = self.weaviate_client.client.collections.get("DocumentChunk")
-        
+
         from weaviate.classes.query import Filter
 
         response = collection.query.fetch_objects(
-            filters=Filter.by_property("chunk_id").equal(chunk_id), 
-            limit=1
+            filters=Filter.by_property("chunk_id").equal(chunk_id), limit=1
         )
 
         if response.objects:
@@ -349,9 +354,8 @@ class EmbeddingService:
                 "meta": obj.properties.get("meta", {}),
                 "uuid": str(obj.uuid),
             }
-        
-        return None
 
+        return None
 
     def _convert_filters_to_weaviate(self, filters: dict) -> Any:
         """Convert generic filters to Weaviate filter format."""
@@ -367,18 +371,19 @@ class EmbeddingService:
                 return {"status": "error", "message": "Service not initialized"}
 
             health = await self.weaviate_client.health_check()
-            
+
             # Check if chunk collection exists
-            chunk_collection_exists = self.weaviate_client.client.collections.exists("DocumentChunk")
-            
+            chunk_collection_exists = self.weaviate_client.client.collections.exists(
+                "DocumentChunk"
+            )
+
             return {
-                "status": "healthy" if health.get("status") == "healthy" and chunk_collection_exists else "degraded",
+                "status": "healthy"
+                if health.get("status") == "healthy" and chunk_collection_exists
+                else "degraded",
                 "weaviate": health,
                 "chunk_collection_exists": chunk_collection_exists,
-                "chunker_available": self.chunker is not None
+                "chunker_available": self.chunker is not None,
             }
         except Exception as e:
-            return {
-                "status": "error",
-                "message": f"Health check failed: {e!s}"
-            }
+            return {"status": "error", "message": f"Health check failed: {e!s}"}

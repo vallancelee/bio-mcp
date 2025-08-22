@@ -23,7 +23,11 @@ from bio_mcp.services.services import (
 from bio_mcp.shared.clients.database import DatabaseManager
 
 # Import shared fixtures directly
-from tests.integration.database.conftest import postgres_container, db_manager, clean_db
+from tests.integration.database.conftest import (
+    clean_db,  # noqa: F401 - pytest fixture
+    db_manager,  # noqa: F401 - pytest fixture
+    postgres_container,  # noqa: F401 - pytest fixture
+)
 
 
 @pytest.fixture(scope="session")
@@ -33,7 +37,6 @@ def weaviate_service():
 
     # Get the directory of this conftest.py file
     current_dir = Path(__file__).parent
-    compose_file = current_dir / "docker-compose-weaviate.yml"
 
     with DockerCompose(
         str(current_dir), compose_file_name="docker-compose-weaviate.yml"
@@ -93,7 +96,7 @@ def weaviate_service():
 
 @pytest_asyncio.fixture(scope="function")
 async def checkpoint_service(
-    clean_db: DatabaseManager,
+    clean_db: DatabaseManager,  # noqa: F811 - pytest fixture parameter
 ) -> AsyncGenerator[CorpusCheckpointService, None]:
     """Provide a CorpusCheckpointService with real database."""
     service = CorpusCheckpointService()
@@ -108,7 +111,7 @@ async def checkpoint_service(
 
 @pytest_asyncio.fixture(scope="function")
 async def document_service(
-    clean_db: DatabaseManager,
+    clean_db: DatabaseManager,  # noqa: F811 - pytest fixture parameter
 ) -> AsyncGenerator[DocumentService, None]:
     """Provide a DocumentService with real database."""
     service = DocumentService()
@@ -151,7 +154,7 @@ async def corpus_checkpoint_manager(
 
 
 @pytest_asyncio.fixture(scope="function", autouse=True)
-async def setup_test_services_config(postgres_container, request):
+async def setup_test_services_config(postgres_container, request):  # noqa: F811 - pytest fixture parameter
     """Auto-setup all service configurations for MCP integration tests."""
     # Get the test database URL
     connection_url = postgres_container.get_connection_url()
@@ -216,7 +219,8 @@ async def setup_test_services_config(postgres_container, request):
 
 @pytest_asyncio.fixture(scope="function")
 async def rag_tools_manager(
-    clean_db: DatabaseManager, weaviate_service
+    clean_db: DatabaseManager,  # noqa: F811 - pytest fixture parameter
+    weaviate_service,
 ) -> AsyncGenerator[RAGToolsManager, None]:
     """Provide a RAGToolsManager with real database and Weaviate."""
     # The environment variables are already set by setup_test_services_config
@@ -236,7 +240,7 @@ async def rag_tools_manager(
 
 @pytest_asyncio.fixture(scope="function")
 async def resource_manager(
-    clean_db: DatabaseManager,
+    clean_db: DatabaseManager,  # noqa: F811 - pytest fixture parameter
 ) -> AsyncGenerator[BioMCPResourceManager, None]:
     """Provide a BioMCPResourceManager with real database."""
     manager = BioMCPResourceManager()
@@ -253,7 +257,7 @@ async def resource_manager(
 
 
 @pytest_asyncio.fixture(scope="function")
-async def sample_documents(clean_db: DatabaseManager) -> list:
+async def sample_documents(clean_db: DatabaseManager) -> list:  # noqa: F811 - pytest fixture parameter
     """Create sample documents for testing."""
     documents_data = [
         {
@@ -283,7 +287,7 @@ async def sample_documents(clean_db: DatabaseManager) -> list:
 
 
 @pytest_asyncio.fixture(scope="function")
-async def sample_checkpoint(clean_db: DatabaseManager, sample_documents) -> str:
+async def sample_checkpoint(clean_db: DatabaseManager, sample_documents) -> str:  # noqa: F811 - pytest fixture parameter
     """Create a sample checkpoint for testing."""
     checkpoint_id = "test_checkpoint_001"
 

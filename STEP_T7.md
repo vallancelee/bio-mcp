@@ -1,645 +1,321 @@
-# T7: MCP Tools Testing Implementation Plan
+# STEP T7: Multi-Source Document Abstraction
 
-**Goal:** Implement comprehensive testing for Bio-MCP's Model Context Protocol tools to improve reliability and user confidence from 16% to 80%+ coverage on MCP modules.
+## Summary
+Introduce a minimal, shared `Document` model that enables multiple biomedical sources (starting with PubMed) while preserving source-specific richness through extensions. This refactoring prepares the pipeline for adding ClinicalTrials.gov and other sources without breaking existing contracts.
 
-## TDD Approach (Red-Green-Refactor)
+## Context
+Currently, the system is tightly coupled to PubMed's data structure. To support multiple document sources efficiently, we need:
+- A stable, minimal base model for cross-source operations
+- Source-specific extensions without polluting the core model  
+- Reproducible provenance and deduplication capabilities
+- Backward compatibility with existing PubMed workflows
 
-1. **Write failing tests for MCP tools reliability**
-   - Test all MCP tool parameter validation and error handling
-   - Test realistic biomedical data scenarios with authentic corpus
-   - Test MCP protocol compliance and response formatting
-   - Test cross-integration between tools (rag → corpus → pubmed)
+## Technical Approach
 
-2. **Create biomedical test infrastructure**
-   - Build realistic test corpus with cancer, immunotherapy, ML papers
-   - Create MCP response validation helpers
-   - Set up testcontainers for integration testing
-   - Mock service factories for unit testing
-
-3. **Implement comprehensive test coverage**
-   - Unit tests for argument parsing, validation, error handling
-   - Integration tests with real database and vector store
-   - End-to-end workflow tests with biomedical scenarios
-   - Performance and reliability validation
-
-## Phase 1: Test Infrastructure Setup (Day 1-2)
-
-### 1.1 Biomedical Test Data Generator
-**File**: `tests/fixtures/biomedical_test_data.py`
+### 1. Core Models (Day 1)
+Create shared document abstractions in `src/bio_mcp/models/document.py`:
 
 ```python
-class BiomedicTestCorpus:
-    """Realistic biomedical test data for MCP tools validation."""
+class Document(BaseModel):
+    # Core identity
+    uid: str                    # e.g., "pubmed:12345678"
+    source: str                 # "pubmed", "clinicaltrials", etc.
+    source_id: str             # Source-specific ID
     
-    # Cancer research papers (realistic PMIDs and metadata)
-    CANCER_PAPERS = [
-        {
-            "pmid": "36653448",
-            "title": "Glioblastoma multiforme: pathogenesis and treatment",
-            "abstract": "Glioblastoma multiforme (GBM) is the most aggressive primary brain tumor...",
-            "journal": "Nature Reviews Cancer",
-            "publication_date": "2023-01-18",
-            "mesh_terms": ["Glioblastoma", "Brain Neoplasms", "Antineoplastic Agents"],
-            "authors": ["Smith, J.", "Johnson, A.", "Wilson, R."]
+    # Minimal content
+    title: Optional[str]
+    text: str                  # Main text to chunk/embed
+    
+    # Temporal metadata
+    published_at: Optional[datetime]
+    fetched_at: Optional[datetime]
+    
+    # Common metadata
+    authors: Optional[List[str]]
+    labels: Optional[List[str]]
+    identifiers: Dict[str, str]  # {"doi": "10.1234/..."}
+    
+    # Provenance & extensions
+    provenance: Dict[str, Any]   # {"s3_raw_uri": ..., "content_hash": ...}
+    detail: Dict[str, Any]       # Source-specific fields
+    schema_version: int = 1
+
+class Chunk(BaseModel):
+    chunk_id: str               # uid + ":" + idx
+    parent_uid: str             # Document.uid
+    source: str
+    chunk_idx: int
+    text: str
+    # Inheritable metadata
+    title: Optional[str]
+    published_at: Optional[datetime]
+    meta: Dict[str, Any]
+```
+
+### 2. PubMed Normalizer (Day 1-2)
+Create `src/bio_mcp/services/normalize_pubmed.py`:
+
+```python
+def to_document(raw: Dict[str, Any], *, 
+                s3_raw_uri: str, 
+                content_hash: str) -> Document:
+    """Convert raw PubMed data to normalized Document."""
+    pmid = str(raw.get("pmid"))
+    
+    # Map to base fields
+    doc = Document(
+        uid=f"pubmed:{pmid}",
+        source="pubmed",
+        source_id=pmid,
+        title=raw.get("title"),
+        text=raw.get("abstract", ""),
+        published_at=parse_pubmed_dates(raw),
+        authors=raw.get("authors"),
+        identifiers={"doi": raw.get("doi")} if raw.get("doi") else {},
+        provenance={
+            "s3_raw_uri": s3_raw_uri,
+            "content_hash": content_hash
         },
-        # Additional realistic cancer papers...
-    ]
-    
-    # Immunotherapy studies
-    IMMUNOTHERAPY_PAPERS = [...]
-    
-    # Machine learning in medicine papers  
-    ML_MEDICINE_PAPERS = [...]
-    
-    # Clinical trial scenarios
-    CHECKPOINT_SCENARIOS = [...]
+        # PubMed-specific fields go in detail
+        detail={
+            "journal": raw.get("journal"),
+            "mesh_terms": raw.get("mesh_terms"),
+            "keywords": raw.get("keywords"),
+            "affiliations": raw.get("affiliations")
+        }
+    )
+    return doc
 ```
 
-### 1.2 MCP Response Validation Framework
-**File**: `tests/utils/mcp_validators.py`
+### 3. Chunking Service Update (Day 2)
+Refactor `src/bio_mcp/services/chunking.py`:
 
 ```python
-class MCPResponseValidator:
-    """Validate MCP responses against expected formats."""
+def chunk_document(doc: Document, 
+                  strategy: ChunkingStrategy = DEFAULT) -> List[Chunk]:
+    """Chunk a normalized document."""
+    text_segments = strategy.split(doc.text)
     
-    def validate_text_content(self, response: TextContent) -> bool:
-        """Validate TextContent response structure and content."""
-        assert response.type == "text"
-        assert isinstance(response.text, str)
-        assert len(response.text) > 0
-        return True
+    chunks = []
+    for idx, segment in enumerate(text_segments):
+        chunk = Chunk(
+            chunk_id=f"{doc.uid}:{idx}",
+            parent_uid=doc.uid,
+            source=doc.source,
+            chunk_idx=idx,
+            text=segment,
+            title=doc.title,
+            published_at=doc.published_at,
+            meta={"language": doc.detail.get("language")}
+        )
+        chunks.append(chunk)
     
-    def validate_search_results(self, response_text: str) -> dict:
-        """Parse and validate search result structure."""
-        # Extract structured data from MCP text response
-        # Validate contains: query, results count, PMIDs, execution time
-        pass
-    
-    def validate_error_response(self, response_text: str) -> bool:
-        """Validate error response format and helpful messages."""
-        assert "❌ Error:" in response_text
-        assert len(response_text) < 500  # Not too verbose
-        return True
+    return chunks
 ```
 
-### 1.3 Test Utilities and Mocks
-**File**: `tests/utils/test_helpers.py`
+### 4. Embedding/Indexing Updates (Day 2-3)
+Update `src/bio_mcp/services/embed_index.py`:
 
 ```python
-class MockServiceFactory:
-    """Factory for creating consistent mock services."""
+async def embed_and_index_chunks(chunks: List[Chunk]) -> IndexResult:
+    """Embed and index normalized chunks."""
+    # Batch embed
+    embeddings = await embed_texts([c.text for c in chunks])
     
-    @staticmethod
-    def create_pubmed_service_mock():
-        """Create mock PubMedService with realistic responses."""
-        pass
-    
-    @staticmethod  
-    def create_weaviate_client_mock():
-        """Create mock WeaviateClient with search responses."""
-        pass
-    
-    @staticmethod
-    def create_database_manager_mock():
-        """Create mock DatabaseManager with corpus data."""
-        pass
-```
-
-## Phase 2: RAG Tools Testing (Day 3-4)
-
-### 2.1 Unit Tests for RAG Tools
-**File**: `tests/unit/mcp/test_rag_tools.py`
-
-```python
-class TestRAGToolsUnit:
-    """Unit tests for RAG search and retrieval tools."""
-    
-    @patch('bio_mcp.mcp.rag_tools.get_rag_manager')
-    async def test_rag_search_parameter_validation(self, mock_manager):
-        """Test search parameter validation with edge cases."""
-        # Test empty query
-        result = await rag_search_tool("rag.search", {"query": ""})
-        validator = MCPResponseValidator()
-        validator.validate_error_response(result[0].text)
-        
-        # Test invalid search_mode
-        result = await rag_search_tool("rag.search", {
-            "query": "cancer", 
-            "search_mode": "invalid_mode"
-        })
-        # Should fallback to "hybrid" mode gracefully
-        
-        # Test top_k limits (min 1, max 50)
-        result = await rag_search_tool("rag.search", {
-            "query": "cancer",
-            "top_k": 100  # Should clamp to 50
-        })
-        
-        # Test alpha parameter validation (0.0-1.0)
-        result = await rag_search_tool("rag.search", {
-            "query": "cancer",
-            "alpha": -0.5  # Should clamp to 0.0
-        })
-    
-    async def test_hybrid_search_mode_selection(self):
-        """Test semantic, BM25, and hybrid search mode handling."""
-        test_corpus = BiomedicTestCorpus()
-        
-        with patch('bio_mcp.mcp.rag_tools.get_rag_manager') as mock_manager:
-            mock_manager.return_value.search_documents = AsyncMock(return_value=RAGSearchResult(
-                query="glioblastoma treatment",
-                total_results=5,
-                documents=test_corpus.CANCER_PAPERS[:5],
-                search_type="hybrid"
-            ))
-            
-            # Test hybrid mode (default)
-            result = await rag_search_tool("rag.search", {
-                "query": "glioblastoma treatment"
-            })
-            
-            response_text = result[0].text
-            assert "🔀" in response_text  # Hybrid mode indicator
-            assert "Hybrid (BM25 + Vector" in response_text
-            
-            # Test semantic mode
-            result = await rag_search_tool("rag.search", {
-                "query": "glioblastoma treatment",
-                "search_mode": "semantic"
-            })
-            
-            response_text = result[0].text
-            assert "🧠" in response_text  # Semantic mode indicator
-    
-    async def test_quality_scoring_integration(self):
-        """Test quality score calculation and boost display."""
-        with patch('bio_mcp.mcp.rag_tools.get_rag_manager') as mock_manager:
-            # Create documents with quality scores and boosts
-            boosted_docs = [
-                {
-                    "pmid": "36653448",
-                    "title": "High-impact paper",
-                    "score": 0.85,
-                    "boosted_score": 0.935,  # 10% boost
-                    "journal": "Nature"
-                }
-            ]
-            
-            mock_manager.return_value.search_documents = AsyncMock(return_value=RAGSearchResult(
-                query="cancer research",
-                total_results=1,
-                documents=boosted_docs,
-                search_type="hybrid"
-            ))
-            
-            result = await rag_search_tool("rag.search", {
-                "query": "cancer research",
-                "rerank_by_quality": True
-            })
-            
-            response_text = result[0].text
-            assert "0.935 (+10.0%)" in response_text  # Quality boost displayed
-            assert "Quality boosting: ON" in response_text
-    
-    async def test_performance_target_validation(self):
-        """Test performance monitoring meets <200ms target."""
-        with patch('bio_mcp.mcp.rag_tools.get_rag_manager') as mock_manager:
-            mock_manager.return_value.search_documents = AsyncMock(return_value=RAGSearchResult(
-                query="test query",
-                total_results=1,
-                documents=[{"pmid": "123", "title": "Test"}],
-                search_type="hybrid",
-                performance={
-                    "total_time_ms": 150.0,  # Under target
-                    "target_time_ms": 200.0
-                }
-            ))
-            
-            result = await rag_search_tool("rag.search", {"query": "test query"})
-            response_text = result[0].text
-            assert "✅ Performance: 150.0ms" in response_text
-```
-
-### 2.2 Integration Tests for RAG Tools  
-**File**: `tests/integration/mcp/test_rag_integration.py`
-
-```python
-class TestRAGToolsIntegration:
-    """Integration tests with real vector store and database."""
-    
-    @pytest.mark.asyncio
-    async def test_end_to_end_biomedical_search(self, weaviate_client, database_manager):
-        """Test complete search workflow with realistic biomedical data."""
-        # Setup: Insert biomedical test corpus into Weaviate
-        test_corpus = BiomedicTestCorpus()
-        
-        for paper in test_corpus.CANCER_PAPERS[:3]:
-            await weaviate_client.add_document(paper)
-        
-        # Test: Search for cancer-related terms
-        result = await rag_search_tool("rag.search", {
-            "query": "glioblastoma treatment options",
-            "search_mode": "hybrid",
-            "top_k": 5
-        })
-        
-        validator = MCPResponseValidator()
-        validator.validate_text_content(result[0])
-        
-        search_data = validator.validate_search_results(result[0].text)
-        assert search_data["total_results"] > 0
-        assert "glioblastoma" in result[0].text.lower()
-        
-    @pytest.mark.asyncio  
-    async def test_cross_source_quality_ranking(self, weaviate_client, database_manager):
-        """Test quality-aware reranking with different journal impact factors."""
-        test_papers = [
-            {
-                "pmid": "1001", 
-                "title": "Nature Cancer Paper",
-                "journal": "Nature",
-                "abstract": "High impact cancer research",
-                "score": 0.80
-            },
-            {
-                "pmid": "1002",
-                "title": "Local Journal Paper", 
-                "journal": "Local Medical Journal",
-                "abstract": "Similar cancer research",
-                "score": 0.82  # Higher base score but lower journal impact
+    # Prepare payloads with metadata
+    payloads = []
+    for chunk, embedding in zip(chunks, embeddings):
+        payload = {
+            "id": chunk.chunk_id,
+            "vector": embedding,
+            "properties": {
+                "parent_uid": chunk.parent_uid,
+                "source": chunk.source,
+                "title": chunk.title,
+                "text": chunk.text,
+                "published_at": chunk.published_at.isoformat() 
+                               if chunk.published_at else None,
+                **chunk.meta
             }
-        ]
-        
-        for paper in test_papers:
-            await weaviate_client.add_document(paper)
-        
-        # Test with quality boosting enabled
-        result = await rag_search_tool("rag.search", {
-            "query": "cancer research",
-            "rerank_by_quality": True,
-            "top_k": 2
-        })
-        
-        # Nature paper should rank higher due to quality boost
-        response_text = result[0].text
-        lines = response_text.split('\n')
-        first_result = [line for line in lines if "1." in line][0]
-        assert "Nature Cancer Paper" in first_result
+        }
+        payloads.append(payload)
+    
+    # Batch upsert to Weaviate
+    return await weaviate_client.batch_upsert(payloads)
 ```
 
-## Phase 3: Corpus Tools Testing (Day 5-6)
+### 5. Database Schema (Day 3)
+Add normalized document tracking table:
 
-### 3.1 Unit Tests for Corpus Tools
-**File**: `tests/unit/mcp/test_corpus_tools.py`
+```sql
+-- Migration: add_documents_table.py
+CREATE TABLE documents (
+    uid TEXT PRIMARY KEY,                    -- "pubmed:12345678"
+    source TEXT NOT NULL,                    -- "pubmed"
+    source_id TEXT NOT NULL,                 -- "12345678"
+    title TEXT,
+    published_at TIMESTAMPTZ,
+    s3_raw_uri TEXT NOT NULL,                -- Provenance
+    content_hash TEXT NOT NULL,              -- Deduplication
+    detail JSONB,                           -- Source-specific data
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    
+    -- Indexes
+    INDEX idx_documents_source (source),
+    INDEX idx_documents_published (published_at),
+    INDEX idx_documents_hash (content_hash),
+    UNIQUE INDEX idx_documents_source_id (source, source_id)
+);
+```
+
+### 6. Pipeline Integration (Day 3-4)
+Wire the new models into PubMed sync with feature flag:
 
 ```python
-class TestCorpusToolsUnit:
-    """Unit tests for corpus checkpoint tools."""
+# src/bio_mcp/services/pubmed_sync.py
+async def process_pubmed_article(raw: Dict[str, Any]) -> SyncResult:
+    # 1. Archive raw to S3 (unchanged)
+    s3_uri, content_hash = await archive_to_s3(raw)
     
-    @patch('bio_mcp.mcp.corpus_tools.get_checkpoint_manager')
-    async def test_checkpoint_create_validation(self, mock_manager):
-        """Test checkpoint creation parameter validation."""
-        # Test missing required parameters
-        result = await corpus_checkpoint_create_tool("corpus.checkpoint.create", {
-            "checkpoint_id": "test_checkpoint"
-            # Missing 'name' parameter
-        })
+    # 2. Check feature flag
+    if config.use_document_model:
+        # New path
+        doc = normalize_pubmed.to_document(
+            raw, 
+            s3_raw_uri=s3_uri,
+            content_hash=content_hash
+        )
         
-        validator = MCPResponseValidator()
-        validator.validate_error_response(result[0].text)
-        assert "name" in result[0].text.lower()
+        # Store normalized document
+        await db.upsert_document(doc)
         
-        # Test valid checkpoint creation
-        mock_manager.return_value.create_checkpoint = AsyncMock(return_value=CheckpointResult(
-            checkpoint_id="test_checkpoint",
-            operation="create", 
-            success=True,
-            execution_time_ms=45.2,
-            checkpoint_data={
-                "name": "Cancer Research Checkpoint",
-                "description": "Checkpoint for cancer research corpus",
-                "total_documents": 1500,
-                "last_sync_edat": "2024-01-15",
-                "version": "1.0"
-            }
-        ))
-        
-        result = await corpus_checkpoint_create_tool("corpus.checkpoint.create", {
-            "checkpoint_id": "test_checkpoint",
-            "name": "Cancer Research Checkpoint", 
-            "description": "Checkpoint for cancer research corpus"
-        })
-        
-        response_text = result[0].text
-        assert "✅ Corpus checkpoint created successfully" in response_text
-        assert "Cancer Research Checkpoint" in response_text
-        assert "1500" in response_text  # Total documents
-        assert "45.2ms" in response_text  # Execution time
+        # Chunk and index
+        chunks = chunk_document(doc)
+        await embed_and_index_chunks(chunks)
+    else:
+        # Legacy path (unchanged)
+        await legacy_process(raw)
     
-    async def test_checkpoint_list_pagination(self):
-        """Test checkpoint listing with pagination parameters."""
-        with patch('bio_mcp.mcp.corpus_tools.get_checkpoint_manager') as mock_manager:
-            # Test default pagination
-            result = await corpus_checkpoint_list_tool("corpus.checkpoint.list", {})
-            # Should use default limit=20, offset=0
-            
-            # Test custom pagination
-            result = await corpus_checkpoint_list_tool("corpus.checkpoint.list", {
-                "limit": 5,
-                "offset": 10
-            })
-            
-            # Test invalid pagination (negative values)
-            result = await corpus_checkpoint_list_tool("corpus.checkpoint.list", {
-                "limit": -5,
-                "offset": -2
-            })
-            # Should handle gracefully with defaults
+    return SyncResult(success=True, doc_uid=doc.uid if doc else None)
 ```
 
-### 3.2 Integration Tests for Corpus Tools
-**File**: `tests/integration/mcp/test_corpus_integration.py`
+## Implementation Plan
 
+### Phase 1: Models & Normalizer (Day 1)
+1. Create `src/bio_mcp/models/document.py` with Document and Chunk models
+2. Add comprehensive Pydantic validation tests
+3. Create `src/bio_mcp/services/normalize_pubmed.py`
+4. Unit tests for PubMed normalizer with varied input shapes
+
+### Phase 2: Service Updates (Day 2)
+1. Update chunking service to accept Document input
+2. Add backward compatibility wrapper for legacy calls
+3. Update embedding/indexing to use Chunk model
+4. Create adapter tests ensuring identical output
+
+### Phase 3: Database & Pipeline (Day 3)
+1. Create and run migration for documents table
+2. Add DocumentRepository with CRUD operations
+3. Wire normalized flow into PubMed sync (feature-flagged)
+4. Integration tests for full pipeline
+
+### Phase 4: Validation & Rollout (Day 4)
+1. Contract tests comparing legacy vs new pipeline outputs
+2. Golden dataset tests with known PubMed records
+3. Performance benchmarks (should be neutral or better)
+4. Enable feature flag in staging environment
+
+### Phase 5: Cleanup (Day 5)
+1. Monitor staging for 24 hours
+2. Remove legacy adapters after validation
+3. Enable feature flag in production
+4. Documentation updates
+
+## Testing Strategy
+
+### Unit Tests
+- Document/Chunk model validation
+- PubMed normalizer edge cases
+- Chunking boundary stability
+- Embedding metadata preservation
+
+### Contract Tests
 ```python
-class TestCorpusToolsIntegration:
-    """Integration tests with real database."""
+@pytest.mark.contract
+async def test_pubmed_sync_backward_compatible():
+    """Ensure identical behavior with new models."""
+    raw_article = load_test_article()
     
-    @pytest.mark.asyncio
-    async def test_checkpoint_lifecycle_workflow(self, database_manager):
-        """Test complete checkpoint lifecycle: create → get → list → delete."""
-        # Create checkpoint
-        create_result = await corpus_checkpoint_create_tool("corpus.checkpoint.create", {
-            "checkpoint_id": "integration_test_checkpoint",
-            "name": "Integration Test Checkpoint",
-            "description": "Test checkpoint for integration testing"
-        })
-        
-        assert "✅ Corpus checkpoint created successfully" in create_result[0].text
-        
-        # Get checkpoint
-        get_result = await corpus_checkpoint_get_tool("corpus.checkpoint.get", {
-            "checkpoint_id": "integration_test_checkpoint"
-        })
-        
-        assert "Integration Test Checkpoint" in get_result[0].text
-        
-        # List checkpoints (should include our checkpoint)
-        list_result = await corpus_checkpoint_list_tool("corpus.checkpoint.list", {})
-        assert "integration_test_checkpoint" in list_result[0].text
-        
-        # Delete checkpoint
-        delete_result = await corpus_checkpoint_delete_tool("corpus.checkpoint.delete", {
-            "checkpoint_id": "integration_test_checkpoint"
-        })
-        
-        assert "✅ Checkpoint deleted successfully" in delete_result[0].text
-        
-        # Verify deletion (get should fail)
-        get_after_delete = await corpus_checkpoint_get_tool("corpus.checkpoint.get", {
-            "checkpoint_id": "integration_test_checkpoint"
-        })
-        
-        assert "❌" in get_after_delete[0].text  # Should be error response
+    # Run both paths
+    legacy_result = await legacy_process(raw_article)
+    new_result = await process_with_document_model(raw_article)
+    
+    # Compare observable outputs
+    assert legacy_result.chunk_count == new_result.chunk_count
+    assert legacy_result.indexed_text == new_result.indexed_text
+    assert legacy_result.metadata_keys == new_result.metadata_keys
 ```
 
-## Phase 4: Resources Testing (Day 7)
+### Integration Tests
+- End-to-end: raw → S3 → normalize → chunk → embed → index
+- Idempotency: re-processing same article produces same result
+- Deduplication: content_hash prevents duplicate processing
 
-### 4.1 Unit Tests for Resources
-**File**: `tests/unit/mcp/test_resources.py`
+### Golden Dataset
+Create `tests/fixtures/golden_pubmed_articles.json` with 5 representative articles covering:
+- Standard article with abstract
+- Article without abstract
+- Article with multiple authors
+- Article with MeSH terms
+- Non-English article
 
-```python
-class TestResourcesUnit:
-    """Unit tests for MCP resource endpoints."""
-    
-    @patch('bio_mcp.mcp.resources.get_resource_manager')
-    async def test_resource_uri_parsing(self, mock_manager):
-        """Test resource URI parsing and validation."""
-        # Test valid corpus resource URI
-        mock_manager.return_value.get_resource = AsyncMock(return_value={
-            "uri": "corpus://bio_mcp/stats",
-            "type": "corpus_statistics", 
-            "data": {"total_documents": 1500, "last_sync": "2024-01-15"}
-        })
-        
-        # Test invalid URI format
-        # Test missing resource handling
-        pass
-    
-    async def test_resource_content_formatting(self):
-        """Test resource content formatting for different types."""
-        # Test corpus statistics resource
-        # Test checkpoint metadata resource
-        # Test system status resource
-        pass
+## Success Metrics
+- ✅ All existing PubMed tests pass unchanged
+- ✅ Document/Chunk models handle 100% of current PubMed data
+- ✅ No performance regression (±5% latency/throughput)
+- ✅ Feature flag allows instant rollback
+- ✅ Documents table correctly tracks all processed articles
+
+## Rollback Plan
+1. Set `BIO_MCP_USE_DOCUMENT_MODEL=false`
+2. System immediately reverts to legacy pipeline
+3. No data loss (raw S3 and legacy tables unchanged)
+4. Fix issues and re-deploy with flag off
+
+## Future Extensions (Not in Scope)
+- ClinicalTrials.gov normalizer
+- Patent document normalizer  
+- Preprint server integration
+- Cross-source deduplication
+- Document-level quality scoring
+
+## Dependencies
+- Existing: PubMed sync, chunking, embedding services
+- New: None (self-contained refactor)
+- External: No API changes
+
+## Configuration
+```yaml
+# Environment variables
+BIO_MCP_USE_DOCUMENT_MODEL: "false"  # Feature flag (default off)
+BIO_MCP_DOCUMENT_SCHEMA_VERSION: "1"  # For future migrations
+
+# Chunking strategy (unchanged)
+BIO_MCP_CHUNK_MAX_TOKENS: "512"
+BIO_MCP_CHUNK_OVERLAP: "50"
 ```
 
-## Phase 5: End-to-End Workflow Testing (Day 8)
+## Notes
+- Preserves all existing functionality
+- Zero changes to user-facing APIs
+- Enables future multi-source support
+- Maintains full backward compatibility
+- Clean abstraction boundaries
 
-### 5.1 Cross-Tool Integration Tests
-**File**: `tests/integration/mcp/test_e2e_workflows.py`
+---
 
-```python
-class TestEndToEndWorkflows:
-    """Test complete biomedical research workflows."""
-    
-    @pytest.mark.asyncio
-    async def test_research_discovery_workflow(self, full_system_setup):
-        """Test: Search → Get Document → Create Checkpoint → List Resources."""
-        # 1. Search for biomedical papers
-        search_result = await rag_search_tool("rag.search", {
-            "query": "CRISPR gene editing cancer",
-            "search_mode": "hybrid",
-            "top_k": 3
-        })
-        
-        # Extract PMID from search results
-        pmid = self._extract_pmid_from_search(search_result[0].text)
-        
-        # 2. Get detailed document information
-        get_result = await rag_get_tool("rag.get", {
-            "doc_id": pmid
-        })
-        
-        assert "📄 **Document Details**" in get_result[0].text
-        
-        # 3. Create checkpoint for this research area
-        checkpoint_result = await corpus_checkpoint_create_tool("corpus.checkpoint.create", {
-            "checkpoint_id": "crispr_research_checkpoint",
-            "name": "CRISPR Cancer Research",
-            "description": "Checkpoint for CRISPR-based cancer research papers"
-        })
-        
-        assert "✅" in checkpoint_result[0].text
-        
-        # 4. Verify workflow completion by listing resources
-        # This validates the complete system integration
-    
-    @pytest.mark.asyncio
-    async def test_error_recovery_workflow(self, full_system_setup):
-        """Test system behavior during error conditions."""
-        # Test search with invalid parameters  
-        # Test graceful degradation when Weaviate unavailable
-        # Test checkpoint operations with database errors
-        pass
-    
-    def _extract_pmid_from_search(self, search_text: str) -> str:
-        """Helper to extract PMID from search result text."""
-        import re
-        pmid_match = re.search(r'PMID: (\d+)', search_text)
-        return pmid_match.group(1) if pmid_match else "12345678"
-```
-
-## Phase 6: Performance and Reliability Testing (Day 9-10)
-
-### 6.1 Performance Tests
-**File**: `tests/performance/test_mcp_performance.py`
-
-```python
-class TestMCPPerformance:
-    """Performance and reliability tests for MCP tools."""
-    
-    @pytest.mark.asyncio
-    async def test_search_performance_targets(self, weaviate_client):
-        """Test search performance meets <200ms targets."""
-        import time
-        
-        # Load realistic corpus size (1000+ documents)
-        test_corpus = BiomedicTestCorpus()
-        await self._load_test_corpus(weaviate_client, test_corpus.ALL_PAPERS[:1000])
-        
-        # Test multiple search scenarios
-        test_queries = [
-            "cancer immunotherapy",
-            "CRISPR gene editing",  
-            "machine learning radiology",
-            "glioblastoma treatment options"
-        ]
-        
-        for query in test_queries:
-            start_time = time.time()
-            
-            result = await rag_search_tool("rag.search", {
-                "query": query,
-                "search_mode": "hybrid",
-                "top_k": 10
-            })
-            
-            end_time = time.time()
-            latency_ms = (end_time - start_time) * 1000
-            
-            # Should meet 200ms target for hybrid search
-            assert latency_ms < 200, f"Query '{query}' took {latency_ms:.1f}ms (target: <200ms)"
-    
-    @pytest.mark.asyncio
-    async def test_concurrent_tool_usage(self, full_system_setup):
-        """Test system reliability under concurrent tool usage."""
-        import asyncio
-        
-        # Simulate concurrent users
-        async def simulate_user_session():
-            # Search -> Get -> Checkpoint workflow
-            await rag_search_tool("rag.search", {"query": "cancer research"})
-            await rag_get_tool("rag.get", {"doc_id": "12345678"})
-            await corpus_checkpoint_list_tool("corpus.checkpoint.list", {})
-        
-        # Run 10 concurrent user sessions
-        tasks = [simulate_user_session() for _ in range(10)]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # All should complete successfully
-        exceptions = [r for r in results if isinstance(r, Exception)]
-        assert len(exceptions) == 0, f"Found {len(exceptions)} exceptions in concurrent usage"
-```
-
-### 6.2 Reliability Tests
-**File**: `tests/reliability/test_mcp_reliability.py`
-
-```python
-class TestMCPReliability:
-    """Reliability and error handling tests."""
-    
-    @pytest.mark.asyncio
-    async def test_graceful_degradation(self, database_manager):
-        """Test graceful degradation when services unavailable."""
-        # Test search when Weaviate unavailable
-        with patch('bio_mcp.mcp.rag_tools.get_rag_manager') as mock_manager:
-            mock_manager.return_value.search_documents = AsyncMock(
-                side_effect=Exception("Weaviate connection failed")
-            )
-            
-            result = await rag_search_tool("rag.search", {"query": "test"})
-            
-            # Should return helpful error message
-            assert "❌ Error during hybrid RAG search" in result[0].text
-            assert len(result[0].text) < 200  # Not too verbose
-    
-    async def test_input_sanitization(self):
-        """Test handling of malicious or malformed inputs."""
-        # Test extremely long queries
-        long_query = "cancer " * 1000
-        result = await rag_search_tool("rag.search", {"query": long_query})
-        # Should handle gracefully
-        
-        # Test special characters and injection attempts
-        malicious_query = "'; DROP TABLE documents; --"
-        result = await rag_search_tool("rag.search", {"query": malicious_query})
-        # Should sanitize and handle safely
-```
-
-## Implementation Success Criteria
-
-### Coverage Targets (Per MCP_TESTING.md)
-- **RAG Tools**: 16% → 85% coverage (+108 statements)
-- **Corpus Tools**: 17% → 80% coverage (+121 statements)  
-- **Resources**: 15% → 75% coverage (+91 statements)
-- **Overall Project**: 37% → 47% coverage (+9.8pp improvement)
-
-### Quality Metrics
-- ✅ All MCP tools have both unit and integration test coverage
-- ✅ Realistic biomedical scenarios tested with authentic data
-- ✅ Error handling comprehensively tested with helpful messages
-- ✅ Performance targets validated (<200ms hybrid search)
-- ✅ Cross-tool workflows tested end-to-end
-- ✅ Concurrent usage reliability validated
-
-### Test Execution Performance
-- ✅ Unit tests complete in <30 seconds
-- ✅ Integration tests complete in <2 minutes  
-- ✅ Full test suite completes in <5 minutes
-- ✅ Tests are deterministic and don't flake
-
-## Running the Tests
-
-```bash
-# Unit tests (fast feedback)
-uv run pytest tests/unit/mcp/ -v
-
-# Integration tests (comprehensive)  
-uv run pytest tests/integration/mcp/ -v
-
-# Full MCP test suite
-uv run pytest tests/unit/mcp/ tests/integration/mcp/ -v
-
-# Performance tests
-uv run pytest tests/performance/ -v
-
-# Coverage analysis
-uv run pytest tests/unit/mcp/ tests/integration/mcp/ \
-  --cov=bio_mcp.mcp --cov-report=term --cov-report=html
-
-# Coverage target validation
-uv run python scripts/coverage.py
-```
-
-## Definition of Done
-
-- ✅ **Reliability**: All MCP tools have comprehensive unit and integration tests
-- ✅ **Coverage**: Overall project coverage increases from 37% to 47%
-- ✅ **Real Data**: Tests use realistic biomedical corpus (cancer, immunotherapy, ML papers)
-- ✅ **Performance**: Hybrid search consistently meets <200ms targets
-- ✅ **Error Handling**: All error paths tested with helpful user messages
-- ✅ **End-to-End**: Complete research workflows validated (search → get → checkpoint)
-- ✅ **Reliability**: System handles concurrent usage and graceful degradation
-- ✅ **Documentation**: Test coverage reports and biomedical scenarios documented
-
-This creates a **rock-solid foundation** users can trust for biomedical research workflows.
+**Status**: Ready for implementation
+**Priority**: High (blocks multi-source support)
+**Estimated**: 5 days
+**Team**: Backend engineering

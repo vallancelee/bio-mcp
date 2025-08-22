@@ -21,11 +21,11 @@ class MockCheckpoint:
         self,
         checkpoint_id: str,
         name: str,
-        created_at: datetime = None,
+        created_at: datetime | None = None,
         total_documents: int = 0,
         version: str = "1.0",
-        parent_checkpoint_id: str = None,
-        description: str = None,
+        parent_checkpoint_id: str | None = None,
+        description: str | None = None,
     ):
         self.checkpoint_id = checkpoint_id
         self.name = name
@@ -139,7 +139,7 @@ class TestCorpusCheckpointService:
             )
             self.mock_manager.create_corpus_checkpoint.return_value = parent_checkpoint
 
-            parent_result = await self.service.create_checkpoint(
+            await self.service.create_checkpoint(
                 checkpoint_id="parent_research", name="Parent Research"
             )
 

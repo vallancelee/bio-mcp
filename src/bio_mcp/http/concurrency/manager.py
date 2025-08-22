@@ -161,7 +161,8 @@ class ConcurrencyManager:
             # Record the failure with the circuit breaker properly
             import asyncio
 
-            _task = asyncio.create_task(circuit.record_failure())
+            # Fire and forget - we don't await this to avoid blocking
+            asyncio.create_task(circuit.record_failure())  # noqa: RUF006
 
             # Simple additional check - trip after 5 failures
             if self.tool_failure_counts[tool_name] >= 5:

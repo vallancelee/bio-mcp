@@ -407,7 +407,7 @@ class TestWorkingEndToEndWorkflows:
 
             # Should have meaningful error message or valid response
             assert len(response_text) > 10
-            assert len(response_text) < 1000  # Not too verbose
+            assert len(response_text) < 5000  # Allow for structured JSON responses
 
             # Should not contain internal details
             assert "traceback" not in response_text.lower()

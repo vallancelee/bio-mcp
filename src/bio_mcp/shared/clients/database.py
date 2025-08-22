@@ -688,7 +688,9 @@ class DatabaseManager:
     ) -> CorpusCheckpoint:
         """Create a new corpus checkpoint capturing current corpus state."""
         logger.info(
-            "Creating corpus checkpoint", checkpoint_id=checkpoint_id, checkpoint_name=name
+            "Creating corpus checkpoint",
+            checkpoint_id=checkpoint_id,
+            checkpoint_name=name,
         )
 
         try:

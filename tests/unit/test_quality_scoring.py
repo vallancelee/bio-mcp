@@ -19,7 +19,6 @@ class TestQualityConfig:
         assert config.JOURNAL_BOOST_FACTOR == 0.10
         assert config.RECENCY_BOOST_FACTOR == 0.05
         assert config.RECENT_YEARS_THRESHOLD == 2
-        assert config.LEGACY_QUALITY_DIVISOR == 20
         assert config.INVESTMENT_BOOST_FACTOR == 0.08
 
     def test_tier_1_journals_frozen(self):
@@ -148,22 +147,6 @@ class TestJournalQualityScorer:
         assert scorer._calculate_recency_boost("abc") == 0.0
         assert scorer._calculate_recency_boost(123) == 0.0
 
-    def test_calculate_legacy_boost(self):
-        """Test legacy quality score boost calculation."""
-        scorer = JournalQualityScorer()
-
-        # Valid legacy scores
-        assert scorer._calculate_legacy_boost(100) == 5.0  # 100/20
-        assert scorer._calculate_legacy_boost(40) == 2.0  # 40/20
-        assert scorer._calculate_legacy_boost(1) == 0.05  # 1/20
-
-        # Zero or negative scores
-        assert scorer._calculate_legacy_boost(0) == 0.0
-        assert scorer._calculate_legacy_boost(-10) == 0.0
-
-        # None value
-        assert scorer._calculate_legacy_boost(None) == 0.0
-
     def test_calculate_investment_boost(self):
         """Test investment relevance boost calculation."""
         scorer = JournalQualityScorer()
@@ -266,7 +249,6 @@ class TestJournalQualityScorer:
         doc = {
             "journal": "Nature Biotechnology",  # Journal boost: 0.10
             "publication_date": datetime(current_year, 6, 15),  # Recency boost: 0.05
-            "quality_total": 60,  # Legacy boost: 3.0
             "title": "Phase II Clinical Trial Results",  # Investment boost: varies
             "abstract": "FDA approval sought for this biotech therapeutic",
             "keywords": ["precision medicine"],
@@ -275,9 +257,9 @@ class TestJournalQualityScorer:
 
         total_boost = scorer.calculate_quality_boost(doc)
 
-        # Should include journal boost (0.10) + recency boost (0.05) + legacy boost (3.0) + investment boost
-        assert total_boost >= 3.15  # At minimum journal + recency + legacy
-        assert total_boost < 4.0  # Reasonable upper bound
+        # Should include journal boost (0.10) + recency boost (0.05) + investment boost
+        assert total_boost >= 0.15  # At minimum journal + recency
+        assert total_boost < 0.25  # Reasonable upper bound
 
     def test_calculate_quality_boost_minimal(self):
         """Test quality boost calculation with minimal document."""
@@ -363,14 +345,13 @@ class TestJournalQualityScorer:
                 "publication_date": datetime(
                     current_year, 1, 1
                 ),  # Will get recency boost
-                "quality_total": 40,  # Will get legacy boost
+                "abstract": "Phase II Clinical Trial study",  # Will get investment boost
             },
             {
                 "score": 0.9,
                 "title": "High Score, No Boost",
                 "journal": "Unknown Journal",
                 "publication_date": datetime(2010, 1, 1),
-                "quality_total": 0,
             },
         ]
 

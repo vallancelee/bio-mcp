@@ -90,9 +90,7 @@ class NormalizedDocument(Base):
     s3_raw_uri = Column(Text, nullable=False)  # S3 location of raw data
     content_hash = Column(String(64), nullable=False)  # SHA256 hash for deduplication
     created_at = Column(
-        DateTime(timezone=True), 
-        default=lambda: datetime.now(UTC), 
-        nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
 
     def to_document_dict(self) -> dict:
@@ -102,7 +100,9 @@ class NormalizedDocument(Base):
             "source": self.source,
             "source_id": self.source_id,
             "title": self.title,
-            "published_at": self.published_at.isoformat() if self.published_at else None,
+            "published_at": self.published_at.isoformat()
+            if self.published_at
+            else None,
             "s3_raw_uri": self.s3_raw_uri,
             "content_hash": self.content_hash,
             "created_at": self.created_at.isoformat() if self.created_at else None,

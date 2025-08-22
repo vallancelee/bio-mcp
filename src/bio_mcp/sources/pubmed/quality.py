@@ -19,7 +19,6 @@ class QualityConfig:
     RECENCY_BOOST_FACTOR: float = 0.05  # 5% boost for recent publications
     RECENT_YEARS_THRESHOLD: int = 2  # Papers from last 2 years get boost
 
-
     # High-impact journal lists (could be made configurable in future)
     TIER_1_JOURNALS: frozenset[str] = frozenset(
         [
@@ -92,7 +91,6 @@ class JournalQualityScorer:
         if recency_boost > 0:
             quality_factors.append(recency_boost)
 
-
         # Investment relevance boost for biotech research
         investment_boost = self._calculate_investment_boost(document)
         if investment_boost > 0:
@@ -139,7 +137,6 @@ class JournalQualityScorer:
                 pass  # Skip if can't parse year
 
         return 0.0
-
 
     def _calculate_investment_boost(self, document: dict[str, Any]) -> float:
         """Calculate boost based on investment relevance for biotech research."""

@@ -137,7 +137,9 @@ class TestPerToolSemaphores:
         """Test semaphore release on success and failure."""
         from bio_mcp.http.concurrency.manager import ConcurrencyManager
 
-        manager = ConcurrencyManager(tool_limits={"test.tool": {"max_concurrent": 1, "timeout_ms": 100}})
+        manager = ConcurrencyManager(
+            tool_limits={"test.tool": {"max_concurrent": 1, "timeout_ms": 100}}
+        )
 
         # Test successful release
         async with manager.acquire_tool("test.tool"):

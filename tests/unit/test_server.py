@@ -185,7 +185,7 @@ class TestMCPServerLogging:
 
             # Check log output (handle both JSON and plain text formats)
             log_output = log_stream.getvalue()
-            
+
             # Check for expected log messages in either format
             has_processing_message = (
                 "Processing ping tool request" in log_output
@@ -195,16 +195,18 @@ class TestMCPServerLogging:
                 "Ping tool completed successfully" in log_output
                 or '"message": "Ping tool completed successfully"' in log_output
             )
-            
+
             # If no logs were captured, it might be due to logging configuration
             # In that case, let's just verify the call completed without error
             if not log_output.strip():
                 # The ping tool executed without error, which is the main test goal
-                assert True, "Ping tool executed successfully (no logs captured due to test environment)"
+                assert True, (
+                    "Ping tool executed successfully (no logs captured due to test environment)"
+                )
             else:
-                assert (
-                    has_processing_message or has_completion_message
-                ), f"Expected log messages not found in: {log_output}"
+                assert has_processing_message or has_completion_message, (
+                    f"Expected log messages not found in: {log_output}"
+                )
 
         finally:
             # Clean up

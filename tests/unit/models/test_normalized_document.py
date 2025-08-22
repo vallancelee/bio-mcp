@@ -28,17 +28,15 @@ class TestNormalizedDocument:
             authors=["Smith, John A", "Johnson, Mary"],
             identifiers={"doi": "10.1000/test.doi"},
             provenance={"test": True},
-            detail={"journal": "Test Journal"}
+            detail={"journal": "Test Journal"},
         )
 
         # Convert to database record
         s3_uri = "s3://bucket/test/12345678.json"
         content_hash = "abc123def456"
-        
+
         normalized_doc = NormalizedDocument.from_document(
-            document=doc,
-            s3_raw_uri=s3_uri,
-            content_hash=content_hash
+            document=doc, s3_raw_uri=s3_uri, content_hash=content_hash
         )
 
         # Verify conversion
@@ -119,13 +117,13 @@ class TestNormalizedDocument:
             authors=["Research Team"],
             identifiers={"nct_id": "NCT01234567"},
             provenance={"clinical_trials_gov": True},
-            detail={"phase": "Phase III"}
+            detail={"phase": "Phase III"},
         )
 
         normalized_doc = NormalizedDocument.from_document(
             document=doc,
             s3_raw_uri="s3://bucket/clinical/NCT01234567.json",
-            content_hash="clinical123"
+            content_hash="clinical123",
         )
 
         # Verify multi-source support

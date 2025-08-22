@@ -1,8 +1,11 @@
 """FastAPI application for Bio-MCP HTTP adapter."""
 
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, status
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from bio_mcp.http.adapters import invoke_tool_safely
@@ -49,10 +52,18 @@ class HealthResponse(BaseModel):
     status: str
 
 
+class ToolInfo(BaseModel):
+    """Information about a single tool."""
+
+    name: str
+    description: str | None = None
+    input_schema: dict[str, Any] | None = None
+
+
 class ToolsResponse(BaseModel):
     """Response model for tools listing."""
 
-    tools: list[str]
+    tools: list[ToolInfo]
 
 
 def create_error_response(
@@ -82,6 +93,11 @@ def create_app(registry: ToolRegistry | None = None) -> FastAPI:
 
     # Store registry in app state
     app.state.registry = registry
+
+    # Add static files serving for the UI
+    static_dir = Path(__file__).parent / "static"
+    if static_dir.exists():
+        app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
     # Create a job service factory
     def create_job_service() -> JobService:
@@ -134,11 +150,37 @@ def create_app(registry: ToolRegistry | None = None) -> FastAPI:
                 },
             )
 
+    @app.get("/", response_class=FileResponse)
+    async def serve_ui():
+        """Serve the MCP testing UI."""
+        static_dir = Path(__file__).parent / "static" / "index.html"
+        if static_dir.exists():
+            return FileResponse(str(static_dir))
+        else:
+            return {"message": "Bio-MCP HTTP Adapter - UI not available"}
+
     @app.get("/v1/mcp/tools", response_model=ToolsResponse)
     async def list_tools():
-        """List available tools."""
-        tools = app.state.registry.list_tool_names()
-        return ToolsResponse(tools=tools)
+        """List available tools with their schemas."""
+        tool_infos = []
+        for tool_name in app.state.registry.list_tool_names():
+            tool_schema = app.state.registry.get_tool_schema(tool_name)
+
+            # Extract description and input schema
+            description = None
+            input_schema = None
+
+            if tool_schema:
+                description = tool_schema.get("description")
+                input_schema = tool_schema.get("inputSchema")
+
+            tool_infos.append(
+                ToolInfo(
+                    name=tool_name, description=description, input_schema=input_schema
+                )
+            )
+
+        return ToolsResponse(tools=tool_infos)
 
     @app.post("/v1/mcp/invoke")
     async def invoke_tool(request: InvokeRequest):

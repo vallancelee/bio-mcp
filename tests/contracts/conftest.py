@@ -4,29 +4,33 @@ Contract test fixtures and configuration.
 Provides minimal fixtures needed for contract testing without heavy integration dependencies.
 """
 
+from typing import Any
+
 import pytest
-from typing import Dict, Any, List
+
 
 @pytest.fixture
-def sample_pubmed_raw_data() -> Dict[str, Any]:
+def sample_pubmed_raw_data() -> dict[str, Any]:
     """Sample raw PubMed data for contract testing."""
     return {
         "pmid": "12345678",
-        "title": "Test Document for Contract Validation", 
+        "title": "Test Document for Contract Validation",
         "abstract": "This is a test abstract for contract validation purposes.",
         "authors": ["Smith, John A", "Johnson, Mary B"],
         "journal": "Test Journal",
         "publication_date": "2023-06-15",
         "doi": "10.1000/test.doi",
         "mesh_terms": ["Neoplasms", "Drug Therapy"],
-        "pub_types": ["Journal Article", "Research Support"]
+        "pub_types": ["Journal Article", "Research Support"],
     }
 
-@pytest.fixture  
+
+@pytest.fixture
 def sample_documents():
     """Mock sample documents fixture for contract tests."""
     # Return empty list - contract tests should work with mock responses
     return []
+
 
 @pytest.fixture
 def sample_checkpoint():

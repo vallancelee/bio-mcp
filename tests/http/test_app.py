@@ -87,8 +87,9 @@ class TestToolsEndpoint:
 
         assert "tools" in data
         assert isinstance(data["tools"], list)
-        assert "ping" in data["tools"]
-        assert "test.error" in data["tools"]
+        tool_names = [tool["name"] for tool in data["tools"]]
+        assert "ping" in tool_names
+        assert "test.error" in tool_names
 
 
 class TestInvokeEndpoint:

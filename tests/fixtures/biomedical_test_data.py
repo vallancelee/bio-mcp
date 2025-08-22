@@ -6,7 +6,7 @@ to validate MCP tools with authentic biomedical scenarios.
 """
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, ClassVar
 
 
 @dataclass
@@ -45,7 +45,7 @@ class BiomedicTestCorpus:
     """Realistic biomedical test data for MCP tools validation."""
 
     # Cancer research papers (realistic PMIDs and metadata)
-    CANCER_PAPERS = [
+    CANCER_PAPERS: ClassVar[list[TestPaper]] = [
         TestPaper(
             pmid="36653448",
             title="Glioblastoma multiforme: pathogenesis and treatment",
@@ -94,7 +94,7 @@ class BiomedicTestCorpus:
     ]
 
     # Immunotherapy studies
-    IMMUNOTHERAPY_PAPERS = [
+    IMMUNOTHERAPY_PAPERS: ClassVar[list[TestPaper]] = [
         TestPaper(
             pmid="33445566",
             title="Checkpoint inhibitor immunotherapy: mechanisms and clinical outcomes",
@@ -128,7 +128,7 @@ class BiomedicTestCorpus:
     ]
 
     # Machine learning in medicine papers
-    ML_MEDICINE_PAPERS = [
+    ML_MEDICINE_PAPERS: ClassVar[list[TestPaper]] = [
         TestPaper(
             pmid="31789012",
             title="Deep learning for medical image analysis: applications in radiology and pathology",
@@ -163,7 +163,7 @@ class BiomedicTestCorpus:
     ]
 
     # Clinical trial checkpoint scenarios for corpus testing
-    CHECKPOINT_SCENARIOS = [
+    CHECKPOINT_SCENARIOS: ClassVar[list[dict[str, Any]]] = [
         {
             "checkpoint_id": "cancer_immunotherapy_2024",
             "name": "Cancer Immunotherapy Research 2024",
@@ -194,7 +194,7 @@ class BiomedicTestCorpus:
     ]
 
     @property
-    def ALL_PAPERS(self) -> list[TestPaper]:
+    def all_papers(self) -> list[TestPaper]:
         """Return all test papers across all categories."""
         return self.CANCER_PAPERS + self.IMMUNOTHERAPY_PAPERS + self.ML_MEDICINE_PAPERS
 

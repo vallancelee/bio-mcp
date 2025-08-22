@@ -203,8 +203,8 @@ class TestSimpleEndToEndWorkflows:
 
             # Valid response in any case
 
-            # Should be reasonable length
-            assert len(result[0].text) < 500
+            # Should be reasonable length (allow for structured JSON responses)
+            assert len(result[0].text) < 5000  # Increased limit for JSON responses
 
         print("✅ Parameter Validation Comprehensive Test Complete")
 
@@ -318,7 +318,11 @@ class TestSimpleEndToEndWorkflows:
                 {"query": "glioblastoma treatment", "top_k": 3, "format": "human"},
             ),
             (rag_get_tool, "rag.get", {"doc_id": "12345678", "format": "human"}),
-            (corpus_checkpoint_list_tool, "corpus.checkpoint.list", {"limit": 5, "format": "human"}),
+            (
+                corpus_checkpoint_list_tool,
+                "corpus.checkpoint.list",
+                {"limit": 5, "format": "human"},
+            ),
         ]
 
         for tool_func, tool_name, params in test_scenarios:
@@ -333,7 +337,17 @@ class TestSimpleEndToEndWorkflows:
             # Should have some structure (headers, bullets, or formatting)
             has_structure = any(
                 marker in response_text
-                for marker in ["**", "•", "- ", "📄", "📋", "✅", "❌", "Query:", "Results:"]
+                for marker in [
+                    "**",
+                    "•",
+                    "- ",
+                    "📄",
+                    "📋",
+                    "✅",
+                    "❌",
+                    "Query:",
+                    "Results:",
+                ]
             )
             assert has_structure, (
                 f"Response should have visual structure: {response_text[:200]}"

@@ -9,12 +9,14 @@ Implements the chunking strategy from CHUNKING_STRATEGY.md for PubMed abstracts:
 
 import re
 import uuid
+from datetime import UTC
 from typing import Any
 from uuid import UUID
 
 import tiktoken
 
 from bio_mcp.config.logging_config import get_logger
+from bio_mcp.models.document import Chunk, Document
 
 logger = get_logger(__name__)
 
@@ -107,16 +109,20 @@ class AbstractChunker:
         if not text:
             return ""
 
-        # Unicode NFKC normalize and collapse spaces
+        # Unicode NFKC normalize
         import unicodedata
 
         text = unicodedata.normalize("NFKC", text)
-        text = re.sub(r"\s+", " ", text.strip())
 
-        # Join hyphenated line breaks
+        # Join hyphenated line breaks first
         text = re.sub(r"-\s*\n\s*", "", text)
 
-        return text
+        # Collapse multiple whitespace within lines but preserve newlines for structure detection
+        text = re.sub(r"[ \t]+", " ", text)  # Collapse spaces and tabs within lines
+        text = re.sub(r"\n[ \t]*\n", "\n\n", text)  # Normalize paragraph breaks
+        text = re.sub(r"\n{3,}", "\n\n", text)  # Max 2 consecutive newlines
+
+        return text.strip()
 
     def detect_structure(self, abstract: str) -> list[tuple[str, str]] | None:
         """Detect if abstract is structured and extract sections."""
@@ -295,6 +301,160 @@ class AbstractChunker:
 
         return chunks
 
+    def chunk_document(self, document: Document, **legacy_kwargs) -> list[Chunk]:
+        """
+        Chunk a Document instance into Chunk instances.
+
+        This is the new method that works with the multi-source Document model.
+
+        Args:
+            document: Document instance to chunk
+            **legacy_kwargs: Ignored, for compatibility
+
+        Returns:
+            List of Chunk objects
+        """
+        # Extract metadata from document
+        title = document.title or f"Document {document.source_id}"
+        text = document.text
+
+        # Extract additional metadata from detail if available
+        year = None
+        quality_total = None
+        edat = None
+        lr = None
+
+        if document.published_at:
+            year = document.published_at.year
+
+        # Extract legacy fields from detail if available (for PubMed compatibility)
+        if document.detail:
+            quality_total = document.detail.get("quality_total")
+            edat = document.detail.get("edat")
+            lr = document.detail.get("lr")
+
+        if not text or len(text.strip()) < 50:
+            # Very short or empty text
+            if text:
+                combined_text = f"{title}\n[Section] Text\n{text}".strip()
+                token_count = self.count_tokens(combined_text)
+                chunk_id = "s0"  # Section-based chunk
+                return [
+                    Chunk(
+                        chunk_id=chunk_id,
+                        uuid=Chunk.generate_uuid(document.uid, chunk_id),
+                        parent_uid=document.uid,
+                        source=document.source,
+                        chunk_idx=0,
+                        text=combined_text,
+                        title=title,
+                        section="Text",
+                        tokens=token_count,
+                        meta={
+                            "chunker_version": "2.0",
+                            "chunk_strategy": "minimal",
+                            "n_sentences": 1,
+                        },
+                    )
+                ]
+            else:
+                # No text - create metadata-only chunk
+                combined_text = f"{title}\n[Section] Title Only\nNo content available."
+                token_count = self.count_tokens(combined_text)
+                chunk_id = "s0"  # Even title-only chunks use section format
+                return [
+                    Chunk(
+                        chunk_id=chunk_id,
+                        uuid=Chunk.generate_uuid(document.uid, chunk_id),
+                        parent_uid=document.uid,
+                        source=document.source,
+                        chunk_idx=0,  # Use 0 instead of -1 for consistency
+                        text=combined_text,
+                        title=title,
+                        section="Title Only",
+                        tokens=token_count,
+                        meta={
+                            "chunker_version": "2.0",
+                            "chunk_strategy": "title_only",
+                            "n_sentences": 0,
+                            "legacy_chunk_id": "title",
+                        },
+                    )
+                ]
+
+        # Normalize text
+        normalized_text = self.normalize_text(text)
+        normalized_title = self.normalize_text(title)
+
+        # Detect structure
+        sections = self.detect_structure(normalized_text)
+
+        if sections:
+            # Structured text
+            logger.debug(
+                f"Chunking structured text for {document.uid}", sections=len(sections)
+            )
+            text_blocks = self.chunk_structured(sections)
+            strategy = "structured"
+        else:
+            # Unstructured text
+            logger.debug(f"Chunking unstructured text for {document.uid}")
+            text_blocks = self.chunk_unstructured(normalized_text)
+            strategy = "unstructured"
+
+        # Apply numeric safety rules
+        text_blocks = self.expand_around_stats(text_blocks)
+
+        # Create chunks with enriched headers
+        chunks = []
+        for k, (legacy_chunk_id, section, body) in enumerate(text_blocks):
+            # Add title prefix only to first chunk
+            if k == 0:
+                enriched_text = f"[Title] {normalized_title} ({document.source}:{document.source_id})\n[Section] {section}\n[Text] {body}"
+            else:
+                enriched_text = f"[Section] {section}\n[Text] {body}"
+
+            # Count sentences
+            sentences = self.split_sentences(body)
+            n_sentences = len(sentences)
+
+            # Calculate final token count
+            token_count = self.count_tokens(enriched_text)
+
+            # Use section-based chunking format
+            chunk_id = f"s{k}"
+            chunk = Chunk(
+                chunk_id=chunk_id,
+                uuid=Chunk.generate_uuid(document.uid, chunk_id),
+                parent_uid=document.uid,
+                source=document.source,
+                chunk_idx=k,
+                text=enriched_text.strip(),
+                title=normalized_title,
+                published_at=document.published_at,
+                section=section,
+                tokens=token_count,
+                meta={
+                    "chunker_version": "2.0",
+                    "chunk_strategy": strategy,
+                    "n_sentences": n_sentences,
+                    "legacy_chunk_id": legacy_chunk_id,
+                    "quality_total": quality_total,
+                    "year": year,
+                    "edat": edat,
+                    "lr": lr,
+                },
+            )
+
+            chunks.append(chunk)
+
+        logger.info(
+            f"Created {len(chunks)} chunks for {document.uid}",
+            total_tokens=sum(c.tokens or 0 for c in chunks),
+        )
+
+        return chunks
+
     def chunk_abstract(
         self,
         pmid: str,
@@ -308,6 +468,9 @@ class AbstractChunker:
         """
         Chunk a PubMed abstract according to the chunking strategy.
 
+        DEPRECATED: Use chunk_document() with Document model instead.
+        This method is maintained for backward compatibility.
+
         Args:
             pmid: PubMed ID
             title: Article title
@@ -318,104 +481,97 @@ class AbstractChunker:
             lr: Last revision date
 
         Returns:
-            List of DocumentChunk objects
+            List of DocumentChunk objects (legacy format)
         """
-        if not abstract or len(abstract.strip()) < 50:
-            # Very short or empty abstract
-            if abstract:
-                combined_text = f"{title}\n[Section] Abstract\n{abstract}".strip()
-                token_count = self.count_tokens(combined_text)
-                return [
-                    DocumentChunk(
-                        pmid=pmid,
-                        chunk_id="w0",
-                        title=title,
-                        section="Abstract",
-                        text=combined_text,
-                        token_count=token_count,
-                        n_sentences=1,
-                        quality_total=quality_total,
-                        year=year,
-                        edat=edat,
-                        lr=lr,
-                    )
-                ]
-            else:
-                # No abstract - create metadata-only chunk
-                combined_text = f"{title}\n[Section] Title Only\nNo abstract available."
-                token_count = self.count_tokens(combined_text)
-                return [
-                    DocumentChunk(
-                        pmid=pmid,
-                        chunk_id="title",
-                        title=title,
-                        section="Title Only",
-                        text=combined_text,
-                        token_count=token_count,
-                        n_sentences=0,
-                        quality_total=quality_total,
-                        year=year,
-                        edat=edat,
-                        lr=lr,
-                    )
-                ]
+        # Convert to Document model and use new chunking logic
+        from datetime import datetime
 
-        # Normalize text
-        normalized_abstract = self.normalize_text(abstract)
-        normalized_title = self.normalize_text(title)
+        # Create a temporary Document for the new chunking logic
+        published_at = None
+        if year:
+            published_at = datetime(year, 1, 1, tzinfo=UTC)
 
-        # Detect structure
-        sections = self.detect_structure(normalized_abstract)
-
-        if sections:
-            # Structured abstract
-            logger.debug(
-                f"Chunking structured abstract for PMID {pmid}", sections=len(sections)
-            )
-            text_blocks = self.chunk_structured(sections)
-        else:
-            # Unstructured abstract
-            logger.debug(f"Chunking unstructured abstract for PMID {pmid}")
-            text_blocks = self.chunk_unstructured(normalized_abstract)
-
-        # Apply numeric safety rules
-        text_blocks = self.expand_around_stats(text_blocks)
-
-        # Create chunks with enriched headers
-        chunks = []
-        for k, (chunk_id, section, body) in enumerate(text_blocks):
-            # Add title prefix only to first chunk
-            if k == 0:
-                enriched_text = f"[Title] {normalized_title} (pmid:{pmid})\n[Section] {section}\n[Text] {body}"
-            else:
-                enriched_text = f"[Section] {section}\n[Text] {body}"
-
-            # Count sentences
-            sentences = self.split_sentences(body)
-            n_sentences = len(sentences)
-
-            # Calculate final token count
-            token_count = self.count_tokens(enriched_text)
-
-            chunk = DocumentChunk(
-                pmid=pmid,
-                chunk_id=chunk_id,
-                title=normalized_title,
-                section=section,
-                text=enriched_text.strip(),
-                token_count=token_count,
-                n_sentences=n_sentences,
-                quality_total=quality_total,
-                year=year,
-                edat=edat,
-                lr=lr,
-            )
-
-            chunks.append(chunk)
-
-        logger.info(
-            f"Created {len(chunks)} chunks for PMID {pmid}",
-            total_tokens=sum(c.token_count for c in chunks),
+        temp_document = Document(
+            uid=f"pubmed:{pmid}",
+            source="pubmed",
+            source_id=pmid,
+            title=title,
+            text=abstract or "",
+            published_at=published_at,
+            authors=None,
+            identifiers={},
+            provenance={},
+            detail={"quality_total": quality_total, "edat": edat, "lr": lr},
         )
 
-        return chunks
+        # Use new chunking logic
+        new_chunks = self.chunk_document(temp_document)
+
+        # Convert back to legacy DocumentChunk format
+        legacy_chunks = []
+        for chunk in new_chunks:
+            legacy_chunk = chunk_to_document_chunk(chunk)
+            legacy_chunks.append(legacy_chunk)
+
+        return legacy_chunks
+
+
+# Convenience function for creating chunker with backward compatibility wrapper
+def create_chunker(model_name: str = ChunkingConfig.TOKENIZER_MODEL) -> AbstractChunker:
+    """Create an AbstractChunker instance with both new and legacy methods."""
+    return AbstractChunker(model_name)
+
+
+# Helper function to convert legacy DocumentChunk to new Chunk model
+def document_chunk_to_chunk(
+    doc_chunk: DocumentChunk, document_uid: str, chunk_idx: int = 0
+) -> Chunk:
+    """Convert legacy DocumentChunk to new Chunk model."""
+    # Use section-based chunk ID format for legacy conversion
+    chunk_id = f"s{chunk_idx}"
+    return Chunk(
+        chunk_id=chunk_id,
+        uuid=Chunk.generate_uuid(document_uid, chunk_id),
+        parent_uid=document_uid,
+        source="pubmed",  # Assume PubMed for legacy chunks
+        chunk_idx=chunk_idx,
+        text=doc_chunk.text,
+        title=doc_chunk.title,
+        section=doc_chunk.section,
+        tokens=doc_chunk.token_count,
+        meta={
+            "chunker_version": "1.0_legacy",
+            "n_sentences": doc_chunk.n_sentences,
+            "quality_total": doc_chunk.quality_total,
+            "year": doc_chunk.year,
+            "edat": doc_chunk.edat,
+            "lr": doc_chunk.lr,
+            "legacy_chunk_id": doc_chunk.chunk_id,
+        },
+    )
+
+
+# Helper function to convert new Chunk to legacy DocumentChunk
+def chunk_to_document_chunk(chunk: Chunk) -> DocumentChunk:
+    """Convert new Chunk model to legacy DocumentChunk."""
+    # Extract PMID from parent_uid (assumes format "pubmed:12345678")
+    pmid = (
+        chunk.parent_uid.split(":")[-1] if ":" in chunk.parent_uid else chunk.parent_uid
+    )
+
+    # Use legacy chunk ID from meta if available, otherwise use chunk_idx
+    legacy_chunk_id = chunk.meta.get("legacy_chunk_id", str(chunk.chunk_idx))
+
+    return DocumentChunk(
+        pmid=pmid,
+        chunk_id=legacy_chunk_id,
+        title=chunk.title,
+        section=chunk.section,
+        text=chunk.text,
+        token_count=chunk.tokens or 0,
+        n_sentences=chunk.meta.get("n_sentences", 0),
+        quality_total=chunk.meta.get("quality_total"),
+        year=chunk.meta.get("year"),
+        edat=chunk.meta.get("edat"),
+        lr=chunk.meta.get("lr"),
+    )

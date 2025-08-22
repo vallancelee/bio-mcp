@@ -15,7 +15,9 @@ class TestWeaviateHealthChecker:
     @pytest.fixture
     def weaviate_checker(self):
         """Create Weaviate health checker for testing."""
-        return WeaviateHealthChecker("http://localhost:18080", timeout_seconds=3.0)  # Use test port
+        return WeaviateHealthChecker(
+            "http://localhost:18080", timeout_seconds=3.0
+        )  # Use test port
 
     def test_checker_name(self, weaviate_checker):
         """Test health checker name property."""

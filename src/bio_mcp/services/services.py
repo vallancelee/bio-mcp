@@ -157,10 +157,10 @@ class VectorService:
     async def store_document_chunks(self, document: Document) -> list[str]:
         """
         Store document as chunks in vector store.
-        
+
         Args:
             document: Document to chunk and store
-            
+
         Returns:
             List of Weaviate UUIDs for stored chunks
         """
@@ -169,7 +169,7 @@ class VectorService:
 
         if not self.embedding_service:
             raise ValueError("Embedding service not initialized")
-            
+
         return await self.embedding_service.store_document_chunks(document)
 
     async def search_chunks(
@@ -182,14 +182,14 @@ class VectorService:
     ) -> list[dict[str, Any]]:
         """
         Search chunks using different search modes.
-        
+
         Args:
             query: Search query text
             limit: Maximum number of chunks to return
             search_mode: 'semantic', 'bm25', or 'hybrid'
             alpha: Hybrid search balance (0.0=BM25, 1.0=semantic)
             filters: Additional filters for search
-            
+
         Returns:
             List of matching chunk results with metadata
         """
@@ -198,13 +198,13 @@ class VectorService:
 
         if not self.embedding_service:
             raise ValueError("Embedding service not initialized")
-            
+
         return await self.embedding_service.search_chunks(
             query=query,
             limit=limit,
             search_mode=search_mode,
             alpha=alpha,
-            filters=filters
+            filters=filters,
         )
 
     async def store_document(
@@ -220,10 +220,10 @@ class VectorService:
     ) -> list[str]:
         """
         Store document in vector store as chunks.
-        
+
         This method provides backward compatibility by converting legacy parameters
         to the Document model internally.
-        
+
         Returns:
             List of chunk UUIDs
         """
@@ -235,7 +235,7 @@ class VectorService:
 
         # Convert legacy parameters to Document model using the normalizer
         from bio_mcp.services.normalization.pubmed import PubMedNormalizer
-        
+
         raw_data = {
             "pmid": pmid,
             "title": title,
@@ -244,17 +244,19 @@ class VectorService:
             "journal": journal,
             "publication_date": publication_date,
             "doi": doi,
-            "keywords": keywords or []
+            "keywords": keywords or [],
         }
-        
+
         document = PubMedNormalizer.from_raw_dict(
             raw_data,
             s3_raw_uri=f"s3://bio-mcp-temp/pubmed/{pmid}.json",  # Placeholder S3 URI
-            content_hash=f"temp_{pmid}"  # Placeholder hash
+            content_hash=f"temp_{pmid}",  # Placeholder hash
         )
-        
+
         chunk_uuids = await self.embedding_service.store_document_chunks(document)
-        logger.info("Stored document as chunks", pmid=pmid, chunk_count=len(chunk_uuids))
+        logger.info(
+            "Stored document as chunks", pmid=pmid, chunk_count=len(chunk_uuids)
+        )
         return chunk_uuids
 
     async def search_documents(
@@ -267,7 +269,7 @@ class VectorService:
     ) -> list[dict[str, Any]]:
         """
         Search documents/chunks using the chunk-based approach.
-        
+
         Returns results in a unified format.
         """
         if not self._initialized:
@@ -275,13 +277,13 @@ class VectorService:
 
         if not self.embedding_service:
             raise ValueError("Embedding service not initialized")
-            
+
         return await self.embedding_service.search_chunks(
             query=query,
             limit=limit,
             search_mode=search_mode,
             alpha=alpha,
-            filters=filters
+            filters=filters,
         )
 
 

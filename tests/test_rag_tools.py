@@ -24,12 +24,12 @@ class TestAbstractChunker:
         # Test basic normalization
         text = "This is  a   test\nwith   multiple spaces"
         normalized = chunker.normalize_text(text)
-        assert normalized == "This is a test with multiple spaces"
+        assert normalized == "This is a test\nwith multiple spaces"
 
         # Test hyphenated line breaks
         text = "hyphen-\nated word"
         normalized = chunker.normalize_text(text)
-        assert normalized == "hyphen- ated word"  # Fixed expectation
+        assert normalized == "hyphenated word"  # Hyphenated words get joined correctly
 
     def test_detect_structure_structured(self):
         """Test detection of structured abstracts."""
@@ -86,8 +86,8 @@ class TestAbstractChunker:
         assert len(chunks) == 1
         chunk = chunks[0]
         assert chunk.pmid == pmid
-        assert chunk.chunk_id == "w0"
-        assert chunk.section == "Abstract"
+        assert chunk.chunk_id == "0"  # New format uses numeric chunk index
+        assert chunk.section == "Text"  # New format uses "Text" for short content
         assert title in chunk.text
         assert abstract in chunk.text
 
@@ -104,9 +104,9 @@ class TestAbstractChunker:
         assert len(chunks) == 1
         chunk = chunks[0]
         assert chunk.pmid == pmid
-        assert chunk.chunk_id == "title"
+        assert chunk.chunk_id == "title"  # Legacy chunk ID preserved in conversion
         assert chunk.section == "Title Only"
-        assert "No abstract available" in chunk.text
+        assert "No content available" in chunk.text
 
     def test_chunk_structured_abstract(self):
         """Test chunking of structured abstracts."""
@@ -127,7 +127,7 @@ class TestAbstractChunker:
         # First chunk should have title prefix
         first_chunk = chunks[0]
         assert title in first_chunk.text
-        assert f"pmid:{pmid}" in first_chunk.text
+        assert f"(pubmed:{pmid})" in first_chunk.text  # New format uses (pubmed:PMID)
 
         # Each chunk should have section information
         for chunk in chunks:
@@ -167,7 +167,7 @@ class TestRAGTools:
         result = await rag_search_tool("rag.search", {})
 
         assert len(result) == 1
-        assert "Error: Query parameter is required" in result[0].text
+        assert "Query parameter is required" in result[0].text
 
     @pytest.mark.asyncio
     async def test_rag_get_tool_missing_doc_id(self):
@@ -175,10 +175,10 @@ class TestRAGTools:
         result = await rag_get_tool("rag.get", {})
 
         assert len(result) == 1
-        assert "Error: doc_id parameter is required" in result[0].text
+        assert "doc_id parameter is required" in result[0].text
 
     @pytest.mark.asyncio
-    @patch("src.bio_mcp.mcp.rag_tools.get_rag_manager")
+    @patch("bio_mcp.mcp.rag_tools.get_rag_manager")
     async def test_rag_search_tool_no_results(self, mock_get_manager):
         """Test RAG search tool when no results found."""
         # Mock manager
@@ -186,7 +186,7 @@ class TestRAGTools:
         mock_get_manager.return_value = mock_manager
 
         # Mock search result with no documents
-        from src.bio_mcp.mcp.rag_tools import RAGSearchResult
+        from bio_mcp.mcp.rag_tools import RAGSearchResult
 
         mock_result = RAGSearchResult(
             query="test query", total_results=0, documents=[], search_type="semantic"
@@ -196,11 +196,13 @@ class TestRAGTools:
         result = await rag_search_tool("rag.search", {"query": "test query"})
 
         assert len(result) == 1
-        assert "No documents found" in result[0].text
-        assert "test query" in result[0].text
+        response_text = result[0].text
+        assert '"total_results": 0' in response_text
+        assert '"results": []' in response_text
+        assert "test query" in response_text
 
     @pytest.mark.asyncio
-    @patch("src.bio_mcp.mcp.rag_tools.get_rag_manager")
+    @patch("bio_mcp.mcp.rag_tools.get_rag_manager")
     async def test_rag_get_tool_document_not_found(self, mock_get_manager):
         """Test RAG get tool when document is not found."""
         # Mock manager
@@ -208,7 +210,7 @@ class TestRAGTools:
         mock_get_manager.return_value = mock_manager
 
         # Mock get result with document not found
-        from src.bio_mcp.mcp.rag_tools import RAGGetResult
+        from bio_mcp.mcp.rag_tools import RAGGetResult
 
         mock_result = RAGGetResult(doc_id="pmid:123", found=False)
         mock_manager.get_document.return_value = mock_result
@@ -216,7 +218,7 @@ class TestRAGTools:
         result = await rag_get_tool("rag.get", {"doc_id": "pmid:123"})
 
         assert len(result) == 1
-        assert "Document Not Found" in result[0].text
+        assert "Document not found" in result[0].text
         assert "pmid:123" in result[0].text
 
     @pytest.mark.asyncio
@@ -227,7 +229,9 @@ class TestRAGTools:
 
         # Mock Weaviate initialization failure
         with patch.object(
-            manager.weaviate, "initialize", side_effect=Exception("Connection failed")
+            manager.embedding_service,
+            "search_chunks",
+            side_effect=Exception("Connection failed"),
         ):
             result = await manager.search_documents("test query")
 

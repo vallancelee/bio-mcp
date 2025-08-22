@@ -17,7 +17,7 @@ from bio_mcp.sources.pubmed.config import PubMedConfig
 class MockSearchResult:
     """Mock search result for testing."""
 
-    def __init__(self, pmids: list[str], total_results: int = None):
+    def __init__(self, pmids: list[str], total_results: int | None = None):
         self.pmids = pmids
         self.total_results = total_results or len(pmids)
 
@@ -25,7 +25,7 @@ class MockSearchResult:
 class MockDocument:
     """Mock PubMed document for testing."""
 
-    def __init__(self, pmid: str, title: str, abstract: str = None):
+    def __init__(self, pmid: str, title: str, abstract: str | None = None):
         self.pmid = pmid
         self.title = title
         self.abstract = abstract
