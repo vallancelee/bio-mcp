@@ -24,7 +24,7 @@ from bio_mcp.mcp.response_builder import (
     format_rag_get_human
 )
 from bio_mcp.shared.clients.database import get_database_manager
-from bio_mcp.shared.clients.weaviate_client import get_weaviate_client
+from bio_mcp.services.embedding_service import EmbeddingService
 from bio_mcp.sources.pubmed.quality import JournalQualityScorer
 
 logger = get_logger(__name__)
@@ -55,7 +55,7 @@ class RAGToolsManager:
     """Manager for RAG-related operations."""
 
     def __init__(self):
-        self.weaviate = get_weaviate_client()
+        self.embedding_service = EmbeddingService()
         self.db_manager = get_database_manager()
         self.quality_scorer = JournalQualityScorer()
 
@@ -93,11 +93,11 @@ class RAGToolsManager:
         search_start_time = time.time()
 
         try:
-            await self.weaviate.initialize()
+            await self.embedding_service.initialize()
 
-            # Perform search with specified mode
+            # Perform search with specified mode using the chunk-based approach
             search_time_start = time.time()
-            results = await self.weaviate.search_documents(
+            results = await self.embedding_service.search_chunks(
                 query=query,
                 limit=top_k,
                 search_mode=search_mode,
@@ -124,19 +124,33 @@ class RAGToolsManager:
                 results_count=len(results),
             )
 
-            # Format results for consistent output
+            # Format chunk results for consistent output
             formatted_results = []
             for result in results:
+                # Extract PMID from parent_uid (format: "pubmed:12345678")
+                pmid = ""
+                if "parent_uid" in result:
+                    parent_uid = result["parent_uid"]
+                    if parent_uid.startswith("pubmed:"):
+                        pmid = parent_uid[7:]  # Remove "pubmed:" prefix
+
+                # Handle date serialization
+                pub_date = result.get("published_at", "")
+                if hasattr(pub_date, 'isoformat'):
+                    pub_date = pub_date.isoformat()
+                elif pub_date is None:
+                    pub_date = ""
+                
                 formatted_result = {
                     "uuid": result["uuid"],
-                    "pmid": result.get("pmid", ""),
+                    "pmid": pmid,
                     "title": result.get("title", ""),
-                    "abstract": result.get("abstract", ""),
-                    "journal": result.get("journal", ""),
-                    "publication_date": result.get("publication_date", ""),
+                    "abstract": result.get("text", ""),  # chunks have 'text' not 'abstract'
+                    "journal": "",  # journal info not stored in chunks currently
+                    "publication_date": pub_date,
                     "score": result.get("score", 0.0),
                     "distance": result.get("distance"),
-                    "content": self._truncate_content(result.get("content", "")),
+                    "content": self._truncate_content(result.get("text", "")),
                     "search_mode": search_mode,
                 }
 
@@ -191,25 +205,56 @@ class RAGToolsManager:
         logger.info("RAG get document", doc_id=doc_id, include_chunks=include_chunks)
 
         try:
-            await self.weaviate.initialize()
+            await self.embedding_service.initialize()
 
+            # For chunk-based approach, search for chunks by parent_uid
             if doc_id.startswith("pmid:"):
-                pmid = doc_id[5:]
-                document = await self.weaviate.get_document_by_pmid(pmid)
+                parent_uid = doc_id  # Already in format "pmid:12345678"
             else:
-                document = await self.weaviate.get_document_by_pmid(doc_id)
+                parent_uid = f"pubmed:{doc_id}"  # Convert PMID to parent_uid format
 
-            if not document:
+            # Search for all chunks belonging to this document
+            from weaviate.classes.query import Filter
+            collection = self.embedding_service.weaviate_client.client.collections.get("DocumentChunk")
+            
+            response = collection.query.fetch_objects(
+                filters=Filter.by_property("parent_uid").equal(parent_uid)
+            )
+
+            if not response.objects:
                 return RAGGetResult(doc_id=doc_id, found=False)
 
-            chunks = None
-            if include_chunks:
-                # Note: Document chunking is available but not yet integrated with database storage
-                # Currently returning the full document as a single chunk
-                chunks = [document]
+            # Reconstruct document from first chunk's metadata
+            first_chunk = response.objects[0]
+            document = {
+                "uuid": str(first_chunk.uuid),
+                "pmid": parent_uid.replace("pubmed:", "") if parent_uid.startswith("pubmed:") else parent_uid,
+                "title": first_chunk.properties.get("title", ""),
+                "abstract": "",  # We'll combine all chunk texts
+                "journal": "",  # Not available in chunks
+                "publication_date": first_chunk.properties.get("published_at", ""),
+                "parent_uid": parent_uid
+            }
 
+            chunks = []
+            combined_text = []
+            for obj in response.objects:
+                chunk = {
+                    "chunk_id": obj.properties["chunk_id"],
+                    "text": obj.properties.get("text", ""),
+                    "section": obj.properties.get("section", ""),
+                    "tokens": obj.properties.get("tokens", 0),
+                    "chunk_idx": obj.properties.get("chunk_idx", 0)
+                }
+                chunks.append(chunk)
+                combined_text.append(obj.properties.get("text", ""))
+            
+            # Combine all chunk texts to form the full abstract
+            document["abstract"] = " ".join(combined_text)
+
+            result_chunks = chunks if include_chunks else None
             return RAGGetResult(
-                doc_id=doc_id, found=True, document=document, chunks=chunks
+                doc_id=doc_id, found=True, document=document, chunks=result_chunks
             )
 
         except Exception as e:

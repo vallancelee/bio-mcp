@@ -122,6 +122,8 @@ run: ## Run the MCP server locally
 
 run-http: ## Run the HTTP server locally
 	@echo "$(YELLOW)Starting Bio-MCP HTTP server...$(NC)"
+	@echo "$(BLUE)API will be available at: http://localhost:8000$(NC)"
+	@echo "$(BLUE)Web UI will be available at: http://localhost:8000$(NC)"
 	UVICORN_LIMIT=200 LOG_LEVEL=info $(UV) run python -m bio_mcp.main_http
 
 run-worker: ## Run the async job worker
@@ -218,7 +220,7 @@ up: ## Start all development services (ONBOARDING alias)
 	@echo "$(BLUE)PostgreSQL: localhost:5433$(NC)"
 	@echo "$(BLUE)Weaviate: http://localhost:8080$(NC)"
 	@echo "$(BLUE)MinIO S3: http://localhost:9000$(NC)"
-	@echo "$(BLUE)MinIO Console: http://localhost:9001 (admin/minioadmin)$(NC)"
+	@echo "$(BLUE)MinIO Console: http://localhost:9001 (minioadmin/minioadmin)$(NC)"
 
 docker-down: ## Stop development services
 	@echo "$(YELLOW)Stopping development services...$(NC)"

@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bio-MCP Tool Testing Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+        
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .status-bar {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            padding: 1rem;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ef4444;
+        }
+        
+        .status-indicator.connected {
+            background: #22c55e;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .panel {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+            border: 1px solid #e2e8f0;
+        }
+        
+        .panel h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: #334155;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 0.5rem;
+        }
+        
+        .tool-list {
+            max-height: 500px;
+            overflow-y: auto;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+        }
+        
+        .tool-item {
+            padding: 1rem;
+            border-bottom: 1px solid #f1f5f9;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .tool-item:last-child {
+            border-bottom: none;
+        }
+        
+        .tool-item:hover {
+            background: #f8fafc;
+        }
+        
+        .tool-item.selected {
+            background: #eff6ff;
+            border-left: 4px solid #3b82f6;
+        }
+        
+        .tool-name {
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 0.25rem;
+        }
+        
+        .tool-description {
+            font-size: 0.875rem;
+            color: #64748b;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #374151;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.2s;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgb(59 130 246 / 0.1);
+        }
+        
+        .form-textarea {
+            min-height: 120px;
+            resize: vertical;
+            font-family: 'Monaco', 'Menlo', monospace;
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+        
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            background: #2563eb;
+            transform: translateY(-1px);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .result-panel {
+            grid-column: 1 / -1;
+            margin-top: 2rem;
+        }
+        
+        .result-content {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 1.5rem;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.875rem;
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        
+        .success {
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            color: #16a34a;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        
+        .schema-display {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.875rem;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        
+        .param-hint {
+            font-size: 0.75rem;
+            color: #6b7280;
+            margin-top: 0.25rem;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧬 Bio-MCP Tool Testing Interface</h1>
+            <p>Interactive testing environment for Bio-MCP server tools</p>
+        </div>
+        
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-indicator" id="connectionStatus"></div>
+                <span id="connectionText">Connecting...</span>
+            </div>
+            <div class="status-item">
+                <span id="toolCount">Loading tools...</span>
+            </div>
+        </div>
+        
+        <div class="grid">
+            <div class="panel">
+                <h2>Available Tools</h2>
+                <div class="tool-list" id="toolList">
+                    <div style="text-align: center; padding: 2rem; color: #64748b;">
+                        Loading tools...
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <h2>Tool Invocation</h2>
+                <div id="invocationForm">
+                    <div class="form-group">
+                        <label class="form-label">Selected Tool</label>
+                        <input type="text" class="form-input" id="selectedTool" readonly placeholder="Select a tool from the list">
+                    </div>
+                    
+                    <div class="form-group" id="schemaDisplay" style="display: none;">
+                        <label class="form-label">Input Schema</label>
+                        <div class="schema-display" id="schemaContent"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Parameters (JSON)</label>
+                        <textarea class="form-input form-textarea" id="toolParams" placeholder='{"param": "value"}'>{}</textarea>
+                        <div class="param-hint">Enter parameters as JSON object. Leave empty {} for tools with no required parameters.</div>
+                    </div>
+                    
+                    <button class="btn btn-primary" id="invokeBtn" disabled>
+                        <span id="invokeText">Invoke Tool</span>
+                        <div class="loading" id="invokeLoading" style="display: none;"></div>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="panel result-panel" id="resultPanel" style="display: none;">
+            <h2>Result</h2>
+            <div class="result-content" id="resultContent"></div>
+        </div>
+    </div>
+
+    <script>
+        class MCPTestingUI {
+            constructor() {
+                this.tools = [];
+                this.selectedTool = null;
+                this.baseUrl = window.location.origin;
+                this.init();
+            }
+            
+            async init() {
+                await this.checkConnection();
+                await this.loadTools();
+                this.bindEvents();
+            }
+            
+            async checkConnection() {
+                const statusIndicator = document.getElementById('connectionStatus');
+                const statusText = document.getElementById('connectionText');
+                
+                try {
+                    const response = await fetch(`${this.baseUrl}/healthz`);
+                    if (response.ok) {
+                        statusIndicator.classList.add('connected');
+                        statusText.textContent = 'Connected';
+                    } else {
+                        throw new Error('Health check failed');
+                    }
+                } catch (error) {
+                    statusText.textContent = 'Connection failed';
+                    this.showError('Failed to connect to Bio-MCP server. Make sure the server is running.');
+                }
+            }
+            
+            async loadTools() {
+                const toolList = document.getElementById('toolList');
+                const toolCount = document.getElementById('toolCount');
+                
+                try {
+                    const response = await fetch(`${this.baseUrl}/v1/mcp/tools`);
+                    const data = await response.json();
+                    
+                    this.tools = data.tools || [];
+                    toolCount.textContent = `${this.tools.length} tools available`;
+                    
+                    if (this.tools.length === 0) {
+                        toolList.innerHTML = '<div style="text-align: center; padding: 2rem; color: #64748b;">No tools available</div>';
+                        return;
+                    }
+                    
+                    toolList.innerHTML = this.tools.map(tool => `
+                        <div class="tool-item" data-tool="${tool.name}">
+                            <div class="tool-name">${tool.name}</div>
+                            <div class="tool-description">${tool.description || 'No description available'}</div>
+                        </div>
+                    `).join('');
+                    
+                } catch (error) {
+                    console.error('Error loading tools:', error);
+                    toolList.innerHTML = '<div style="text-align: center; padding: 2rem; color: #ef4444;">Error loading tools</div>';
+                    this.showError('Failed to load tools from server.');
+                }
+            }
+            
+            bindEvents() {
+                // Tool selection
+                document.getElementById('toolList').addEventListener('click', (e) => {
+                    const toolItem = e.target.closest('.tool-item');
+                    if (toolItem) {
+                        this.selectTool(toolItem.dataset.tool);
+                    }
+                });
+                
+                // Tool invocation
+                document.getElementById('invokeBtn').addEventListener('click', () => {
+                    this.invokeTool();
+                });
+                
+                // Parameter validation
+                document.getElementById('toolParams').addEventListener('input', (e) => {
+                    this.validateParams(e.target.value);
+                });
+            }
+            
+            selectTool(toolName) {
+                // Update UI selection
+                document.querySelectorAll('.tool-item').forEach(item => {
+                    item.classList.remove('selected');
+                });
+                document.querySelector(`[data-tool="${toolName}"]`).classList.add('selected');
+                
+                // Find tool details
+                this.selectedTool = this.tools.find(tool => tool.name === toolName);
+                document.getElementById('selectedTool').value = toolName;
+                
+                // Show schema if available
+                if (this.selectedTool && this.selectedTool.inputSchema) {
+                    document.getElementById('schemaDisplay').style.display = 'block';
+                    document.getElementById('schemaContent').textContent = JSON.stringify(this.selectedTool.inputSchema, null, 2);
+                } else {
+                    document.getElementById('schemaDisplay').style.display = 'none';
+                }
+                
+                // Enable invoke button
+                document.getElementById('invokeBtn').disabled = false;
+                
+                // Pre-fill common parameters
+                this.prefillParams(toolName);
+            }
+            
+            prefillParams(toolName) {
+                const paramsTextarea = document.getElementById('toolParams');
+                let defaultParams = {};
+                
+                // Add some intelligent defaults for common tools
+                if (toolName === 'ping') {
+                    defaultParams = { message: "Hello from UI!" };
+                } else if (toolName === 'pubmed.search') {
+                    defaultParams = { term: "cancer", limit: 5 };
+                } else if (toolName === 'pubmed.get') {
+                    defaultParams = { pmid: "32503899" };
+                } else if (toolName.includes('pubmed.sync')) {
+                    defaultParams = { query: "glioblastoma", limit: 10 };
+                } else if (toolName === 'rag.search') {
+                    defaultParams = { query: "oncology treatment", top_k: 5 };
+                } else if (toolName === 'rag.get') {
+                    defaultParams = { doc_id: "pmid:12345" };
+                } else if (toolName.includes('search')) {
+                    defaultParams = { query: "cancer", limit: 5 };
+                }
+                
+                paramsTextarea.value = JSON.stringify(defaultParams, null, 2);
+            }
+            
+            validateParams(paramsStr) {
+                const invokeBtn = document.getElementById('invokeBtn');
+                
+                if (!paramsStr.trim()) {
+                    paramsStr = '{}';
+                    document.getElementById('toolParams').value = '{}';
+                }
+                
+                try {
+                    JSON.parse(paramsStr);
+                    invokeBtn.disabled = !this.selectedTool;
+                } catch (error) {
+                    invokeBtn.disabled = true;
+                }
+            }
+            
+            async invokeTool() {
+                if (!this.selectedTool) return;
+                
+                const invokeBtn = document.getElementById('invokeBtn');
+                const invokeText = document.getElementById('invokeText');
+                const invokeLoading = document.getElementById('invokeLoading');
+                const paramsStr = document.getElementById('toolParams').value;
+                
+                let params;
+                try {
+                    params = JSON.parse(paramsStr || '{}');
+                } catch (error) {
+                    this.showError('Invalid JSON in parameters field');
+                    return;
+                }
+                
+                // Show loading state
+                invokeBtn.disabled = true;
+                invokeText.textContent = 'Invoking...';
+                invokeLoading.style.display = 'block';
+                
+                try {
+                    const response = await fetch(`${this.baseUrl}/v1/mcp/invoke`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            tool: this.selectedTool.name,
+                            params: params
+                        })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (response.ok) {
+                        this.showResult(result);
+                    } else {
+                        this.showError(`Tool invocation failed: ${result.message || 'Unknown error'}`);
+                    }
+                    
+                } catch (error) {
+                    console.error('Error invoking tool:', error);
+                    this.showError(`Network error: ${error.message}`);
+                } finally {
+                    // Reset button state
+                    invokeBtn.disabled = false;
+                    invokeText.textContent = 'Invoke Tool';
+                    invokeLoading.style.display = 'none';
+                }
+            }
+            
+            showResult(result) {
+                const resultPanel = document.getElementById('resultPanel');
+                const resultContent = document.getElementById('resultContent');
+                
+                resultContent.textContent = JSON.stringify(result, null, 2);
+                resultPanel.style.display = 'block';
+                resultPanel.scrollIntoView({ behavior: 'smooth' });
+            }
+            
+            showError(message) {
+                const resultPanel = document.getElementById('resultPanel');
+                const resultContent = document.getElementById('resultContent');
+                
+                resultContent.innerHTML = `<div style="color: #ef4444; font-weight: bold;">Error:</div><div>${message}</div>`;
+                resultPanel.style.display = 'block';
+                resultPanel.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+        
+        // Initialize the UI when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            new MCPTestingUI();
+        });
+    </script>
+</body>
+</html>

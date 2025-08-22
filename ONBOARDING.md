@@ -6,8 +6,8 @@ Welcome! This guide gets you productive on **bio-mcp** in a couple of hours. It 
 >
 > * `make bootstrap && make up`
 > * `make quickstart` (tests everything works)
-> * `make run-http` in one terminal, `make run-worker` in another
-> * `uv run python clients/cli.py ping --message "hello"`
+> * `make run-http` then open `http://localhost:8000` 🌐
+> * Try the **Web UI** or CLI: `uv run python clients/cli.py ping --message "hello"`
 
 ---
 
@@ -83,6 +83,7 @@ make run-http
 ```
 
 * Serves on `http://localhost:8000`
+* **Web UI**: Browse to `http://localhost:8000` for interactive tool testing
 * Health: `/healthz`, `/readyz`
 
 **Terminal B — Worker (SQS/job consumer)**
@@ -120,12 +121,21 @@ uv run python clients/cli.py list-tools
 
 Test a tool (recommended first test):
 
+**Option 1: Web UI (easiest)**
+1. Open `http://localhost:8000` in your browser
+2. Select "ping" from the tool list
+3. Click "Invoke Tool"
+
+**Option 2: CLI**
 ```bash
 uv run python clients/cli.py ping --message "hello world"
 ```
 
 Search PubMed:
 
+**Web UI**: Select "rag.search" tool and enter `{"query": "glioblastoma", "top_k": 3}`
+
+**CLI**: 
 ```bash
 uv run python clients/cli.py rag.search --query "glioblastoma" --top-k 3
 ```
