@@ -53,12 +53,49 @@ Core dependencies include:
 - **Pre-commit**: Automated code quality checks
 
 ## Testing
-- **Run all tests**: `uv run pytest`
+
+### Testing Requirements and Discipline
+
+#### Mandatory Testing Protocol:
+1. **ALWAYS run tests before claiming work is complete**
+   - Run unit tests during development for fast feedback: `uv run pytest --ignore=tests/e2e --ignore=tests/integration`
+   - Run linting after code changes: `uv run ruff check`
+   - **MUST run integration tests before marking any task as "completed"**: `uv run pytest tests/integration/`
+   - Never mark a task as "completed" without green tests
+
+2. **Zero Tolerance for Test Failures**:
+   - Treat ANY test failure as a blocking issue
+   - Never ship or continue with failing tests
+   - Investigate ALL warnings - they often indicate real problems
+   - Don't assume test failures are "environment issues" without proof
+
+3. **Integration Test Verification**:
+   - Unit tests with mocks can miss real integration issues
+   - Integration tests catch configuration, import, and system-level problems
+   - Integration tests use real databases via testcontainers
+   - Must run integration tests before task completion
+
+4. **Test Failure Response Protocol**:
+   - STOP all other work when tests fail
+   - Investigate the root cause thoroughly
+   - Fix the underlying issue, not just the symptom
+   - Re-run tests to confirm the fix
+   - Only then continue with other work
+
+#### Test Commands:
+- **Development (fast feedback)**: `uv run pytest --ignore=tests/e2e --ignore=tests/integration`
+- **Before task completion**: `uv run pytest tests/integration/`
+- **Full test suite**: `uv run pytest`
 - **Run with coverage**: `uv run python scripts/coverage.py`
 - **Unit tests only**: `uv run pytest tests/unit/`
 - **Integration tests only**: `uv run pytest tests/integration/`
 - **E2E tests only**: `uv run pytest tests/e2e/`
-- **Test directory structure**: `tests/unit/`, `tests/integration/`, `tests/e2e/`
+- **Linting**: `uv run ruff check`
+
+#### Test Directory Structure:
+- `tests/unit/` - Fast unit tests with mocks
+- `tests/integration/` - Real database/service integration tests
+- `tests/e2e/` - End-to-end workflow tests
 - **Coverage reports**: Generated in `htmlcov/` directory
 - **Current coverage**: ~20% (baseline established)
 
@@ -67,6 +104,18 @@ Core dependencies include:
 - Target Python version: 3.12
 - Strict typing with MyPy
 - Follow contracts defined in `contracts.md`
+
+### Linting Standards
+- **Pytest fixture imports**: Always add `# noqa: F401 - pytest fixture` for fixture imports that appear unused
+- **Test framework imports**: Add `# noqa: F401 - may be used by test framework` for imports like `pytest` that may not show direct usage
+- **Example**:
+  ```python
+  from tests.integration.database.conftest import (
+      postgres_container,  # noqa: F401 - pytest fixture
+      clean_db,           # noqa: F401 - pytest fixture
+  )
+  import pytest  # noqa: F401 - may be used by test framework
+  ```
 
 ## API Contracts
 All tool contracts are defined in `contracts.md` with JSON schemas for:

@@ -3,7 +3,7 @@ Universal database models for multi-source documents.
 """
 
 import enum
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import JSON, Column, DateTime, Enum, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -75,6 +75,51 @@ class CorpusCheckpoint(Base):
     updated_at = Column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
+
+
+class NormalizedDocument(Base):
+    """Normalized document metadata table for multi-source pipeline."""
+
+    __tablename__ = "documents"
+
+    uid = Column(String(255), primary_key=True)  # e.g., "pubmed:12345678"
+    source = Column(String(50), nullable=False, index=True)  # e.g., "pubmed"
+    source_id = Column(String(100), nullable=False)  # e.g., "12345678"
+    title = Column(Text)
+    published_at = Column(DateTime(timezone=True), index=True)
+    s3_raw_uri = Column(Text, nullable=False)  # S3 location of raw data
+    content_hash = Column(String(64), nullable=False)  # SHA256 hash for deduplication
+    created_at = Column(
+        DateTime(timezone=True), 
+        default=lambda: datetime.now(UTC), 
+        nullable=False
+    )
+
+    def to_document_dict(self) -> dict:
+        """Convert database record to dictionary for API responses."""
+        return {
+            "uid": self.uid,
+            "source": self.source,
+            "source_id": self.source_id,
+            "title": self.title,
+            "published_at": self.published_at.isoformat() if self.published_at else None,
+            "s3_raw_uri": self.s3_raw_uri,
+            "content_hash": self.content_hash,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+    @classmethod
+    def from_document(cls, document, s3_raw_uri: str, content_hash: str):
+        """Create database record from Document model instance."""
+        return cls(
+            uid=document.uid,
+            source=document.source,
+            source_id=document.source_id,
+            title=document.title,
+            published_at=document.published_at,
+            s3_raw_uri=s3_raw_uri,
+            content_hash=content_hash,
+        )
 
 
 class JobStatus(enum.Enum):
