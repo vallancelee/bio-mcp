@@ -12,17 +12,17 @@ from bio_mcp import __build__, __commit__, __version__
 # Try to load .env file if it exists
 try:
     from dotenv import load_dotenv
-    
+
     # Look for .env file in project root
     project_root = Path(__file__).parent.parent.parent
     env_file = project_root / ".env"
-    
+
     if env_file.exists():
         load_dotenv(env_file)
         print(f"✓ Loaded configuration from {env_file}")
     else:
         print(f"i No .env file found at {env_file} (using environment variables)")
-        
+
 except ImportError:
     print("i python-dotenv not available (using environment variables only)")
     pass
@@ -31,26 +31,26 @@ except ImportError:
 @dataclass
 class Config:
     """Basic configuration for Bio-MCP server."""
-    
+
     # Version information
     version: str = __version__
     build: str | None = __build__
     commit: str | None = __commit__
-    
+
     # Server configuration
     server_name: str = "bio-mcp"
     log_level: str = "INFO"
-    
+
     # API Keys (optional for Phase 1A)
     pubmed_api_key: str | None = None
     openai_api_key: str | None = None
-    
+
     # Database (defaults to in-memory for Phase 1A)
     database_url: str = "sqlite:///:memory:"
-    
+
     # Weaviate (defaults to local for Phase 1A)
     weaviate_url: str = "http://localhost:8080"
-    
+
     @classmethod
     def from_env(cls) -> "Config":
         """Load configuration from environment variables."""
@@ -67,7 +67,7 @@ class Config:
             database_url=os.getenv("BIO_MCP_DATABASE_URL", "sqlite:///:memory:"),
             weaviate_url=os.getenv("BIO_MCP_WEAVIATE_URL", "http://localhost:8080"),
         )
-    
+
     def validate(self) -> None:
         """Basic validation - will be enhanced in Phase 1B."""
         if self.log_level not in ["DEBUG", "INFO", "WARNING", "ERROR"]:

@@ -39,22 +39,24 @@ def get_database_url():
     """Get database URL from environment variables or config."""
     # First try to get URL from alembic config (for tests)
     url = config.get_main_option("sqlalchemy.url")
-    
+
     # Fall back to environment variable
     if not url:
-        url = os.getenv('BIO_MCP_DATABASE_URL')
-    
+        url = os.getenv("BIO_MCP_DATABASE_URL")
+
     if not url:
-        raise ValueError("Database URL must be provided via alembic config or BIO_MCP_DATABASE_URL environment variable")
-    
+        raise ValueError(
+            "Database URL must be provided via alembic config or BIO_MCP_DATABASE_URL environment variable"
+        )
+
     # Convert URLs for sync migrations (Alembic standard)
-    if url.startswith('postgresql+asyncpg://'):
+    if url.startswith("postgresql+asyncpg://"):
         # Convert asyncpg to psycopg2 for sync operations
-        url = url.replace('postgresql+asyncpg://', 'postgresql+psycopg2://')
-    elif url.startswith('postgresql://') and not url.startswith('postgresql+'):
+        url = url.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
+    elif url.startswith("postgresql://") and not url.startswith("postgresql+"):
         # Ensure we use psycopg2 for synchronous operations
-        url = url.replace('postgresql://', 'postgresql+psycopg2://')
-    
+        url = url.replace("postgresql://", "postgresql+psycopg2://")
+
     return url
 
 
@@ -92,7 +94,7 @@ def do_run_migrations(connection: Connection) -> None:
 def run_migrations_sync() -> None:
     """Run migrations in 'online' mode with sync engine."""
     from sqlalchemy import create_engine
-    
+
     connectable = create_engine(
         get_database_url(),
         poolclass=pool.NullPool,

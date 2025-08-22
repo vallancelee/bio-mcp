@@ -41,11 +41,11 @@ Execution time: {self.execution_time_ms:.1f}ms"""
             return f"""✅ Corpus checkpoint created successfully
 
 **Checkpoint ID:** {self.checkpoint_id}
-**Name:** {data.get('name', 'N/A')}
-**Description:** {data.get('description', 'None')}
-**Total Documents:** {data.get('total_documents', '0')}
-**Last Sync EDAT:** {data.get('last_sync_edat', 'None')}
-**Version:** {data.get('version', '1.0')}
+**Name:** {data.get("name", "N/A")}
+**Description:** {data.get("description", "None")}
+**Total Documents:** {data.get("total_documents", "0")}
+**Last Sync EDAT:** {data.get("last_sync_edat", "None")}
+**Version:** {data.get("version", "1.0")}
 
 Execution time: {self.execution_time_ms:.1f}ms"""
 
@@ -61,20 +61,20 @@ Execution time: {self.execution_time_ms:.1f}ms"""
             return f"""📋 Corpus Checkpoint Details
 
 **Checkpoint ID:** {self.checkpoint_id}
-**Name:** {data.get('name', 'N/A')}
-**Description:** {data.get('description', 'None')}
+**Name:** {data.get("name", "N/A")}
+**Description:** {data.get("description", "None")}
 
 **Corpus Statistics:**
-- Total Documents: {data.get('total_documents', '0')}
-- Total Vectors: {data.get('total_vectors', '0')}
-- Last Sync EDAT: {data.get('last_sync_edat', 'None')}
+- Total Documents: {data.get("total_documents", "0")}
+- Total Vectors: {data.get("total_vectors", "0")}
+- Last Sync EDAT: {data.get("last_sync_edat", "None")}
 
 **Metadata:**
-- Version: {data.get('version', '1.0')}
-- Parent Checkpoint: {data.get('parent_checkpoint_id', 'None')}
-- Created: {data.get('created_at', 'N/A')}
+- Version: {data.get("version", "1.0")}
+- Parent Checkpoint: {data.get("parent_checkpoint_id", "None")}
+- Created: {data.get("created_at", "N/A")}
 
-**Primary Queries:** {', '.join(data.get('primary_queries', []))}
+**Primary Queries:** {", ".join(data.get("primary_queries", []))}
 
 Execution time: {self.execution_time_ms:.1f}ms"""
 
@@ -88,7 +88,7 @@ Execution time: {self.execution_time_ms:.1f}ms"""
         return f"Unknown operation: {self.operation}"
 
 
-@dataclass 
+@dataclass
 class CheckpointListResult:
     """Result of a checkpoint list operation."""
 
@@ -111,15 +111,19 @@ Execution time: {self.execution_time_ms:.1f}ms"""
         # Format checkpoint list
         checkpoints_text = []
         for i, checkpoint in enumerate(self.checkpoints, 1):
-            parent_info = f" (parent: {checkpoint.get('parent_checkpoint_id', 'none')})" if checkpoint.get('parent_checkpoint_id') else ""
-            
-            checkpoint_text = f"""**{i}. {checkpoint.get('name', 'Unnamed')}**
-📋 ID: {checkpoint.get('checkpoint_id', 'N/A')}
-📊 Documents: {checkpoint.get('total_documents', '0')}
-📅 Created: {checkpoint.get('created_at', 'N/A')[:19] if checkpoint.get('created_at') else 'N/A'}
-🏷️ Version: {checkpoint.get('version', '1.0')}{parent_info}
-📝 Description: {checkpoint.get('description', 'No description')}"""
-            
+            parent_info = (
+                f" (parent: {checkpoint.get('parent_checkpoint_id', 'none')})"
+                if checkpoint.get("parent_checkpoint_id")
+                else ""
+            )
+
+            checkpoint_text = f"""**{i}. {checkpoint.get("name", "Unnamed")}**
+📋 ID: {checkpoint.get("checkpoint_id", "N/A")}
+📊 Documents: {checkpoint.get("total_documents", "0")}
+📅 Created: {checkpoint.get("created_at", "N/A")[:19] if checkpoint.get("created_at") else "N/A"}
+🏷️ Version: {checkpoint.get("version", "1.0")}{parent_info}
+📝 Description: {checkpoint.get("description", "No description")}"""
+
             checkpoints_text.append(checkpoint_text)
 
         response = f"""📋 **Corpus Checkpoints**
@@ -155,25 +159,29 @@ class CorpusCheckpointManager:
         """Close all connections and cleanup."""
         if self.checkpoint_service:
             await self.checkpoint_service.close()
-        
+
         self.initialized = False
         logger.info("Corpus checkpoint manager closed")
 
     async def create_checkpoint(
-        self, 
-        checkpoint_id: str, 
+        self,
+        checkpoint_id: str,
         name: str,
         description: str | None = None,
         primary_queries: list[str] | None = None,
-        parent_checkpoint_id: str | None = None
+        parent_checkpoint_id: str | None = None,
     ) -> CheckpointResult:
         """Create a new corpus checkpoint."""
         if not self.initialized:
             await self.initialize()
 
         start_time = time.time()
-        
-        logger.info("Creating corpus checkpoint", checkpoint_id=checkpoint_id, checkpoint_name=name)
+
+        logger.info(
+            "Creating corpus checkpoint",
+            checkpoint_id=checkpoint_id,
+            checkpoint_name=name,
+        )
 
         try:
             checkpoint = await self.checkpoint_service.create_checkpoint(
@@ -181,7 +189,7 @@ class CorpusCheckpointManager:
                 name=name,
                 description=description,
                 primary_queries=primary_queries,
-                parent_checkpoint_id=parent_checkpoint_id
+                parent_checkpoint_id=parent_checkpoint_id,
             )
 
             execution_time = (time.time() - start_time) * 1000
@@ -196,7 +204,7 @@ class CorpusCheckpointManager:
                 "version": checkpoint.version,
                 "parent_checkpoint_id": checkpoint.parent_checkpoint_id,
                 "created_at": checkpoint.created_at.isoformat(),
-                "primary_queries": checkpoint.primary_queries
+                "primary_queries": checkpoint.primary_queries,
             }
 
             result = CheckpointResult(
@@ -204,7 +212,7 @@ class CorpusCheckpointManager:
                 operation="create",
                 success=True,
                 execution_time_ms=execution_time,
-                checkpoint_data=checkpoint_data
+                checkpoint_data=checkpoint_data,
             )
 
             logger.info(
@@ -229,7 +237,7 @@ class CorpusCheckpointManager:
                 operation="create",
                 success=False,
                 execution_time_ms=execution_time,
-                error_message=str(e)
+                error_message=str(e),
             )
 
     async def get_checkpoint(self, checkpoint_id: str) -> CheckpointResult:
@@ -238,7 +246,7 @@ class CorpusCheckpointManager:
             await self.initialize()
 
         start_time = time.time()
-        
+
         logger.info("Getting corpus checkpoint", checkpoint_id=checkpoint_id)
 
         try:
@@ -258,7 +266,7 @@ class CorpusCheckpointManager:
                     "created_at": checkpoint.created_at.isoformat(),
                     "updated_at": checkpoint.updated_at.isoformat(),
                     "primary_queries": checkpoint.primary_queries,
-                    "sync_watermarks": checkpoint.sync_watermarks
+                    "sync_watermarks": checkpoint.sync_watermarks,
                 }
 
                 logger.info(
@@ -272,7 +280,7 @@ class CorpusCheckpointManager:
                     operation="get",
                     success=True,
                     execution_time_ms=execution_time,
-                    checkpoint_data=checkpoint_data
+                    checkpoint_data=checkpoint_data,
                 )
             else:
                 logger.info(
@@ -286,7 +294,7 @@ class CorpusCheckpointManager:
                     operation="get",
                     success=True,
                     execution_time_ms=execution_time,
-                    checkpoint_data=None
+                    checkpoint_data=None,
                 )
 
         except Exception as e:
@@ -302,41 +310,47 @@ class CorpusCheckpointManager:
                 operation="get",
                 success=False,
                 execution_time_ms=execution_time,
-                error_message=str(e)
+                error_message=str(e),
             )
 
-    async def list_checkpoints(self, limit: int = 20, offset: int = 0) -> CheckpointListResult:
+    async def list_checkpoints(
+        self, limit: int = 20, offset: int = 0
+    ) -> CheckpointListResult:
         """List all corpus checkpoints."""
         if not self.initialized:
             await self.initialize()
 
         start_time = time.time()
-        
+
         logger.info("Listing corpus checkpoints", limit=limit, offset=offset)
 
         try:
-            checkpoints = await self.checkpoint_service.list_checkpoints(limit=limit, offset=offset)
+            checkpoints = await self.checkpoint_service.list_checkpoints(
+                limit=limit, offset=offset
+            )
             execution_time = (time.time() - start_time) * 1000
 
             checkpoint_data = []
             for checkpoint in checkpoints:
-                checkpoint_data.append({
-                    "checkpoint_id": checkpoint.checkpoint_id,
-                    "name": checkpoint.name,
-                    "description": checkpoint.description,
-                    "total_documents": checkpoint.total_documents,
-                    "total_vectors": checkpoint.total_vectors,
-                    "version": checkpoint.version,
-                    "parent_checkpoint_id": checkpoint.parent_checkpoint_id,
-                    "created_at": checkpoint.created_at.isoformat(),
-                })
+                checkpoint_data.append(
+                    {
+                        "checkpoint_id": checkpoint.checkpoint_id,
+                        "name": checkpoint.name,
+                        "description": checkpoint.description,
+                        "total_documents": checkpoint.total_documents,
+                        "total_vectors": checkpoint.total_vectors,
+                        "version": checkpoint.version,
+                        "parent_checkpoint_id": checkpoint.parent_checkpoint_id,
+                        "created_at": checkpoint.created_at.isoformat(),
+                    }
+                )
 
             result = CheckpointListResult(
                 total_found=len(checkpoints),
                 checkpoints=checkpoint_data,
                 execution_time_ms=execution_time,
                 limit=limit,
-                offset=offset
+                offset=offset,
             )
 
             logger.info(
@@ -359,7 +373,7 @@ class CorpusCheckpointManager:
                 checkpoints=[],
                 execution_time_ms=execution_time,
                 limit=limit,
-                offset=offset
+                offset=offset,
             )
 
     async def delete_checkpoint(self, checkpoint_id: str) -> CheckpointResult:
@@ -368,7 +382,7 @@ class CorpusCheckpointManager:
             await self.initialize()
 
         start_time = time.time()
-        
+
         logger.info("Deleting corpus checkpoint", checkpoint_id=checkpoint_id)
 
         try:
@@ -386,7 +400,7 @@ class CorpusCheckpointManager:
                     checkpoint_id=checkpoint_id,
                     operation="delete",
                     success=True,
-                    execution_time_ms=execution_time
+                    execution_time_ms=execution_time,
                 )
             else:
                 return CheckpointResult(
@@ -394,7 +408,7 @@ class CorpusCheckpointManager:
                     operation="delete",
                     success=False,
                     execution_time_ms=execution_time,
-                    error_message="Checkpoint not found"
+                    error_message="Checkpoint not found",
                 )
 
         except Exception as e:
@@ -410,7 +424,7 @@ class CorpusCheckpointManager:
                 operation="delete",
                 success=False,
                 execution_time_ms=execution_time,
-                error_message=str(e)
+                error_message=str(e),
             )
 
 
@@ -460,7 +474,7 @@ async def corpus_checkpoint_create_tool(
             name=checkpoint_name,
             description=description,
             primary_queries=primary_queries,
-            parent_checkpoint_id=parent_checkpoint_id
+            parent_checkpoint_id=parent_checkpoint_id,
         )
 
         return [TextContent(type="text", text=result.to_mcp_response())]
@@ -491,7 +505,11 @@ async def corpus_checkpoint_get_tool(
         return [TextContent(type="text", text=result.to_mcp_response())]
 
     except Exception as e:
-        logger.error("Corpus checkpoint get tool error", checkpoint_id=arguments.get("checkpoint_id"), error=str(e))
+        logger.error(
+            "Corpus checkpoint get tool error",
+            checkpoint_id=arguments.get("checkpoint_id"),
+            error=str(e),
+        )
         return [TextContent(type="text", text=f"❌ Error retrieving checkpoint: {e!s}")]
 
 
@@ -534,7 +552,11 @@ async def corpus_checkpoint_delete_tool(
         return [TextContent(type="text", text=result.to_mcp_response())]
 
     except Exception as e:
-        logger.error("Corpus checkpoint delete tool error", checkpoint_id=arguments.get("checkpoint_id"), error=str(e))
+        logger.error(
+            "Corpus checkpoint delete tool error",
+            checkpoint_id=arguments.get("checkpoint_id"),
+            error=str(e),
+        )
         return [TextContent(type="text", text=f"❌ Error deleting checkpoint: {e!s}")]
 
 

@@ -119,7 +119,7 @@ Server Info:
 
         elif name == "pubmed.sync":
             return await pubmed_sync_tool(name, arguments)
-        
+
         elif name == "pubmed.sync.incremental":
             return await pubmed_sync_incremental_tool(name, arguments)
 
@@ -128,16 +128,16 @@ Server Info:
 
         elif name == "rag.get":
             return await rag_get_tool(name, arguments)
-        
+
         elif name == "corpus.checkpoint.create":
             return await corpus_checkpoint_create_tool(name, arguments)
-        
+
         elif name == "corpus.checkpoint.get":
             return await corpus_checkpoint_get_tool(name, arguments)
-        
+
         elif name == "corpus.checkpoint.list":
             return await corpus_checkpoint_list_tool(name, arguments)
-        
+
         elif name == "corpus.checkpoint.delete":
             return await corpus_checkpoint_delete_tool(name, arguments)
 
@@ -175,10 +175,10 @@ async def main():
     try:
         from .clients.database import DatabaseConfig, DatabaseManager
         from .clients.migrations import run_migrations
-        
+
         logger.info("Initializing database connection...")
         db_config = DatabaseConfig.from_env()
-        
+
         # Run migrations to ensure schema is up to date
         if db_config.url and db_config.url != "sqlite:///:memory:":
             logger.info("Running database migrations...")
@@ -186,20 +186,21 @@ async def main():
             if not migration_success:
                 raise Exception("Database migrations failed")
             logger.info("Database migrations completed successfully")
-        
+
         # Initialize database manager (without schema creation since migrations handle it)
         db_manager = DatabaseManager(db_config)
         # Create engine and session factory but skip schema creation
         db_manager.config = db_config
         db_manager.engine = None  # Will be created on first use
         db_manager.session_factory = None
-        
+
         # Store database manager globally for access by tools
         import bio_mcp.clients.database as db_module
+
         db_module._database_manager = db_manager
-        
+
         logger.info("Database initialization completed successfully")
-        
+
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")
         logger.warning("Continuing without database - some tools may not work properly")
@@ -253,12 +254,13 @@ async def main():
         # Cleanup database connection
         try:
             import bio_mcp.clients.database as db_module
+
             if db_module._database_manager:
                 await db_module._database_manager.close()
                 logger.info("Database connections closed")
         except Exception as e:
             logger.warning(f"Error closing database: {e}")
-        
+
         logger.info("Bio-MCP server stopped")
 
 

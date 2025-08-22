@@ -226,7 +226,9 @@ class PubMedClient:
             logger.error("PubMed API request failed", error=str(e))
             raise PubMedAPIError(f"Request failed: {e}")
 
-    async def _make_xml_request(self, url: str, params: dict[str, str]) -> dict[str, Any]:
+    async def _make_xml_request(
+        self, url: str, params: dict[str, str]
+    ) -> dict[str, Any]:
         """Make request that returns XML, convert to dict for parsing."""
         try:
             await self._enforce_rate_limit()
@@ -244,10 +246,17 @@ class PubMedClient:
             try:
                 # Parse XML to dict
                 data = xmltodict.parse(xml_text)
-                logger.debug("PubMed XML API response received and parsed", status=response.status_code)
+                logger.debug(
+                    "PubMed XML API response received and parsed",
+                    status=response.status_code,
+                )
                 return data
             except Exception as xml_error:
-                logger.error("Failed to parse XML response", error=str(xml_error), xml_snippet=xml_text[:200])
+                logger.error(
+                    "Failed to parse XML response",
+                    error=str(xml_error),
+                    xml_snippet=xml_text[:200],
+                )
                 # Return empty dict to fail gracefully
                 return {}
 
@@ -315,41 +324,45 @@ class PubMedClient:
 
         # Should not reach here
         raise PubMedAPIError("All retry attempts failed")
-    
+
     async def search_incremental(
-        self, 
-        query: str, 
+        self,
+        query: str,
         last_edat: str | None = None,
-        limit: int = 20, 
-        offset: int = 0, 
-        retries: int | None = None
+        limit: int = 20,
+        offset: int = 0,
+        retries: int | None = None,
     ) -> PubMedSearchResult:
         """Search PubMed with EDAT (Entry Date) filtering for incremental sync.
-        
+
         Args:
             query: Base search query
             last_edat: Last Entry Date in YYYY/MM/DD format (e.g., "2024/01/15")
             limit: Maximum number of results to return
             offset: Starting offset for pagination
             retries: Number of retry attempts
-            
+
         Returns:
             PubMedSearchResult with PMIDs of documents newer than last_edat
         """
         if retries is None:
             retries = self.config.retries
-        
+
         # Build incremental query with EDAT filter
         incremental_query = query
         if last_edat:
             # Add EDAT filter to find documents entered after the last sync
             # EDAT (Entry Date) tracks when documents were added to PubMed
             incremental_query = f"({query}) AND (EDAT[{last_edat}:3000/12/31])"
-            logger.info("Using incremental search with EDAT filter", 
-                       base_query=query, last_edat=last_edat, full_query=incremental_query)
+            logger.info(
+                "Using incremental search with EDAT filter",
+                base_query=query,
+                last_edat=last_edat,
+                full_query=incremental_query,
+            )
         else:
             logger.info("Using full search (no EDAT filter)", query=query)
-        
+
         url = f"{self.config.base_url}esearch.fcgi"
         params = {
             "db": "pubmed",
@@ -359,15 +372,20 @@ class PubMedClient:
             "usehistory": "y",
             "sort": "date",  # Sort by date to get newest entries first
         }
-        
-        logger.info("Searching PubMed incrementally", 
-                   query=incremental_query, limit=limit, offset=offset, last_edat=last_edat)
-        
+
+        logger.info(
+            "Searching PubMed incrementally",
+            query=incremental_query,
+            limit=limit,
+            offset=offset,
+            last_edat=last_edat,
+        )
+
         for attempt in range(retries + 1):
             try:
                 response_data = await self._make_request(url, params)
                 result = parse_esearch_response(response_data, incremental_query)
-                
+
                 logger.info(
                     "PubMed incremental search completed",
                     base_query=query,
@@ -375,9 +393,9 @@ class PubMedClient:
                     total_count=result.total_count,
                     returned_count=len(result.pmids),
                 )
-                
+
                 return result
-                
+
             except (PubMedAPIError, RateLimitError):
                 # Re-raise PubMed specific errors immediately
                 raise
@@ -385,7 +403,7 @@ class PubMedClient:
                 if attempt == retries:
                     # Convert generic exception to PubMedAPIError on final attempt
                     raise PubMedAPIError(f"Incremental search failed: {e}")
-                
+
                 wait_time = 2**attempt  # Exponential backoff
                 logger.warning(
                     "PubMed incremental search attempt failed, retrying",
@@ -394,7 +412,7 @@ class PubMedClient:
                     error=str(e),
                 )
                 await asyncio.sleep(wait_time)
-        
+
         # Should not reach here
         raise PubMedAPIError("All incremental search retry attempts failed")
 
@@ -496,7 +514,7 @@ def _parse_single_article(article_data: dict[str, Any]) -> PubMedDocument | None
         # Extract abstract
         abstract_data = article.get("Abstract", {})
         abstract_text = abstract_data.get("AbstractText", "")
-        
+
         def extract_text_from_xml_dict(obj):
             """Recursively extract text content from XML dictionary structure."""
             if isinstance(obj, dict):
@@ -517,12 +535,12 @@ def _parse_single_article(article_data: dict[str, Any]) -> PubMedDocument | None
                 return " ".join(extract_text_from_xml_dict(item) for item in obj)
             else:
                 return str(obj) if obj else ""
-        
+
         if isinstance(abstract_text, dict | list):
             abstract_text = extract_text_from_xml_dict(abstract_text)
         elif isinstance(abstract_text, list):
             abstract_text = " ".join(str(part) for part in abstract_text)
-        
+
         abstract = abstract_text.strip() if abstract_text else None
 
         # Extract authors

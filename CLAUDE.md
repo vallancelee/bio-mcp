@@ -76,3 +76,4 @@ All tool contracts are defined in `contracts.md` with JSON schemas for:
 - Internal adapter boundaries
 - always lint before committing
 - Always use absolute imports starting from the top-level package (the one defined in pyproject.toml/setup.cfg), never including build directories like `src` in the path.
+- Do not mock databases. Prefer testcontainers

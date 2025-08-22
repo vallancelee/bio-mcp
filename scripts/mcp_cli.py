@@ -11,6 +11,7 @@ from typing import Any
 
 # ---------- JSON-RPC over stdio ----------
 
+
 class JsonRpcStdioClient:
     def __init__(self, cmd: list[str]):
         self.proc = subprocess.Popen(
@@ -68,7 +69,9 @@ class JsonRpcStdioClient:
             code = err.get("code", "UNKNOWN")
             msg = err.get("message", "Error")
             details = err.get("data") or err.get("details")
-            raise RuntimeError(f"{method} failed [{code}]: {msg}\nDetails: {json.dumps(details, indent=2)}")
+            raise RuntimeError(
+                f"{method} failed [{code}]: {msg}\nDetails: {json.dumps(details, indent=2)}"
+            )
 
         return resp.get("result")
 
@@ -79,15 +82,19 @@ class JsonRpcStdioClient:
         except Exception:
             pass
 
+
 # ---------- Command handlers ----------
+
 
 def cmd_pubmed_search(client, a):
     res = client.call("pubmed.search", {"term": a.term, "limit": a.limit})
     print(json.dumps(res, indent=2))
 
+
 def cmd_pubmed_get(client, a):
     res = client.call("pubmed.get", {"pmid": a.pmid})
     print(json.dumps(res, indent=2))
+
 
 def cmd_pubmed_sync(client, a):
     params = {"term": a.term}
@@ -98,6 +105,7 @@ def cmd_pubmed_sync(client, a):
     res = client.call("pubmed.sync", params)
     print(json.dumps(res, indent=2))
 
+
 def cmd_pubmed_sync_incremental(client, a):
     params = {"query_key": a.query_key}
     if a.overlap_days is not None:
@@ -105,33 +113,43 @@ def cmd_pubmed_sync_incremental(client, a):
     res = client.call("pubmed.sync.incremental", params)
     print(json.dumps(res, indent=2))
 
+
 def cmd_ckpt_create(client, a):
-    res = client.call("corpus.checkpoint.create", {
-        "checkpoint_id": a.checkpoint_id,
-        "name": a.name,
-        "description": a.description or ""
-    })
+    res = client.call(
+        "corpus.checkpoint.create",
+        {
+            "checkpoint_id": a.checkpoint_id,
+            "name": a.name,
+            "description": a.description or "",
+        },
+    )
     print(json.dumps(res, indent=2))
+
 
 def cmd_ckpt_get(client, a):
     res = client.call("corpus.checkpoint.get", {"checkpoint_id": a.checkpoint_id})
     print(json.dumps(res, indent=2))
 
+
 def cmd_ckpt_list(client, a):
     res = client.call("corpus.checkpoint.list", {})
     print(json.dumps(res, indent=2))
+
 
 def cmd_ckpt_delete(client, a):
     res = client.call("corpus.checkpoint.delete", {"checkpoint_id": a.checkpoint_id})
     print(json.dumps(res, indent=2))
 
+
 def cmd_rag_search(client, a):
     res = client.call("rag.search", {"query": a.query, "top_k": a.top_k})
     print(json.dumps(res, indent=2))
 
+
 def cmd_rag_get(client, a):
     res = client.call("rag.get", {"doc_id": a.doc_id})
     print(json.dumps(res, indent=2))
+
 
 def cmd_raw(client, a):
     # Power-user escape hatch if schemas differ: pass any method/JSON params
@@ -139,7 +157,9 @@ def cmd_raw(client, a):
     res = client.call(a.method, params)
     print(json.dumps(res, indent=2))
 
+
 # ---------- CLI wiring ----------
+
 
 def build_parser():
     p = argparse.ArgumentParser(
@@ -148,7 +168,7 @@ def build_parser():
     p.add_argument(
         "--server-cmd",
         default="python main.py",
-        help="Command to start the MCP server (spawned per invocation)."
+        help="Command to start the MCP server (spawned per invocation).",
     )
 
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -162,13 +182,19 @@ def build_parser():
     s.add_argument("--pmid", required=True)
     s.set_defaults(func=cmd_pubmed_get)
 
-    s = sub.add_parser("pubmed.sync", help="Run a sync (e.g., backfill or ad-hoc refresh)")
-    s.add_argument("--term", required=True, help="PubMed term (use your compiler output)")
+    s = sub.add_parser(
+        "pubmed.sync", help="Run a sync (e.g., backfill or ad-hoc refresh)"
+    )
+    s.add_argument(
+        "--term", required=True, help="PubMed term (use your compiler output)"
+    )
     s.add_argument("--query-key", help="Name for checkpointing this corpus")
     s.add_argument("--overlap-days", type=int, default=5)
     s.set_defaults(func=cmd_pubmed_sync)
 
-    s = sub.add_parser("pubmed.sync.incremental", help="Incremental delta sync using checkpoint")
+    s = sub.add_parser(
+        "pubmed.sync.incremental", help="Incremental delta sync using checkpoint"
+    )
     s.add_argument("--query-key", required=True)
     s.add_argument("--overlap-days", type=int, default=5)
     s.set_defaults(func=cmd_pubmed_sync_incremental)
@@ -207,14 +233,20 @@ def build_parser():
 
     return p
 
+
 def main():
     args = build_parser().parse_args()
-    server_cmd = args.server_cmd if isinstance(args.server_cmd, list) else args.server_cmd.split()
+    server_cmd = (
+        args.server_cmd
+        if isinstance(args.server_cmd, list)
+        else args.server_cmd.split()
+    )
     client = JsonRpcStdioClient(server_cmd)
     try:
         args.func(client, args)
     finally:
         client.close()
+
 
 if __name__ == "__main__":
     main()

@@ -16,7 +16,7 @@ app = create_app()
 def main():
     """Main entrypoint for HTTP server."""
     logger.info("Starting Bio-MCP HTTP server...")
-    
+
     uvicorn.run(
         "bio_mcp.main_http:app",
         host="0.0.0.0",

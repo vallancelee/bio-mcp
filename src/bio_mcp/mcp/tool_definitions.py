@@ -126,7 +126,10 @@ def get_rag_tool_definitions() -> list[Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Search query for biomedical literature"},
+                    "query": {
+                        "type": "string",
+                        "description": "Search query for biomedical literature",
+                    },
                     "top_k": {
                         "type": "integer",
                         "description": "Number of results to return",
@@ -135,32 +138,42 @@ def get_rag_tool_definitions() -> list[Tool]:
                         "maximum": SEARCH_CONFIG.MAX_TOP_K,
                     },
                     "search_mode": {
-                        "type": "string", 
+                        "type": "string",
                         "enum": ["hybrid", "semantic", "bm25"],
                         "description": "Search strategy: 'hybrid' (BM25+vector), 'semantic' (vector only), 'bm25' (keyword only)",
-                        "default": "hybrid"
+                        "default": "hybrid",
                     },
                     "alpha": {
                         "type": "number",
                         "description": "Hybrid search weighting: 0.0=pure BM25 keyword, 1.0=pure vector semantic, 0.5=balanced",
                         "default": 0.5,
                         "minimum": 0.0,
-                        "maximum": 1.0
+                        "maximum": 1.0,
                     },
                     "rerank_by_quality": {
                         "type": "boolean",
                         "description": "Boost results by PubMed quality metrics, journal impact, and investment relevance",
-                        "default": True
+                        "default": True,
                     },
                     "filters": {
                         "type": "object",
                         "description": "Metadata filters for date ranges, journals, etc.",
                         "properties": {
-                            "date_from": {"type": "string", "description": "Filter results from this date (YYYY-MM-DD)"},
-                            "date_to": {"type": "string", "description": "Filter results to this date (YYYY-MM-DD)"},
-                            "journals": {"type": "array", "items": {"type": "string"}, "description": "Filter by specific journals"}
+                            "date_from": {
+                                "type": "string",
+                                "description": "Filter results from this date (YYYY-MM-DD)",
+                            },
+                            "date_to": {
+                                "type": "string",
+                                "description": "Filter results to this date (YYYY-MM-DD)",
+                            },
+                            "journals": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Filter by specific journals",
+                            },
                         },
-                        "additionalProperties": False
+                        "additionalProperties": False,
                     },
                 },
                 "required": ["query"],

@@ -33,7 +33,9 @@ class SearchResult:
         max_display = RESPONSE_CONFIG.MAX_PMIDS_DISPLAY
         pmids_display = ", ".join(self.pmids[:max_display])
         if len(self.pmids) > max_display:
-            pmids_display += RESPONSE_CONFIG.PMIDS_TRUNCATION_SUFFIX.format(total=len(self.pmids))
+            pmids_display += RESPONSE_CONFIG.PMIDS_TRUNCATION_SUFFIX.format(
+                total=len(self.pmids)
+            )
 
         return f"""Search completed for query: "{self.query}"
 
@@ -131,7 +133,9 @@ Execution time: {self.execution_time_ms:.1f}ms"""
             max_display = RESPONSE_CONFIG.MAX_PMIDS_DISPLAY
             failed_display = ", ".join(self.pmids_failed[:max_display])
             if len(self.pmids_failed) > max_display:
-                failed_display += RESPONSE_CONFIG.PMIDS_TRUNCATION_SUFFIX.format(total=len(self.pmids_failed))
+                failed_display += RESPONSE_CONFIG.PMIDS_TRUNCATION_SUFFIX.format(
+                    total=len(self.pmids_failed)
+                )
             result += f"\n\nFailed PMIDs: {failed_display}"
 
         return result
@@ -160,7 +164,7 @@ class PubMedToolsManager:
         """Close all connections and cleanup."""
         if self.orchestrator:
             await self.orchestrator.close()
-        
+
         self.initialized = False
         logger.info("PubMed tools manager closed")
 
@@ -336,7 +340,7 @@ class PubMedToolsManager:
                 execution_time_ms=execution_time,
             )
             raise
-    
+
     async def sync_incremental(self, query: str, limit: int = 100) -> SyncResult:
         """Search PubMed and sync documents incrementally using EDAT watermarks."""
         if not self.initialized:
@@ -347,7 +351,9 @@ class PubMedToolsManager:
 
         try:
             # Use orchestrator for the entire incremental sync process
-            sync_result = await self.orchestrator.sync_documents_incremental(query, limit)
+            sync_result = await self.orchestrator.sync_documents_incremental(
+                query, limit
+            )
             execution_time = (time.time() - start_time) * 1000
 
             result = SyncResult(
@@ -501,9 +507,15 @@ async def pubmed_sync_incremental_tool(
 
     except Exception as e:
         logger.error(
-            "PubMed incremental sync tool error", query=arguments.get("query"), error=str(e)
+            "PubMed incremental sync tool error",
+            query=arguments.get("query"),
+            error=str(e),
         )
-        return [TextContent(type="text", text=f"Error syncing documents incrementally: {e!s}")]
+        return [
+            TextContent(
+                type="text", text=f"Error syncing documents incrementally: {e!s}"
+            )
+        ]
 
 
 def register_pubmed_tools(server) -> None:
