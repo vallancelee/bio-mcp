@@ -91,30 +91,38 @@ class JSONFormatter(logging.Formatter):
         }
 
         # Add extra fields from record
-        for key, value in record.__dict__.items():
-            if key not in [
-                "name",
-                "msg",
-                "args",
-                "created",
-                "filename",
-                "funcName",
-                "levelname",
-                "levelno",
-                "lineno",
-                "module",
-                "msecs",
-                "pathname",
-                "process",
-                "processName",
-                "relativeCreated",
-                "thread",
-                "threadName",
-                "getMessage",
-                "message",
-                "asctime",
-            ]:
-                log_data[key] = value
+        try:
+            for key, value in record.__dict__.items():
+                if key not in [
+                    "name",
+                    "msg",
+                    "args",
+                    "created",
+                    "filename",
+                    "funcName",
+                    "levelname",
+                    "levelno",
+                    "lineno",
+                    "module",
+                    "msecs",
+                    "pathname",
+                    "process",
+                    "processName",
+                    "relativeCreated",
+                    "thread",
+                    "threadName",
+                    "getMessage",
+                    "message",
+                    "asctime",
+                ]:
+                    log_data[key] = value
+        except RuntimeError as e:
+            # Handle "Attempt to overwrite 'name' in LogRecord" errors
+            if "overwrite" in str(e) and "LogRecord" in str(e):
+                # Log a warning but continue processing
+                log_data["logging_error"] = str(e)
+            else:
+                raise
 
         return json.dumps(log_data)
 

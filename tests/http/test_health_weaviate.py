@@ -15,7 +15,7 @@ class TestWeaviateHealthChecker:
     @pytest.fixture
     def weaviate_checker(self):
         """Create Weaviate health checker for testing."""
-        return WeaviateHealthChecker("http://localhost:8080", timeout_seconds=3.0)
+        return WeaviateHealthChecker("http://localhost:18080", timeout_seconds=3.0)  # Use test port
 
     def test_checker_name(self, weaviate_checker):
         """Test health checker name property."""
@@ -27,7 +27,7 @@ class TestWeaviateHealthChecker:
 
     def test_checker_default_timeout(self):
         """Test default timeout configuration."""
-        checker = WeaviateHealthChecker("http://localhost:8080")
+        checker = WeaviateHealthChecker("http://localhost:18080")  # Use test port
         assert checker.timeout_seconds == 5.0
 
     @pytest.mark.asyncio

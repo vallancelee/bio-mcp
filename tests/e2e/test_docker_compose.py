@@ -98,7 +98,7 @@ class TestDockerComposeE2E:
 
         # Test connectivity
         result = subprocess.run(
-            ["curl", "-s", "http://localhost:8080/v1/meta"],
+            ["curl", "-s", "http://localhost:8090/v1/meta"],  # Updated to use new port
             capture_output=True,
             text=True,
             timeout=10,

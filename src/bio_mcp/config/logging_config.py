@@ -60,32 +60,40 @@ class JSONFormatter(logging.Formatter):
 
         # Add extra fields from the log record
         extra_fields = {}
-        for key, value in record.__dict__.items():
-            if key not in {
-                "name",
-                "msg",
-                "args",
-                "levelname",
-                "levelno",
-                "pathname",
-                "filename",
-                "module",
-                "exc_info",
-                "exc_text",
-                "stack_info",
-                "lineno",
-                "funcName",
-                "created",
-                "msecs",
-                "relativeCreated",
-                "thread",
-                "threadName",
-                "processName",
-                "process",
-                "getMessage",
-                "message",
-            }:
-                extra_fields[key] = value
+        try:
+            for key, value in record.__dict__.items():
+                if key not in {
+                    "name",
+                    "msg",
+                    "args",
+                    "levelname",
+                    "levelno",
+                    "pathname",
+                    "filename",
+                    "module",
+                    "exc_info",
+                    "exc_text",
+                    "stack_info",
+                    "lineno",
+                    "funcName",
+                    "created",
+                    "msecs",
+                    "relativeCreated",
+                    "thread",
+                    "threadName",
+                    "processName",
+                    "process",
+                    "getMessage",
+                    "message",
+                }:
+                    extra_fields[key] = value
+        except RuntimeError as e:
+            # Handle "Attempt to overwrite 'name' in LogRecord" errors
+            if "overwrite" in str(e) and "LogRecord" in str(e):
+                # Log a warning but continue processing
+                extra_fields["logging_error"] = str(e)
+            else:
+                raise
 
         if extra_fields:
             log_entry["extra"] = extra_fields

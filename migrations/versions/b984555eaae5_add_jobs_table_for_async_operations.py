@@ -21,18 +21,23 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     """Add jobs table for async operations."""
-    # Create JobStatus enum
-    job_status_enum = postgresql.ENUM(
-        "pending", "running", "completed", "failed", "cancelled", name="jobstatus"
+    # Create JobStatus enum only if it doesn't exist
+    connection = op.get_bind()
+    result = connection.execute(
+        sa.text("SELECT 1 FROM pg_type WHERE typname = 'jobstatus'")
     )
-    job_status_enum.create(op.get_bind(), checkfirst=True)
-
+    if not result.fetchone():
+        job_status_enum = postgresql.ENUM(
+            "pending", "running", "completed", "failed", "cancelled", name="jobstatus"
+        )
+        job_status_enum.create(connection)
+    
     # Create jobs table
     op.create_table(
         "jobs",
         sa.Column("id", sa.UUID(), nullable=False),
         sa.Column("tool_name", sa.String(length=100), nullable=False),
-        sa.Column("status", job_status_enum, nullable=False, server_default="pending"),
+        sa.Column("status", postgresql.ENUM("pending", "running", "completed", "failed", "cancelled", name="jobstatus", create_type=False), nullable=False, server_default="pending"),
         sa.Column("trace_id", sa.String(length=36), nullable=False),
         sa.Column(
             "parameters", postgresql.JSONB(astext_type=sa.Text()), nullable=False
@@ -66,8 +71,20 @@ def downgrade() -> None:
     # Drop table
     op.drop_table("jobs")
 
-    # Drop enum
-    job_status_enum = postgresql.ENUM(
-        "pending", "running", "completed", "failed", "cancelled", name="jobstatus"
+    # Drop enum only if it exists and no other tables are using it
+    connection = op.get_bind()
+    result = connection.execute(
+        sa.text("SELECT 1 FROM pg_type WHERE typname = 'jobstatus'")
     )
-    job_status_enum.drop(op.get_bind(), checkfirst=True)
+    if result.fetchone():
+        # Check if any other tables are using this enum
+        usage_result = connection.execute(
+            sa.text("""
+                SELECT 1 FROM information_schema.columns 
+                WHERE udt_name = 'jobstatus' 
+                LIMIT 1
+            """)
+        )
+        if not usage_result.fetchone():
+            job_status_enum = postgresql.ENUM(name="jobstatus")
+            job_status_enum.drop(connection)

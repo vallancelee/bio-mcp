@@ -332,7 +332,7 @@ class TestSimpleEndToEndWorkflows:
             # Should have some structure (headers, bullets, or formatting)
             has_structure = any(
                 marker in response_text
-                for marker in ["**", "•", "- ", "📄", "✅", "❌", "Query:", "Results:"]
+                for marker in ["**", "•", "- ", "📄", "📋", "✅", "❌", "Query:", "Results:"]
             )
             assert has_structure, (
                 f"Response should have visual structure: {response_text[:200]}"

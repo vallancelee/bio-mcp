@@ -8,9 +8,10 @@ services:
     - '8080'
     - --scheme
     - http
-    image: semitechnologies/weaviate:1.22.4
+    image: semitechnologies/weaviate:1.27.3
     ports:
-    - "8080:8080"
+    - "18080:8080"  # Use port 18080 to avoid conflicts  
+    - "50051:50051" # gRPC port
     restart: on-failure:0
     environment:
       TRANSFORMERS_INFERENCE_API: 'http://t2v-transformers:8080'
@@ -23,6 +24,6 @@ services:
   t2v-transformers:
     image: semitechnologies/transformers-inference:sentence-transformers-all-MiniLM-L6-v2
     ports:
-    - "8081:8080"
+    - "18081:8080"  # Use port 18081 to avoid conflicts
     environment:
       ENABLE_CUDA: '0'

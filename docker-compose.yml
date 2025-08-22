@@ -9,7 +9,7 @@ services:
       - BIO_MCP_SERVER_NAME=bio-mcp-dev
       # Phase 1A: Basic setup with environment defaults
       - DATABASE_URL=sqlite:///data/bio-mcp.db
-      - WEAVIATE_URL=http://weaviate:8080
+      - WEAVIATE_URL=http://weaviate:8080  # Internal container-to-container communication still uses 8080
       # API keys can be set via .env file
       - PUBMED_API_KEY=${PUBMED_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
@@ -26,8 +26,8 @@ services:
     image: semitechnologies/weaviate:1.30.0
     container_name: bio-mcp-weaviate
     ports:
-      - "8080:8080"   # HTTP/REST API
-      - "50051:50051" # gRPC API
+      - "8090:8080"   # HTTP/REST API - use 8090 to avoid conflicts
+      - "50061:50051" # gRPC API - use 50061 to avoid conflicts
     environment:
       QUERY_DEFAULTS_LIMIT: 25
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'

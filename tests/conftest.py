@@ -19,7 +19,7 @@ def test_config():
         build="test-build",
         commit="test-commit",
         database_url="sqlite:///:memory:",
-        weaviate_url="http://localhost:8080",
+        weaviate_url="http://localhost:18080",  # Use test port to avoid conflicts
         pubmed_api_key=None,
         openai_api_key=None,
     )
@@ -56,7 +56,7 @@ def mock_env_with_values():
         "BIO_MCP_BUILD": "test-123",
         "BIO_MCP_COMMIT": "abc123def456",
         "BIO_MCP_DATABASE_URL": "postgresql://test:test@localhost/testdb",
-        "BIO_MCP_WEAVIATE_URL": "http://test-weaviate:8080",
+        "BIO_MCP_WEAVIATE_URL": "http://test-weaviate:18080",  # Use test port
         "BIO_MCP_PUBMED_API_KEY": "test-pubmed-key",
         "BIO_MCP_OPENAI_API_KEY": "test-openai-key",
     }

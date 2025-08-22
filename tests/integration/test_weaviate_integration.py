@@ -125,17 +125,17 @@ def weaviate_container():
     """Provide a Weaviate testcontainer instance with transformers support."""
     from pathlib import Path
 
-    # Get the path to the compose file
-    compose_file = Path(__file__).parent / "docker-compose-weaviate.yml"
+    # Get the path to the compose file (use the MCP integration tests version)
+    compose_file = Path(__file__).parent / "mcp" / "docker-compose-weaviate.yml"
 
     # Use Docker Compose to start Weaviate with transformers
     with DockerCompose(
         str(compose_file.parent), compose_file_name="docker-compose-weaviate.yml"
     ) as compose:
         # Wait for services to be ready
-        weaviate_url = compose.get_service_host("weaviate", 8080)
-        weaviate_port = compose.get_service_port("weaviate", 8080)
-        grpc_port = compose.get_service_port("weaviate", 50051)
+        weaviate_url = compose.get_service_host("weaviate", 8080)  # Use internal port
+        weaviate_port = compose.get_service_port("weaviate", 8080)  # Gets external port
+        grpc_port = compose.get_service_port("weaviate", 50051)  # Get gRPC port
 
         url = f"http://{weaviate_url}:{weaviate_port}"
 

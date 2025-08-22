@@ -3,8 +3,8 @@ services:
   weaviate:
     image: semitechnologies/weaviate:1.30.0
     ports:
-      - "8080:8080"
-      - "50051:50051"
+      - "8090:8080"  # Use non-conflicting port
+      - "50061:50051"  # Use non-conflicting port
     environment:
       QUERY_DEFAULTS_LIMIT: 25
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'

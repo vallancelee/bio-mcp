@@ -96,8 +96,8 @@ class TestPerToolSemaphores:
         from bio_mcp.http.concurrency.manager import ConcurrencyManager
 
         tool_limits = {
-            "rag.search": {"max_concurrent": 2},
-            "pubmed.sync": {"max_concurrent": 1},
+            "rag.search": {"max_concurrent": 2, "timeout_ms": 100},
+            "pubmed.sync": {"max_concurrent": 1, "timeout_ms": 100},
         }
         manager = ConcurrencyManager(tool_limits=tool_limits)
 
@@ -137,7 +137,7 @@ class TestPerToolSemaphores:
         """Test semaphore release on success and failure."""
         from bio_mcp.http.concurrency.manager import ConcurrencyManager
 
-        manager = ConcurrencyManager(tool_limits={"test.tool": {"max_concurrent": 1}})
+        manager = ConcurrencyManager(tool_limits={"test.tool": {"max_concurrent": 1, "timeout_ms": 100}})
 
         # Test successful release
         async with manager.acquire_tool("test.tool"):
@@ -202,7 +202,7 @@ class TestCircuitBreaker:
         breaker = CircuitBreaker(
             failure_threshold=0.5,  # 50% error rate
             min_requests=4,
-            timeout_ms=60000,
+            timeout_ms=100,  # Short timeout for testing
         )
 
         # Generate failures to trip circuit
@@ -283,8 +283,8 @@ class TestBackPressureIntegration:
         from bio_mcp.http.concurrency.manager import ConcurrencyManager
 
         tool_limits = {
-            "fast.tool": {"max_concurrent": 5, "priority": 1},
-            "slow.tool": {"max_concurrent": 2, "priority": 2},
+            "fast.tool": {"max_concurrent": 5, "priority": 1, "timeout_ms": 100},
+            "slow.tool": {"max_concurrent": 2, "priority": 2, "timeout_ms": 100},
         }
         manager = ConcurrencyManager(max_concurrent_total=4, tool_limits=tool_limits)
 

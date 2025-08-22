@@ -10,7 +10,7 @@ from pytest_alembic import Config
 from testcontainers.postgres import PostgresContainer
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def postgres_container():
     """Start a PostgreSQL container for testing."""
     with PostgresContainer("postgres:15") as postgres:

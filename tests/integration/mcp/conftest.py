@@ -23,6 +23,7 @@ from bio_mcp.services.services import (
 from bio_mcp.shared.clients.database import DatabaseManager
 
 # Import shared fixtures directly
+from tests.integration.database.conftest import postgres_container, db_manager, clean_db
 
 
 @pytest.fixture(scope="session")
@@ -38,11 +39,11 @@ def weaviate_service():
         str(current_dir), compose_file_name="docker-compose-weaviate.yml"
     ) as compose:
         # Wait for services to be ready
-        weaviate_url = compose.get_service_host("weaviate", 8080)
-        weaviate_port = compose.get_service_port("weaviate", 8080)
+        weaviate_url = compose.get_service_host("weaviate", 18080)
+        weaviate_port = compose.get_service_port("weaviate", 18080)
 
-        transformers_url = compose.get_service_host("t2v-transformers", 8080)
-        transformers_port = compose.get_service_port("t2v-transformers", 8080)
+        transformers_url = compose.get_service_host("t2v-transformers", 18081)
+        transformers_port = compose.get_service_port("t2v-transformers", 18081)
 
         # Wait for both services to be ready
         import time
@@ -170,7 +171,7 @@ async def setup_test_services_config(postgres_container, request):
     original_vars = {}
     test_vars = {
         "BIO_MCP_DATABASE_URL": async_url,
-        "BIO_MCP_WEAVIATE_URL": "http://localhost:8080",  # Default URL for non-Weaviate tests
+        "BIO_MCP_WEAVIATE_URL": "http://localhost:18080",  # Use non-conflicting port for tests
         "BIO_MCP_OPENAI_API_KEY": "test_key",  # Still using fake key for OpenAI
     }
 
