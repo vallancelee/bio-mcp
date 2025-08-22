@@ -310,14 +310,15 @@ class TestSimpleEndToEndWorkflows:
         """Test that responses are human-readable and helpful."""
 
         # Test with reasonable inputs that should produce useful responses
+        # Use format: "human" to get human-readable responses
         test_scenarios = [
             (
                 rag_search_tool,
                 "rag.search",
-                {"query": "glioblastoma treatment", "top_k": 3},
+                {"query": "glioblastoma treatment", "top_k": 3, "format": "human"},
             ),
-            (rag_get_tool, "rag.get", {"doc_id": "12345678"}),
-            (corpus_checkpoint_list_tool, "corpus.checkpoint.list", {"limit": 5}),
+            (rag_get_tool, "rag.get", {"doc_id": "12345678", "format": "human"}),
+            (corpus_checkpoint_list_tool, "corpus.checkpoint.list", {"limit": 5, "format": "human"}),
         ]
 
         for tool_func, tool_name, params in test_scenarios:

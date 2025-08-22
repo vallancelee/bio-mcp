@@ -42,22 +42,39 @@ class TestCorpusToolsIntegrationSimplified:
         self.validator.validate_text_content(result[0])
 
         response_text = result[0].text
-        assert "✅" in response_text or "successfully" in response_text.lower()
-        assert "integration_test_checkpoint" in response_text
-        assert "Integration Test Checkpoint" in response_text
-        assert "ms" in response_text  # Execution time
+        
+        # Should return successful JSON response  
+        import json
+        assert "```json" in response_text
+        json_data = json.loads(response_text.split("```json\n")[1].split("\n```")[0])
+        
+        assert json_data["success"] is True
+        assert json_data["operation"] == "corpus.checkpoint.create"
+        assert json_data["data"]["checkpoint_id"] == "integration_test_checkpoint"
+        assert json_data["data"]["name"] == "Integration Test Checkpoint"
+        assert "execution_time_ms" in json_data["metadata"]
 
     @pytest.mark.asyncio
     async def test_checkpoint_create_validation_errors(self):
         """Test argument validation failures."""
+        import json
+        
         # Test missing checkpoint_id
         result = await corpus_checkpoint_create_tool(
             "corpus.checkpoint.create", {"name": "Test Checkpoint"}
         )
 
         assert len(result) == 1
-        assert "❌" in result[0].text
-        assert "checkpoint_id" in result[0].text.lower()
+        response_text = result[0].text
+        
+        # Should return JSON error format
+        assert "```json" in response_text
+        json_data = json.loads(response_text.split("```json\n")[1].split("\n```")[0])
+        
+        assert json_data["success"] is False
+        assert json_data["operation"] == "corpus.checkpoint.create"
+        assert json_data["error"]["code"] == "MISSING_PARAMETER"
+        assert "checkpoint_id" in json_data["error"]["message"].lower()
 
         # Test missing name
         result = await corpus_checkpoint_create_tool(
@@ -65,8 +82,16 @@ class TestCorpusToolsIntegrationSimplified:
         )
 
         assert len(result) == 1
-        assert "❌" in result[0].text
-        assert "name" in result[0].text.lower()
+        response_text = result[0].text
+        
+        # Should return JSON error format
+        assert "```json" in response_text
+        json_data = json.loads(response_text.split("```json\n")[1].split("\n```")[0])
+        
+        assert json_data["success"] is False
+        assert json_data["operation"] == "corpus.checkpoint.create"
+        assert json_data["error"]["code"] == "MISSING_PARAMETER"
+        assert "name" in json_data["error"]["message"].lower()
 
     @pytest.mark.asyncio
     async def test_checkpoint_get_success(self, sample_checkpoint):
@@ -79,9 +104,22 @@ class TestCorpusToolsIntegrationSimplified:
         self.validator.validate_text_content(result[0])
 
         response_text = result[0].text
-        assert sample_checkpoint in response_text
-        assert "Test Checkpoint" in response_text  # Name from fixture
-        assert "ms" in response_text
+        
+        # Should return JSON response
+        if "```json" in response_text:
+            import json
+            json_data = json.loads(response_text.split("```json\n")[1].split("\n```")[0])
+            
+            assert json_data["success"] is True
+            assert json_data["operation"] == "corpus.checkpoint.get"
+            assert json_data["data"]["checkpoint_id"] == sample_checkpoint
+            assert "Test Checkpoint" in json_data["data"].get("name", "")
+            assert "execution_time_ms" in json_data["metadata"]
+        else:
+            # Fallback to text validation for backward compatibility
+            assert sample_checkpoint in response_text
+            assert "Test Checkpoint" in response_text  # Name from fixture
+            assert "ms" in response_text
 
     @pytest.mark.asyncio
     async def test_checkpoint_get_not_found(self):
@@ -92,7 +130,19 @@ class TestCorpusToolsIntegrationSimplified:
 
         assert len(result) == 1
         response_text = result[0].text
-        assert "❌" in response_text or "not found" in response_text.lower()
+        
+        # Should return JSON error response
+        if "```json" in response_text:
+            import json
+            json_data = json.loads(response_text.split("```json\n")[1].split("\n```")[0])
+            
+            assert json_data["success"] is False
+            assert json_data["operation"] == "corpus.checkpoint.get"
+            assert json_data["error"]["code"] == "NOT_FOUND"
+            assert "nonexistent_checkpoint_12345" in json_data["error"]["message"]
+        else:
+            # Fallback to text validation
+            assert "❌" in response_text or "not found" in response_text.lower()
 
     @pytest.mark.asyncio
     async def test_checkpoint_get_validation_errors(self):
@@ -100,8 +150,21 @@ class TestCorpusToolsIntegrationSimplified:
         result = await corpus_checkpoint_get_tool("corpus.checkpoint.get", {})
 
         assert len(result) == 1
-        assert "❌" in result[0].text
-        assert "checkpoint_id" in result[0].text.lower()
+        response_text = result[0].text
+        
+        # Should return JSON error response
+        if "```json" in response_text:
+            import json
+            json_data = json.loads(response_text.split("```json\n")[1].split("\n```")[0])
+            
+            assert json_data["success"] is False
+            assert json_data["operation"] == "corpus.checkpoint.get"
+            assert json_data["error"]["code"] == "MISSING_PARAMETER"
+            assert "checkpoint_id" in json_data["error"]["message"].lower()
+        else:
+            # Fallback to text validation
+            assert "❌" in response_text
+            assert "checkpoint_id" in response_text.lower()
 
     @pytest.mark.asyncio
     async def test_checkpoint_list_success(self, sample_checkpoint):
@@ -114,9 +177,21 @@ class TestCorpusToolsIntegrationSimplified:
         self.validator.validate_text_content(result[0])
 
         response_text = result[0].text
+        
+        # Should return successful JSON response
+        import json
+        assert "```json" in response_text
+        json_data = json.loads(response_text.split("```json\n")[1].split("\n```")[0])
+        
+        assert json_data["success"] is True
+        assert json_data["operation"] == "corpus.checkpoint.list"
+        assert "checkpoints" in json_data["data"]
+        assert "execution_time_ms" in json_data["metadata"]
+        
         # Should contain our sample checkpoint
-        assert sample_checkpoint in response_text or "Test Checkpoint" in response_text
-        assert "ms" in response_text
+        checkpoints = json_data["data"]["checkpoints"]
+        checkpoint_ids = [cp.get("checkpoint_id", "") for cp in checkpoints]
+        assert sample_checkpoint in checkpoint_ids or any("Test Checkpoint" in str(cp) for cp in checkpoints)
 
     @pytest.mark.asyncio
     async def test_checkpoint_list_empty(self, clean_db):
@@ -132,6 +207,8 @@ class TestCorpusToolsIntegrationSimplified:
     @pytest.mark.asyncio
     async def test_checkpoint_delete_success(self, sample_documents):
         """Test successful checkpoint deletion."""
+        import json
+        
         # First create a checkpoint to delete
         create_result = await corpus_checkpoint_create_tool(
             "corpus.checkpoint.create",
@@ -141,7 +218,12 @@ class TestCorpusToolsIntegrationSimplified:
                 "description": "Will be deleted in test",
             },
         )
-        assert "✅" in create_result[0].text
+        
+        # Verify create was successful (JSON format)
+        create_text = create_result[0].text
+        assert "```json" in create_text
+        create_json = json.loads(create_text.split("```json\n")[1].split("\n```")[0])
+        assert create_json["success"] is True
 
         # Now delete it
         result = await corpus_checkpoint_delete_tool(
@@ -150,9 +232,16 @@ class TestCorpusToolsIntegrationSimplified:
 
         assert len(result) == 1
         response_text = result[0].text
-        assert "✅" in response_text or "deleted" in response_text.lower()
-        assert "delete_test_checkpoint" in response_text
-        assert "ms" in response_text
+        
+        # Should return successful JSON response
+        assert "```json" in response_text
+        json_data = json.loads(response_text.split("```json\n")[1].split("\n```")[0])
+        
+        assert json_data["success"] is True
+        assert json_data["operation"] == "corpus.checkpoint.delete"
+        assert json_data["data"]["checkpoint_id"] == "delete_test_checkpoint"
+        assert json_data["data"]["deleted"] is True
+        assert "execution_time_ms" in json_data["metadata"]
 
     @pytest.mark.asyncio
     async def test_checkpoint_delete_not_found(self):
@@ -171,8 +260,17 @@ class TestCorpusToolsIntegrationSimplified:
         result = await corpus_checkpoint_delete_tool("corpus.checkpoint.delete", {})
 
         assert len(result) == 1
-        assert "❌" in result[0].text
-        assert "checkpoint_id" in result[0].text.lower()
+        response_text = result[0].text
+        
+        # Should return JSON error format
+        import json
+        assert "```json" in response_text
+        json_data = json.loads(response_text.split("```json\n")[1].split("\n```")[0])
+        
+        assert json_data["success"] is False
+        assert json_data["operation"] == "corpus.checkpoint.delete"
+        assert json_data["error"]["code"] == "MISSING_PARAMETER"
+        assert "checkpoint_id" in json_data["error"]["message"].lower()
 
     @pytest.mark.asyncio
     async def test_checkpoint_workflow_end_to_end(self, sample_documents):
@@ -188,30 +286,55 @@ class TestCorpusToolsIntegrationSimplified:
                 "description": "End-to-end workflow test",
             },
         )
-        assert "✅" in create_result[0].text
-        assert checkpoint_id in create_result[0].text
+        
+        # Verify create success (JSON format)
+        import json
+        create_text = create_result[0].text
+        assert "```json" in create_text
+        create_json = json.loads(create_text.split("```json\n")[1].split("\n```")[0])
+        assert create_json["success"] is True
+        assert create_json["data"]["checkpoint_id"] == checkpoint_id
 
-        # 2. Get checkpoint
+        # 2. Get checkpoint - JSON format
         get_result = await corpus_checkpoint_get_tool(
             "corpus.checkpoint.get", {"checkpoint_id": checkpoint_id}
         )
-        assert checkpoint_id in get_result[0].text
-        assert "Workflow Test Checkpoint" in get_result[0].text
+        get_text = get_result[0].text
+        if "```json" in get_text:
+            get_json = json.loads(get_text.split("```json\n")[1].split("\n```")[0])
+            assert get_json["success"] is True
+            assert get_json["data"]["checkpoint_id"] == checkpoint_id
+            assert "Workflow Test Checkpoint" in get_json["data"].get("name", "")
+        else:
+            # Fallback to text search
+            assert checkpoint_id in get_text
+            assert "Workflow Test Checkpoint" in get_text
 
-        # 3. List checkpoints (should include our new one)
+        # 3. List checkpoints (should include our new one) - JSON format
         list_result = await corpus_checkpoint_list_tool("corpus.checkpoint.list", {})
-        assert (
-            checkpoint_id in list_result[0].text
-            or "Workflow Test Checkpoint" in list_result[0].text
-        )
+        list_text = list_result[0].text
+        if "```json" in list_text:
+            list_json = json.loads(list_text.split("```json\n")[1].split("\n```")[0])
+            assert list_json["success"] is True
+            checkpoint_ids = [cp.get("checkpoint_id", "") for cp in list_json["data"]["checkpoints"]]
+            assert checkpoint_id in checkpoint_ids or "Workflow Test Checkpoint" in list_text
+        else:
+            # Fallback to text search
+            assert checkpoint_id in list_text or "Workflow Test Checkpoint" in list_text
 
-        # 4. Delete checkpoint
+        # 4. Delete checkpoint - JSON format
         delete_result = await corpus_checkpoint_delete_tool(
             "corpus.checkpoint.delete", {"checkpoint_id": checkpoint_id}
         )
-        assert (
-            "✅" in delete_result[0].text or "deleted" in delete_result[0].text.lower()
-        )
+        delete_text = delete_result[0].text
+        if "```json" in delete_text:
+            delete_json = json.loads(delete_text.split("```json\n")[1].split("\n```")[0])
+            assert delete_json["success"] is True
+            assert delete_json["data"]["checkpoint_id"] == checkpoint_id
+            assert delete_json["data"]["deleted"] is True
+        else:
+            # Fallback to text search
+            assert "✅" in delete_text or "deleted" in delete_text.lower()
 
         # 5. Verify deletion - get should now fail
         verify_result = await corpus_checkpoint_get_tool(

@@ -126,16 +126,25 @@ class TestDocumentModelCompatibility:
                 json_str = response_text[json_start:json_end].strip()
                 response_data = json.loads(json_str)
                 
-                # Must have results field per contract
-                assert "results" in response_data
-                assert isinstance(response_data["results"], list)
+                # Must have MCP envelope structure
+                assert "success" in response_data
+                assert "operation" in response_data
+                assert "metadata" in response_data
                 
-                # Each result must have required fields
-                for result_item in response_data["results"]:
-                    assert "doc_id" in result_item
-                    assert "uuid" in result_item
-                    assert "score" in result_item
-                    assert result_item["doc_id"].startswith("pmid:")
+                # For successful responses, check data structure
+                if response_data.get("success"):
+                    assert "data" in response_data
+                    data = response_data["data"]
+                    assert "results" in data
+                    assert isinstance(data["results"], list)
+                    
+                    # Each result must have required fields
+                    for result_item in data["results"]:
+                        assert "uuid" in result_item
+                        assert "pmid" in result_item
+                        assert "score" in result_item
+                        # pmid should be numeric string
+                        assert result_item["pmid"].isdigit()
                     
             except json.JSONDecodeError:
                 pass  # Not JSON format is also valid

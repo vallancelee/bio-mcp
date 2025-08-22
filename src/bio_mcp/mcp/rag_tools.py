@@ -16,6 +16,13 @@ from mcp.types import TextContent
 
 from bio_mcp.config.logging_config import get_logger
 from bio_mcp.config.search_config import RESPONSE_CONFIG, SEARCH_CONFIG
+from bio_mcp.mcp.response_builder import (
+    MCPResponseBuilder,
+    ErrorCodes,
+    get_format_preference,
+    format_rag_search_human,
+    format_rag_get_human
+)
 from bio_mcp.shared.clients.database import get_database_manager
 from bio_mcp.shared.clients.weaviate_client import get_weaviate_client
 from bio_mcp.sources.pubmed.quality import JournalQualityScorer
@@ -249,7 +256,19 @@ async def rag_search_tool(
     Returns:
         Formatted search results with hybrid scoring
     """
+    # Initialize response builder
+    builder = MCPResponseBuilder("rag.search")
+    format_type = get_format_preference(arguments)
+
+    # Extract and validate parameters
     query = arguments.get("query", "").strip()
+    if not query:
+        return builder.error(
+            ErrorCodes.MISSING_PARAMETER,
+            "Query parameter is required",
+            format_type=format_type
+        )
+
     top_k = min(
         max(
             arguments.get("top_k", SEARCH_CONFIG.DEFAULT_TOP_K), SEARCH_CONFIG.MIN_TOP_K
@@ -268,9 +287,6 @@ async def rag_search_tool(
     valid_modes = ["hybrid", "semantic", "bm25"]
     if search_mode not in valid_modes:
         search_mode = "hybrid"  # Default fallback
-
-    if not query:
-        return [TextContent(type="text", text="❌ Error: Query parameter is required")]
 
     logger.info(
         "RAG hybrid search tool called",
@@ -291,107 +307,66 @@ async def rag_search_tool(
             alpha=alpha,
         )
 
-        if result.total_results == 0:
-            response_text = f"""🔍 **Hybrid RAG Search Results**
+        # Format results for JSON response
+        formatted_results = []
+        for doc in result.documents:
+            formatted_result = {
+                "uuid": doc["uuid"],
+                "pmid": doc.get("pmid", ""),
+                "title": doc.get("title", ""),
+                "abstract": doc.get("abstract", ""),
+                "journal": doc.get("journal", ""),
+                "publication_date": doc.get("publication_date", ""),
+                "score": doc.get("score", 0.0),
+                "content": doc.get("content", "")
+            }
+            
+            # Add optional fields if present
+            if "boosted_score" in doc:
+                formatted_result["boosted_score"] = doc["boosted_score"]
+            if "quality_boost" in doc:
+                formatted_result["quality_boost"] = doc["quality_boost"]
+            if "distance" in doc:
+                formatted_result["distance"] = doc["distance"]
+            if "explain_score" in doc:
+                formatted_result["explain_score"] = doc["explain_score"]
+            
+            formatted_results.append(formatted_result)
 
-**Query:** {query}
-**Search Mode:** {result.search_type.title()}
-**Results:** No documents found
+        # Build response data
+        response_data = {
+            "query": query,
+            "search_mode": result.search_type,
+            "total_results": result.total_results,
+            "results": formatted_results,
+            "parameters": {
+                "top_k": top_k,
+                "alpha": alpha,
+                "quality_bias": rerank_by_quality,
+                "filters": filters
+            }
+        }
 
-Try different keywords, search modes ('hybrid', 'semantic', 'bm25'), or check if documents have been synced to the corpus."""
-        else:
-            # Format results with enhanced information
-            results_text = []
-            for i, doc in enumerate(result.documents, 1):
-                # Enhanced score display
-                score_text = f"Score: {doc['score']:.3f}"
-                if (
-                    "boosted_score" in doc
-                    and abs(doc["boosted_score"] - doc["score"]) > 0.001
-                ):
-                    boost_pct = (
-                        ((doc["boosted_score"] / doc["score"]) - 1) * 100
-                        if doc["score"] > 0
-                        else 0
-                    )
-                    score_text += f" → {doc['boosted_score']:.3f} (+{boost_pct:.1f}%)"
+        # Add performance data if available
+        if result.performance:
+            response_data["performance"] = result.performance
 
-                # Add search mode context
-                mode_indicator = {"hybrid": "🔀", "semantic": "🧠", "bm25": "🔎"}.get(
-                    result.search_type, "📄"
-                )
-
-                doc_text = f"""**{i}. {doc["title"]}**
-{mode_indicator} PMID: {doc["pmid"]} | {score_text}
-📰 Journal: {doc["journal"]} | 📅 Date: {doc["publication_date"]}
-
-{doc["content"]}
-
----"""
-                results_text.append(doc_text)
-
-            # Add search statistics
-            mode_description = {
-                "hybrid": f"Hybrid (BM25 + Vector, alpha={alpha:.1f})",
-                "semantic": "Semantic (Vector Only)",
-                "bm25": "Keyword (BM25 Only)",
-            }.get(result.search_type, result.search_type.title())
-
-            quality_note = (
-                "Quality boosting: ON" if rerank_by_quality else "Quality boosting: OFF"
-            )
-
-            # Add performance information
-            performance_info = ""
-            if result.performance:
-                total_ms = result.performance["total_time_ms"]
-                target_ms = result.performance["target_time_ms"]
-                performance_status = "✅" if total_ms <= target_ms else "⚠️"
-                performance_info = f"**{performance_status} Performance:** {total_ms:.1f}ms (target: {target_ms:.0f}ms)\n"
-
-            # Add filter information if any
-            filter_info = ""
-            if filters:
-                filter_parts = []
-                if filters.get("date_from") or filters.get("date_to"):
-                    date_from = filters.get("date_from", "")
-                    date_to = filters.get("date_to", "")
-                    if date_from and date_to:
-                        filter_parts.append(f"Date: {date_from} to {date_to}")
-                    elif date_from:
-                        filter_parts.append(f"Date: from {date_from}")
-                    elif date_to:
-                        filter_parts.append(f"Date: until {date_to}")
-                if filters.get("journals"):
-                    journals = filters["journals"]
-                    if len(journals) <= 3:
-                        filter_parts.append(f"Journals: {', '.join(journals)}")
-                    else:
-                        filter_parts.append(
-                            f"Journals: {', '.join(journals[:3])} +{len(journals) - 3} more"
-                        )
-
-                if filter_parts:
-                    filter_info = f"**Filters:** {' | '.join(filter_parts)}\n"
-
-            response_text = f"""🔍 **Hybrid RAG Search Results**
-
-**Query:** {query}
-**Search Mode:** {mode_description}
-**{quality_note}**
-{performance_info}{filter_info}**Results:** {result.total_results} documents found
-
-{chr(10).join(results_text)}"""
-
-        return [TextContent(type="text", text=response_text)]
+        return builder.success(
+            data=response_data,
+            format_type=format_type,
+            human_formatter=format_rag_search_human
+        )
 
     except Exception as e:
         logger.error(
             "RAG hybrid search tool failed", query=query, mode=search_mode, error=str(e)
         )
-        return [
-            TextContent(type="text", text=f"❌ Error during hybrid RAG search: {e!s}")
-        ]
+        return builder.error(
+            ErrorCodes.OPERATION_FAILED,
+            f"RAG search failed: {str(e)}",
+            details={"query": query, "search_mode": search_mode},
+            format_type=format_type
+        )
 
 
 async def rag_get_tool(name: str, arguments: dict[str, Any]) -> Sequence[TextContent]:
@@ -400,14 +375,23 @@ async def rag_get_tool(name: str, arguments: dict[str, Any]) -> Sequence[TextCon
 
     Args:
         doc_id: Document ID to retrieve (PMID or UUID)
+        format: Response format ('json' or 'human', default: 'json')
 
     Returns:
-        Document details
+        Document details in JSON format
     """
+    # Initialize response builder
+    builder = MCPResponseBuilder("rag.get")
+    format_type = get_format_preference(arguments)
+    
     doc_id = arguments.get("doc_id", "").strip()
 
     if not doc_id:
-        return [TextContent(type="text", text="❌ Error: doc_id parameter is required")]
+        return builder.error(
+            ErrorCodes.MISSING_PARAMETER,
+            "doc_id parameter is required",
+            format_type=format_type
+        )
 
     logger.info("RAG get tool called", doc_id=doc_id)
 
@@ -416,32 +400,62 @@ async def rag_get_tool(name: str, arguments: dict[str, Any]) -> Sequence[TextCon
         result = await manager.get_document(doc_id, include_chunks=True)
 
         if not result.found:
-            response_text = f"""📄 **Document Not Found**
+            return builder.error(
+                ErrorCodes.NOT_FOUND,
+                f"Document not found: {doc_id}",
+                details="The document may not be synced to the corpus yet",
+                format_type=format_type
+            )
 
-**Document ID:** {doc_id}
+        doc = result.document
+        
+        # Format document for JSON response
+        document_data = {
+            "doc_id": doc_id,
+            "document": {
+                "uuid": doc["uuid"],
+                "pmid": doc.get("pmid", ""),
+                "title": doc.get("title", ""),
+                "abstract": doc.get("abstract", ""),
+                "journal": doc.get("journal", ""),
+                "publication_date": doc.get("publication_date", ""),
+                "doi": doc.get("doi"),
+                "authors": doc.get("authors", []),
+                "keywords": doc.get("keywords", []),
+                "pub_types": doc.get("pub_types", []),
+                "quality": doc.get("quality"),
+            }
+        }
 
-The requested document was not found in the RAG corpus.
-Make sure the document has been synced using the pubmed.sync tool."""
-        else:
-            doc = result.document
-            response_text = f"""📄 **Document Details**
+        # Add optional fields if present
+        if "mesh_terms" in doc:
+            document_data["document"]["mesh_terms"] = doc["mesh_terms"]
+        if "edat" in doc:
+            document_data["document"]["entry_date"] = doc["edat"]
+        if "lr" in doc:
+            document_data["document"]["last_revision"] = doc["lr"]
+        if result.chunks:
+            document_data["chunks"] = [
+                {
+                    "chunk_id": chunk["chunk_id"],
+                    "text": chunk.get("text", ""),
+                    "section": chunk.get("section", ""),
+                    "tokens": chunk.get("tokens", 0)
+                }
+                for chunk in result.chunks
+            ]
 
-**Title:** {doc["title"]}
-**PMID:** {doc["pmid"]}
-**Journal:** {doc["journal"]}
-**Publication Date:** {doc["publication_date"]}
-**DOI:** {doc.get("doi", "N/A")}
-
-**Abstract:**
-{doc["abstract"]}
-
-**Keywords:** {", ".join(doc.get("keywords", []))}
-**Authors:** {", ".join(doc.get("authors", []))}
-
-**Vector Database UUID:** {doc["uuid"]}"""
-
-        return [TextContent(type="text", text=response_text)]
+        return builder.success(
+            data=document_data,
+            format_type=format_type,
+            human_formatter=format_rag_get_human
+        )
 
     except Exception as e:
         logger.error("RAG get tool failed", doc_id=doc_id, error=str(e))
-        return [TextContent(type="text", text=f"❌ Error retrieving document: {e!s}")]
+        return builder.error(
+            ErrorCodes.OPERATION_FAILED,
+            f"Failed to retrieve document: {str(e)}",
+            details={"doc_id": doc_id},
+            format_type=format_type
+        )

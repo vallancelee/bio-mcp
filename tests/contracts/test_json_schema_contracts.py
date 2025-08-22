@@ -20,44 +20,70 @@ class TestJSONSchemaContracts:
         """JSON schema for rag.search response per contracts.md."""
         return {
             "type": "object",
-            "required": ["results"],
+            "required": ["success", "operation", "data", "metadata"],
             "properties": {
-                "results": {
-                    "type": "array",
-                    "description": "Search results ordered by relevance score",
-                    "items": {
-                        "type": "object",
-                        "required": ["doc_id", "uuid", "score"],
-                        "properties": {
-                            "doc_id": { 
-                                "type": "string", 
-                                "pattern": "^pmid:[0-9]+$",
-                                "description": "Stable document identifier for lookup"
-                            },
-                            "uuid": { 
-                                "type": "string", 
-                                "minLength": 10,
-                                "description": "Unique chunk identifier"
-                            },
-                            "sim": { 
-                                "type": ["number", "null"],
-                                "description": "Semantic similarity score"
-                            },
-                            "bm25": { 
-                                "type": ["number", "null"],
-                                "description": "BM25 relevance score"
-                            },
-                            "quality": { 
-                                "type": ["number", "null"],
-                                "description": "Document quality score"
-                            },
-                            "score": { 
-                                "type": "number",
-                                "description": "Final combined relevance score"
+                "success": {
+                    "type": "boolean",
+                    "description": "Whether the operation succeeded"
+                },
+                "operation": {
+                    "type": "string",
+                    "enum": ["rag.search"],
+                    "description": "Operation identifier"
+                },
+                "data": {
+                    "type": "object",
+                    "required": ["results"],
+                    "properties": {
+                        "results": {
+                            "type": "array",
+                            "description": "Search results ordered by relevance score",
+                            "items": {
+                                "type": "object",
+                                "required": ["uuid", "pmid", "title", "score"],
+                                "properties": {
+                                    "uuid": { 
+                                        "type": "string", 
+                                        "minLength": 10,
+                                        "description": "Unique chunk identifier"
+                                    },
+                                    "pmid": { 
+                                        "type": "string",
+                                        "description": "PubMed ID"
+                                    },
+                                    "title": { 
+                                        "type": "string",
+                                        "description": "Document title"
+                                    },
+                                    "score": { 
+                                        "type": "number",
+                                        "description": "Final combined relevance score"
+                                    }
+                                },
+                                "additionalProperties": True  # Allow additional fields
                             }
+                        }
+                    },
+                    "additionalProperties": True
+                },
+                "metadata": {
+                    "type": "object",
+                    "required": ["execution_time_ms", "timestamp", "version"],
+                    "properties": {
+                        "execution_time_ms": {
+                            "type": "number",
+                            "description": "Execution time in milliseconds"
                         },
-                        "additionalProperties": False
-                    }
+                        "timestamp": {
+                            "type": "string",
+                            "description": "ISO8601 timestamp"
+                        },
+                        "version": {
+                            "type": "string",
+                            "description": "API version"
+                        }
+                    },
+                    "additionalProperties": False
                 }
             },
             "additionalProperties": False
@@ -68,79 +94,55 @@ class TestJSONSchemaContracts:
         """JSON schema for rag.get response per contracts.md."""
         return {
             "type": "object",
-            "required": ["doc_id", "title", "journal", "pub_types", "quality", "version"],
+            "required": ["success", "operation", "metadata"],
             "properties": {
-                "doc_id": { 
+                "success": {
+                    "type": "boolean",
+                    "description": "Whether the operation succeeded"
+                },
+                "operation": {
                     "type": "string",
-                    "description": "PubMed document identifier"
+                    "enum": ["rag.get"],
+                    "description": "Operation identifier"
                 },
-                "title": { 
-                    "type": ["string", "null"],
-                    "description": "Article title"
-                },
-                "abstract": { 
-                    "type": ["string", "null"],
-                    "description": "Article abstract text"
-                },
-                "journal": { 
-                    "type": ["string", "null"],
-                    "description": "Journal name"
-                },
-                "pub_types": { 
-                    "type": "array", 
-                    "items": {"type": "string"},
-                    "description": "Publication types (e.g., 'Randomized Controlled Trial')"
-                },
-                "pdat": { 
-                    "type": ["string", "null"],
-                    "description": "Publication date (YYYY-MM-DD)"
-                },
-                "edat": { 
-                    "type": ["string", "null"],
-                    "description": "Entrez date (ISO8601 UTC)"
-                },
-                "lr": { 
-                    "type": ["string", "null"],
-                    "description": "Last revision date (ISO8601 UTC)"
-                },
-                "pmcid": { 
-                    "type": ["string", "null"],
-                    "description": "PubMed Central ID"
-                },
-                "quality": {
+                "data": {
                     "type": "object",
-                    "required": ["total"],
-                    "description": "Quality scoring breakdown",
+                    "additionalProperties": True  # Allow flexible document structure
+                },
+                "error": {
+                    "type": "object",
+                    "required": ["code", "message"],
                     "properties": {
-                        "design": { 
-                            "type": ["integer", "null"],
-                            "description": "Study design quality score"
-                        },
-                        "recency": { 
-                            "type": ["integer", "null"],
-                            "description": "Publication recency score"
-                        },
-                        "journal": { 
-                            "type": ["integer", "null"],
-                            "description": "Journal impact score"
-                        },
-                        "human": { 
-                            "type": ["integer", "null"],
-                            "description": "Human studies relevance score"
-                        },
-                        "total": { 
-                            "type": "integer",
-                            "description": "Combined quality score"
-                        }
+                        "code": {"type": "string"},
+                        "message": {"type": "string"},
+                        "details": {"type": ["object", "array", "string", "null"]}
                     },
                     "additionalProperties": False
                 },
-                "version": { 
-                    "type": "integer", 
-                    "minimum": 1,
-                    "description": "Document version number"
+                "metadata": {
+                    "type": "object",
+                    "required": ["execution_time_ms", "timestamp", "version"],
+                    "properties": {
+                        "execution_time_ms": {
+                            "type": "number",
+                            "description": "Execution time in milliseconds"
+                        },
+                        "timestamp": {
+                            "type": "string",
+                            "description": "ISO8601 timestamp"
+                        },
+                        "version": {
+                            "type": "string",
+                            "description": "API version"
+                        }
+                    },
+                    "additionalProperties": False
                 }
             },
+            "anyOf": [
+                {"required": ["success", "operation", "data", "metadata"]},
+                {"required": ["success", "operation", "error", "metadata"]}
+            ],
             "additionalProperties": False
         }
 
@@ -149,17 +151,55 @@ class TestJSONSchemaContracts:
         """JSON schema for corpus.checkpoint.get response."""
         return {
             "type": "object",
-            "required": ["query_key"],
+            "required": ["success", "operation", "metadata"],
             "properties": {
-                "query_key": { 
-                    "type": "string",
-                    "description": "Query identifier"
+                "success": {
+                    "type": "boolean",
+                    "description": "Whether the operation succeeded"
                 },
-                "last_edat": { 
-                    "type": ["string", "null"], 
-                    "description": "Last processed EDAT timestamp (ISO8601 UTC) or null if none"
+                "operation": {
+                    "type": "string",
+                    "enum": ["corpus.checkpoint.get"],
+                    "description": "Operation identifier"
+                },
+                "data": {
+                    "type": "object",
+                    "additionalProperties": True  # Allow flexible checkpoint structure
+                },
+                "error": {
+                    "type": "object",
+                    "required": ["code", "message"],
+                    "properties": {
+                        "code": {"type": "string"},
+                        "message": {"type": "string"},
+                        "details": {"type": ["object", "array", "string", "null"]}
+                    },
+                    "additionalProperties": False
+                },
+                "metadata": {
+                    "type": "object",
+                    "required": ["execution_time_ms", "timestamp", "version"],
+                    "properties": {
+                        "execution_time_ms": {
+                            "type": "number",
+                            "description": "Execution time in milliseconds"
+                        },
+                        "timestamp": {
+                            "type": "string",
+                            "description": "ISO8601 timestamp"
+                        },
+                        "version": {
+                            "type": "string",
+                            "description": "API version"
+                        }
+                    },
+                    "additionalProperties": False
                 }
             },
+            "anyOf": [
+                {"required": ["success", "operation", "data", "metadata"]},
+                {"required": ["success", "operation", "error", "metadata"]}
+            ],
             "additionalProperties": False
         }
 
@@ -183,8 +223,17 @@ class TestJSONSchemaContracts:
         """JSON schema for error response envelope."""
         return {
             "type": "object",
-            "required": ["error"],
+            "required": ["success", "operation", "error", "metadata"],
             "properties": {
+                "success": {
+                    "type": "boolean",
+                    "enum": [False],
+                    "description": "Always false for error responses"
+                },
+                "operation": {
+                    "type": "string",
+                    "description": "Operation identifier"
+                },
                 "error": {
                     "type": "object",
                     "required": ["code", "message"],
@@ -194,7 +243,7 @@ class TestJSONSchemaContracts:
                             "enum": [
                                 "RATE_LIMIT", "UPSTREAM", "VALIDATION", "NOT_FOUND", 
                                 "INVARIANT_FAILURE", "STORE", "EMBEDDINGS", "WEAVIATE",
-                                "ENTREZ", "UNKNOWN"
+                                "ENTREZ", "UNKNOWN", "MISSING_PARAMETER", "OPERATION_FAILED"
                             ]
                         },
                         "message": { 
@@ -204,6 +253,25 @@ class TestJSONSchemaContracts:
                         "details": { 
                             "type": ["object", "array", "string", "null"],
                             "description": "Additional error context (optional)"
+                        }
+                    },
+                    "additionalProperties": False
+                },
+                "metadata": {
+                    "type": "object",
+                    "required": ["execution_time_ms", "timestamp", "version"],
+                    "properties": {
+                        "execution_time_ms": {
+                            "type": "number",
+                            "description": "Execution time in milliseconds"
+                        },
+                        "timestamp": {
+                            "type": "string",
+                            "description": "ISO8601 timestamp"
+                        },
+                        "version": {
+                            "type": "string",
+                            "description": "API version"
                         }
                     },
                     "additionalProperties": False
@@ -314,9 +382,17 @@ class TestJSONSchemaContracts:
         assert len(result) == 1
         response_data = self._extract_json_from_response(result[0].text)
         
-        # For create operations, just check that we get a success/error response
-        assert len(result[0].text) > 0
-        assert ("✅" in result[0].text) or ("❌" in result[0].text)
+        # Should have MCP envelope structure
+        assert "success" in response_data
+        assert "operation" in response_data
+        assert "metadata" in response_data
+        assert response_data["operation"] == "corpus.checkpoint.create"
+        
+        # Should indicate success or failure clearly
+        if response_data["success"]:
+            assert "data" in response_data
+        else:
+            assert "error" in response_data
 
     @pytest.mark.asyncio
     async def test_error_response_schema_compliance(self, error_envelope_schema):

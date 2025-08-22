@@ -11,9 +11,94 @@ from typing import Any
 from mcp.types import TextContent
 
 from bio_mcp.config.logging_config import get_logger
+from bio_mcp.mcp.response_builder import (
+    MCPResponseBuilder,
+    ErrorCodes,
+    get_format_preference
+)
 from bio_mcp.services.services import CorpusCheckpointService
 
 logger = get_logger(__name__)
+
+
+def format_checkpoint_human(response: dict[str, Any]) -> str:
+    """Format checkpoint response for human consumption."""
+    data = response["data"]
+    metadata = response["metadata"]
+    operation = response["operation"]
+    
+    if operation == "corpus.checkpoint.create":
+        return f"""✅ Corpus checkpoint created successfully
+
+**Checkpoint ID:** {data["checkpoint_id"]}
+**Name:** {data.get("name", "N/A")}
+**Description:** {data.get("description", "None")}
+**Total Documents:** {data.get("total_documents", "0")}
+**Last Sync EDAT:** {data.get("last_sync_edat", "None")}
+**Version:** {data.get("version", "1.0")}
+
+Execution time: {metadata["execution_time_ms"]}ms"""
+    
+    elif operation == "corpus.checkpoint.get":
+        if not data:
+            return f"""❌ Checkpoint not found: {data.get("checkpoint_id", "unknown")}
+
+The requested checkpoint does not exist in the database.
+
+Execution time: {metadata["execution_time_ms"]}ms"""
+        
+        return f"""📋 Corpus Checkpoint Details
+
+**Checkpoint ID:** {data["checkpoint_id"]}
+**Name:** {data.get("name", "N/A")}
+**Description:** {data.get("description", "None")}
+
+**Corpus Statistics:**
+- Total Documents: {data.get("total_documents", "0")}
+- Total Vectors: {data.get("total_vectors", "0")}
+- Last Sync EDAT: {data.get("last_sync_edat", "None")}
+
+**Metadata:**
+- Version: {data.get("version", "1.0")}
+- Parent Checkpoint: {data.get("parent_checkpoint_id", "None")}
+- Created: {data.get("created_at", "N/A")}
+
+**Primary Queries:** {", ".join(data.get("primary_queries", []))}
+
+Execution time: {metadata["execution_time_ms"]}ms"""
+    
+    elif operation == "corpus.checkpoint.list":
+        checkpoints = data.get("checkpoints", [])
+        if not checkpoints:
+            return f"""📋 No corpus checkpoints found
+
+The database contains no checkpoints.
+
+Execution time: {metadata["execution_time_ms"]}ms"""
+        
+        checkpoint_list = []
+        for cp in checkpoints:
+            checkpoint_list.append(f"""**{cp["checkpoint_id"]}** - {cp.get("name", "Unnamed")}
+  Description: {cp.get("description", "None")}
+  Documents: {cp.get("total_documents", "0")} | Created: {cp.get("created_at", "N/A")}""")
+        
+        return f"""📋 Corpus Checkpoints ({len(checkpoints)} found)
+
+{chr(10).join(checkpoint_list)}
+
+Execution time: {metadata["execution_time_ms"]}ms"""
+    
+    elif operation == "corpus.checkpoint.delete":
+        return f"""✅ Corpus checkpoint deleted successfully
+
+**Checkpoint ID:** {data["checkpoint_id"]}
+
+Execution time: {metadata["execution_time_ms"]}ms"""
+    
+    else:
+        return f"""Unknown operation: {operation}
+
+Execution time: {metadata["execution_time_ms"]}ms"""
 
 
 @dataclass
@@ -445,6 +530,10 @@ async def corpus_checkpoint_create_tool(
     name: str, arguments: dict[str, Any]
 ) -> Sequence[TextContent]:
     """MCP tool: Create a new corpus checkpoint."""
+    # Initialize response builder
+    builder = MCPResponseBuilder("corpus.checkpoint.create")
+    format_type = get_format_preference(arguments)
+    
     try:
         checkpoint_id = arguments.get("checkpoint_id", "")
         checkpoint_name = arguments.get("name", "")
@@ -453,20 +542,18 @@ async def corpus_checkpoint_create_tool(
         parent_checkpoint_id = arguments.get("parent_checkpoint_id")
 
         if not checkpoint_id:
-            return [
-                TextContent(
-                    type="text",
-                    text="❌ Error: 'checkpoint_id' parameter is required",
-                )
-            ]
+            return builder.error(
+                ErrorCodes.MISSING_PARAMETER,
+                "'checkpoint_id' parameter is required",
+                format_type=format_type
+            )
 
         if not checkpoint_name:
-            return [
-                TextContent(
-                    type="text",
-                    text="❌ Error: 'name' parameter is required",
-                )
-            ]
+            return builder.error(
+                ErrorCodes.MISSING_PARAMETER,
+                "'name' parameter is required",
+                format_type=format_type
+            )
 
         manager = get_checkpoint_manager()
         result = await manager.create_checkpoint(
@@ -477,32 +564,87 @@ async def corpus_checkpoint_create_tool(
             parent_checkpoint_id=parent_checkpoint_id,
         )
 
-        return [TextContent(type="text", text=result.to_mcp_response())]
+        if not result.success:
+            return builder.error(
+                ErrorCodes.OPERATION_FAILED,
+                f"Failed to create checkpoint: {result.error_message}",
+                details={"checkpoint_id": checkpoint_id},
+                format_type=format_type
+            )
+
+        # Build JSON response data
+        response_data = {
+            "checkpoint_id": result.checkpoint_id,
+            "name": checkpoint_name,
+            "description": description,
+            "primary_queries": primary_queries,
+            "parent_checkpoint_id": parent_checkpoint_id
+        }
+        
+        # Add additional checkpoint data if available
+        if result.checkpoint_data:
+            response_data.update(result.checkpoint_data)
+
+        return builder.success(
+            data=response_data,
+            format_type=format_type,
+            human_formatter=format_checkpoint_human
+        )
 
     except Exception as e:
         logger.error("Corpus checkpoint create tool error", error=str(e))
-        return [TextContent(type="text", text=f"❌ Error creating checkpoint: {e!s}")]
+        return builder.error(
+            ErrorCodes.OPERATION_FAILED,
+            f"Error creating checkpoint: {str(e)}",
+            format_type=format_type
+        )
 
 
 async def corpus_checkpoint_get_tool(
     name: str, arguments: dict[str, Any]
 ) -> Sequence[TextContent]:
     """MCP tool: Get a corpus checkpoint by ID."""
+    # Initialize response builder
+    builder = MCPResponseBuilder("corpus.checkpoint.get")
+    format_type = get_format_preference(arguments)
+    
     try:
         checkpoint_id = arguments.get("checkpoint_id", "")
 
         if not checkpoint_id:
-            return [
-                TextContent(
-                    type="text",
-                    text="❌ Error: 'checkpoint_id' parameter is required",
-                )
-            ]
+            return builder.error(
+                ErrorCodes.MISSING_PARAMETER,
+                "'checkpoint_id' parameter is required",
+                format_type=format_type
+            )
 
         manager = get_checkpoint_manager()
         result = await manager.get_checkpoint(checkpoint_id)
 
-        return [TextContent(type="text", text=result.to_mcp_response())]
+        if not result.success:
+            return builder.error(
+                ErrorCodes.OPERATION_FAILED,
+                f"Failed to get checkpoint: {result.error_message}",
+                details={"checkpoint_id": checkpoint_id},
+                format_type=format_type
+            )
+
+        if not result.checkpoint_data:
+            return builder.error(
+                ErrorCodes.NOT_FOUND,
+                f"Checkpoint not found: {checkpoint_id}",
+                details={"checkpoint_id": checkpoint_id},
+                format_type=format_type
+            )
+
+        # Build JSON response data
+        response_data = result.checkpoint_data
+
+        return builder.success(
+            data=response_data,
+            format_type=format_type,
+            human_formatter=format_checkpoint_human
+        )
 
     except Exception as e:
         logger.error(
@@ -510,13 +652,22 @@ async def corpus_checkpoint_get_tool(
             checkpoint_id=arguments.get("checkpoint_id"),
             error=str(e),
         )
-        return [TextContent(type="text", text=f"❌ Error retrieving checkpoint: {e!s}")]
+        return builder.error(
+            ErrorCodes.OPERATION_FAILED,
+            f"Error retrieving checkpoint: {str(e)}",
+            details={"checkpoint_id": arguments.get("checkpoint_id")},
+            format_type=format_type
+        )
 
 
 async def corpus_checkpoint_list_tool(
     name: str, arguments: dict[str, Any]
 ) -> Sequence[TextContent]:
     """MCP tool: List all corpus checkpoints."""
+    # Initialize response builder
+    builder = MCPResponseBuilder("corpus.checkpoint.list")
+    format_type = get_format_preference(arguments)
+    
     try:
         limit = min(max(arguments.get("limit", 20), 1), 100)
         offset = max(arguments.get("offset", 0), 0)
@@ -524,32 +675,69 @@ async def corpus_checkpoint_list_tool(
         manager = get_checkpoint_manager()
         result = await manager.list_checkpoints(limit=limit, offset=offset)
 
-        return [TextContent(type="text", text=result.to_mcp_response())]
+        # Build JSON response data
+        response_data = {
+            "checkpoints": result.checkpoints,
+            "total": result.total_found,
+            "limit": limit,
+            "offset": offset
+        }
+
+        return builder.success(
+            data=response_data,
+            format_type=format_type,
+            human_formatter=format_checkpoint_human
+        )
 
     except Exception as e:
         logger.error("Corpus checkpoint list tool error", error=str(e))
-        return [TextContent(type="text", text=f"❌ Error listing checkpoints: {e!s}")]
+        return builder.error(
+            ErrorCodes.OPERATION_FAILED,
+            f"Error listing checkpoints: {str(e)}",
+            format_type=format_type
+        )
 
 
 async def corpus_checkpoint_delete_tool(
     name: str, arguments: dict[str, Any]
 ) -> Sequence[TextContent]:
     """MCP tool: Delete a corpus checkpoint."""
+    # Initialize response builder
+    builder = MCPResponseBuilder("corpus.checkpoint.delete")
+    format_type = get_format_preference(arguments)
+    
     try:
         checkpoint_id = arguments.get("checkpoint_id", "")
 
         if not checkpoint_id:
-            return [
-                TextContent(
-                    type="text",
-                    text="❌ Error: 'checkpoint_id' parameter is required",
-                )
-            ]
+            return builder.error(
+                ErrorCodes.MISSING_PARAMETER,
+                "'checkpoint_id' parameter is required",
+                format_type=format_type
+            )
 
         manager = get_checkpoint_manager()
         result = await manager.delete_checkpoint(checkpoint_id)
 
-        return [TextContent(type="text", text=result.to_mcp_response())]
+        if not result.success:
+            return builder.error(
+                ErrorCodes.OPERATION_FAILED,
+                f"Failed to delete checkpoint: {result.error_message}",
+                details={"checkpoint_id": checkpoint_id},
+                format_type=format_type
+            )
+
+        # Build JSON response data
+        response_data = {
+            "checkpoint_id": checkpoint_id,
+            "deleted": True
+        }
+
+        return builder.success(
+            data=response_data,
+            format_type=format_type,
+            human_formatter=format_checkpoint_human
+        )
 
     except Exception as e:
         logger.error(
@@ -557,7 +745,12 @@ async def corpus_checkpoint_delete_tool(
             checkpoint_id=arguments.get("checkpoint_id"),
             error=str(e),
         )
-        return [TextContent(type="text", text=f"❌ Error deleting checkpoint: {e!s}")]
+        return builder.error(
+            ErrorCodes.OPERATION_FAILED,
+            f"Error deleting checkpoint: {str(e)}",
+            details={"checkpoint_id": arguments.get("checkpoint_id")},
+            format_type=format_type
+        )
 
 
 def register_corpus_tools(server) -> None:

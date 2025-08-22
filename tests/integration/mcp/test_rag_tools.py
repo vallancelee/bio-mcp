@@ -29,8 +29,19 @@ class TestRAGToolsIntegrationSimplified:
 
         assert len(result) == 1
         response_text = result[0].text
-        assert "❌" in response_text
-        assert "query" in response_text.lower()
+        
+        # Should return JSON error format
+        assert "```json" in response_text
+        
+        # Parse and validate error structure
+        import json
+        json_data = json.loads(response_text.split("```json\n")[1].split("\n```")[0])
+        
+        assert json_data["success"] is False
+        assert json_data["operation"] == "rag.search"
+        assert "error" in json_data
+        assert json_data["error"]["code"] == "MISSING_PARAMETER"
+        assert "query" in json_data["error"]["message"].lower()
 
     @pytest.mark.asyncio
     async def test_rag_search_with_mock_results(self, sample_documents):
@@ -60,8 +71,19 @@ class TestRAGToolsIntegrationSimplified:
 
         assert len(result) == 1
         response_text = result[0].text
-        assert "❌" in response_text
-        assert "doc_id" in response_text.lower()
+        
+        # Should return JSON error format
+        assert "```json" in response_text
+        
+        # Parse and validate error structure
+        import json
+        json_data = json.loads(response_text.split("```json\n")[1].split("\n```")[0])
+        
+        assert json_data["success"] is False
+        assert json_data["operation"] == "rag.get"
+        assert "error" in json_data
+        assert json_data["error"]["code"] == "MISSING_PARAMETER"
+        assert "doc_id" in json_data["error"]["message"].lower()
 
     @pytest.mark.asyncio
     async def test_rag_get_with_existing_document(self, sample_documents):

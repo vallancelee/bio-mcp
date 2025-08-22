@@ -19,8 +19,6 @@ class QualityConfig:
     RECENCY_BOOST_FACTOR: float = 0.05  # 5% boost for recent publications
     RECENT_YEARS_THRESHOLD: int = 2  # Papers from last 2 years get boost
 
-    # Legacy quality score integration
-    LEGACY_QUALITY_DIVISOR: int = 20  # Normalize legacy quality_total scores
 
     # High-impact journal lists (could be made configurable in future)
     TIER_1_JOURNALS: frozenset[str] = frozenset(
@@ -94,10 +92,6 @@ class JournalQualityScorer:
         if recency_boost > 0:
             quality_factors.append(recency_boost)
 
-        # Legacy quality score integration
-        legacy_boost = self._calculate_legacy_boost(document.get("quality_total", 0))
-        if legacy_boost > 0:
-            quality_factors.append(legacy_boost)
 
         # Investment relevance boost for biotech research
         investment_boost = self._calculate_investment_boost(document)
@@ -146,12 +140,6 @@ class JournalQualityScorer:
 
         return 0.0
 
-    def _calculate_legacy_boost(self, quality_total: int | None) -> float:
-        """Calculate boost from legacy quality_total scores."""
-        if not quality_total or quality_total <= 0:
-            return 0.0
-
-        return quality_total / self.config.LEGACY_QUALITY_DIVISOR
 
     def _calculate_investment_boost(self, document: dict[str, Any]) -> float:
         """Calculate boost based on investment relevance for biotech research."""

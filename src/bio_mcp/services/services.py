@@ -7,8 +7,9 @@ Focused service classes that follow Single Responsibility Principle.
 from typing import Any
 
 from bio_mcp.config.logging_config import get_logger
+from bio_mcp.models.document import Document
+from bio_mcp.services.embedding_service import EmbeddingService
 from bio_mcp.shared.clients.database import DatabaseConfig, DatabaseManager
-from bio_mcp.shared.clients.weaviate_client import WeaviateClient, get_weaviate_client
 from bio_mcp.sources.pubmed.client import PubMedClient
 from bio_mcp.sources.pubmed.config import PubMedConfig
 
@@ -125,30 +126,86 @@ class DocumentService:
 
 
 class VectorService:
-    """Service for vector store operations only."""
+    """
+    Service for vector store operations using the Document/Chunk model.
+    """
 
     def __init__(self):
-        self.client: WeaviateClient | None = None
+        """Initialize VectorService with chunk-based approach."""
+        self.embedding_service: EmbeddingService | None = None
         self._initialized = False
 
     async def initialize(self) -> None:
-        """Initialize Weaviate client."""
+        """Initialize vector service."""
         if self._initialized:
             return
 
         logger.info("Initializing vector service")
-        self.client = get_weaviate_client()
-        await self.client.initialize()
+        self.embedding_service = EmbeddingService()
+        await self.embedding_service.initialize()
         self._initialized = True
         logger.info("Vector service initialized successfully")
 
     async def close(self) -> None:
         """Close vector store connections."""
-        if self.client:
-            await self.client.close()
-            self.client = None
+        if self.embedding_service:
+            await self.embedding_service.close()
+            self.embedding_service = None
         self._initialized = False
         logger.info("Vector service closed")
+
+    async def store_document_chunks(self, document: Document) -> list[str]:
+        """
+        Store document as chunks in vector store.
+        
+        Args:
+            document: Document to chunk and store
+            
+        Returns:
+            List of Weaviate UUIDs for stored chunks
+        """
+        if not self._initialized:
+            await self.initialize()
+
+        if not self.embedding_service:
+            raise ValueError("Embedding service not initialized")
+            
+        return await self.embedding_service.store_document_chunks(document)
+
+    async def search_chunks(
+        self,
+        query: str,
+        limit: int = 5,
+        search_mode: str = "semantic",
+        alpha: float = 0.5,
+        filters: dict | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Search chunks using different search modes.
+        
+        Args:
+            query: Search query text
+            limit: Maximum number of chunks to return
+            search_mode: 'semantic', 'bm25', or 'hybrid'
+            alpha: Hybrid search balance (0.0=BM25, 1.0=semantic)
+            filters: Additional filters for search
+            
+        Returns:
+            List of matching chunk results with metadata
+        """
+        if not self._initialized:
+            await self.initialize()
+
+        if not self.embedding_service:
+            raise ValueError("Embedding service not initialized")
+            
+        return await self.embedding_service.search_chunks(
+            query=query,
+            limit=limit,
+            search_mode=search_mode,
+            alpha=alpha,
+            filters=filters
+        )
 
     async def store_document(
         self,
@@ -160,20 +217,71 @@ class VectorService:
         publication_date: str | None = None,
         doi: str | None = None,
         keywords: list[str] | None = None,
-    ) -> str:
-        """Store document in vector store."""
+    ) -> list[str]:
+        """
+        Store document in vector store as chunks.
+        
+        This method provides backward compatibility by converting legacy parameters
+        to the Document model internally.
+        
+        Returns:
+            List of chunk UUIDs
+        """
         if not self._initialized:
             await self.initialize()
 
-        return await self.client.store_document(
-            pmid=pmid,
-            title=title,
-            abstract=abstract,
-            authors=authors,
-            journal=journal,
-            publication_date=publication_date,
-            doi=doi,
-            keywords=keywords,
+        if not self.embedding_service:
+            raise ValueError("Embedding service not initialized")
+
+        # Convert legacy parameters to Document model using the normalizer
+        from bio_mcp.services.normalization.pubmed import PubMedNormalizer
+        
+        raw_data = {
+            "pmid": pmid,
+            "title": title,
+            "abstract": abstract or "",
+            "authors": authors or [],
+            "journal": journal,
+            "publication_date": publication_date,
+            "doi": doi,
+            "keywords": keywords or []
+        }
+        
+        document = PubMedNormalizer.from_raw_dict(
+            raw_data,
+            s3_raw_uri=f"s3://bio-mcp-temp/pubmed/{pmid}.json",  # Placeholder S3 URI
+            content_hash=f"temp_{pmid}"  # Placeholder hash
+        )
+        
+        chunk_uuids = await self.embedding_service.store_document_chunks(document)
+        logger.info("Stored document as chunks", pmid=pmid, chunk_count=len(chunk_uuids))
+        return chunk_uuids
+
+    async def search_documents(
+        self,
+        query: str,
+        limit: int = 5,
+        search_mode: str = "semantic",
+        alpha: float = 0.5,
+        filters: dict | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Search documents/chunks using the chunk-based approach.
+        
+        Returns results in a unified format.
+        """
+        if not self._initialized:
+            await self.initialize()
+
+        if not self.embedding_service:
+            raise ValueError("Embedding service not initialized")
+            
+        return await self.embedding_service.search_chunks(
+            query=query,
+            limit=limit,
+            search_mode=search_mode,
+            alpha=alpha,
+            filters=filters
         )
 
 
