@@ -151,12 +151,12 @@ class Chunk(BaseModel):
     @field_validator("chunk_id")
     @classmethod
     def validate_chunk_id_format(cls, v: str) -> str:
-        """Ensure chunk_id follows expected format (s0, w1, etc.)."""
+        """Ensure chunk_id follows expected format (s0, w1, s0_1, etc.)."""
         import re
 
-        if not re.match(r"^[sw]\d+$", v):
+        if not re.match(r"^[sw]\d+(_\d+)?$", v):
             raise ValueError(
-                "chunk_id must follow format 's0', 'w1', etc. (s=section, w=window)"
+                "chunk_id must follow format 's0', 'w1', 's0_1', etc. (s=section, w=window, _n=sub-chunk)"
             )
         return v
 

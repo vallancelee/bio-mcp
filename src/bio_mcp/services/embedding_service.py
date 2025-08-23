@@ -8,9 +8,9 @@ both the legacy document-based approach and the new multi-source chunk approach.
 from typing import Any
 
 from bio_mcp.config.logging_config import get_logger
-from bio_mcp.models.document import Document
+from bio_mcp.models.document import Chunk, Document
+from bio_mcp.services.chunking import AbstractChunker, ChunkingConfig
 from bio_mcp.shared.clients.weaviate_client import WeaviateClient, get_weaviate_client
-from bio_mcp.shared.core.embeddings import AbstractChunker
 
 logger = get_logger(__name__)
 
@@ -22,9 +22,10 @@ class EmbeddingService:
     Supports both new Document/Chunk workflow and legacy backward compatibility.
     """
 
-    def __init__(self, weaviate_client: WeaviateClient | None = None):
+    def __init__(self, weaviate_client: WeaviateClient | None = None, chunking_config: ChunkingConfig | None = None):
         self.weaviate_client = weaviate_client
-        self.chunker = AbstractChunker()
+        # Use new enhanced chunking service
+        self.chunker = AbstractChunker(chunking_config)
         self._initialized = False
 
     async def initialize(self) -> None:
@@ -151,7 +152,7 @@ class EmbeddingService:
 
         logger.info("Storing document chunks", document_uid=document.uid)
 
-        # Chunk the document
+        # Use enhanced chunking service
         chunks = self.chunker.chunk_document(document)
 
         if not chunks:
@@ -159,6 +160,36 @@ class EmbeddingService:
                 "No chunks generated for document", document_uid=document.uid
             )
             return []
+
+        # Store chunks using the new method
+        chunk_uuids = await self.store_chunks(chunks)
+
+        logger.info(
+            "Document chunks stored successfully",
+            document_uid=document.uid,
+            chunk_count=len(chunk_uuids),
+        )
+
+        return chunk_uuids
+
+    async def store_chunks(self, chunks: list[Chunk]) -> list[str]:
+        """
+        Store pre-chunked Chunk objects in vector store.
+
+        Args:
+            chunks: List of Chunk objects to store
+
+        Returns:
+            List of Weaviate UUIDs for stored chunks
+        """
+        if not self._initialized:
+            await self.initialize()
+
+        if not chunks:
+            logger.warning("No chunks provided for storage")
+            return []
+
+        logger.info("Storing pre-chunked chunks", chunk_count=len(chunks))
 
         # Store chunks in Weaviate
         collection = self.weaviate_client.client.collections.get("DocumentChunk")
@@ -180,8 +211,8 @@ class EmbeddingService:
                 "meta": chunk.meta,
             }
 
-            # Store chunk - Weaviate will automatically generate embeddings
-            uuid = collection.data.insert(properties=chunk_data)
+            # Store chunk with deterministic UUID for idempotent upserts
+            uuid = collection.data.insert(properties=chunk_data, uuid=chunk.uuid)
             chunk_uuids.append(str(uuid))
 
             logger.debug(
@@ -192,8 +223,7 @@ class EmbeddingService:
             )
 
         logger.info(
-            "Document chunks stored successfully",
-            document_uid=document.uid,
+            "Chunks stored successfully",
             chunk_count=len(chunk_uuids),
         )
 

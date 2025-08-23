@@ -115,6 +115,27 @@ security-scan: ## Run security vulnerability scan
 	$(UV) run --with safety safety check
 	@echo "$(GREEN)✓ Security scan completed$(NC)"
 
+# Chunking tests and validation
+test-chunking: ## Run chunking-specific tests
+	@echo "$(YELLOW)Running chunking tests...$(NC)"
+	$(UV) run --with pytest-asyncio pytest tests/unit/services/test_chunking.py -v
+	@echo "$(GREEN)✓ Chunking tests completed$(NC)"
+
+test-chunking-perf: ## Run chunking performance tests  
+	@echo "$(YELLOW)Running chunking performance tests...$(NC)"
+	$(UV) run --with pytest-asyncio pytest tests/performance/test_chunking_performance.py -v
+	@echo "$(GREEN)✓ Chunking performance tests completed$(NC)"
+
+validate-chunking: ## Validate chunking on sample data
+	@echo "$(YELLOW)Validating chunking strategy...$(NC)"
+	$(UV) run python scripts/validate_chunking.py --sample-size 10
+	@echo "$(GREEN)✓ Chunking validation completed$(NC)"
+
+benchmark-chunking: ## Benchmark chunking performance
+	@echo "$(YELLOW)Running chunking performance benchmark...$(NC)"
+	$(UV) run python scripts/benchmark_chunking.py --iterations 3
+	@echo "$(GREEN)✓ Chunking benchmark completed$(NC)"
+
 # Development Server
 run: ## Run the MCP server locally
 	@echo "$(YELLOW)Starting Bio-MCP server...$(NC)"

@@ -19,15 +19,17 @@ from bio_mcp.mcp.resources import list_resources, read_resource
 from tests.utils.mcp_validators import MCPResponseValidator
 
 
+@pytest.fixture(scope="class")
+def validator():
+    """Create a validator instance shared across test class."""
+    return MCPResponseValidator()
+
+
 class TestSimpleEndToEndWorkflows:
     """Simple end-to-end tests without external dependencies."""
 
-    def setup_method(self):
-        """Setup test fixtures."""
-        self.validator = MCPResponseValidator()
-
     @pytest.mark.asyncio
-    async def test_research_workflow_error_handling(self):
+    async def test_research_workflow_error_handling(self, validator):
         """Test complete research workflow with proper error handling."""
 
         # === Step 1: Search with missing query (should error gracefully) ===
@@ -35,7 +37,7 @@ class TestSimpleEndToEndWorkflows:
 
         assert len(search_result) == 1
         assert isinstance(search_result[0], TextContent)
-        self.validator.validate_text_content(search_result[0])
+        validator.validate_text_content(search_result[0])
 
         search_text = search_result[0].text
         assert "error" in search_text.lower() or "❌" in search_text
@@ -46,7 +48,7 @@ class TestSimpleEndToEndWorkflows:
 
         assert len(get_result) == 1
         assert isinstance(get_result[0], TextContent)
-        self.validator.validate_text_content(get_result[0])
+        validator.validate_text_content(get_result[0])
 
         get_text = get_result[0].text
         # Should either error or indicate not found
@@ -63,7 +65,7 @@ class TestSimpleEndToEndWorkflows:
 
         assert len(checkpoint_result) == 1
         assert isinstance(checkpoint_result[0], TextContent)
-        self.validator.validate_text_content(checkpoint_result[0])
+        validator.validate_text_content(checkpoint_result[0])
 
         checkpoint_text = checkpoint_result[0].text
         assert "error" in checkpoint_text.lower() or "❌" in checkpoint_text
@@ -85,7 +87,7 @@ class TestSimpleEndToEndWorkflows:
 
         assert len(list_result) == 1
         assert isinstance(list_result[0], TextContent)
-        self.validator.validate_text_content(list_result[0])
+        validator.validate_text_content(list_result[0])
 
         # Should return some response (empty list is acceptable)
         list_text = list_result[0].text
@@ -134,7 +136,7 @@ class TestSimpleEndToEndWorkflows:
         print("✅ Resources Workflow Complete")
 
     @pytest.mark.asyncio
-    async def test_parameter_validation_comprehensive(self):
+    async def test_parameter_validation_comprehensive(self, validator):
         """Test parameter validation across all tools."""
 
         # Test cases: (tool_function, tool_name, invalid_params, expected_error_keywords)
@@ -174,7 +176,7 @@ class TestSimpleEndToEndWorkflows:
 
             assert len(result) == 1
             assert isinstance(result[0], TextContent)
-            self.validator.validate_text_content(result[0])
+            validator.validate_text_content(result[0])
 
             error_text = result[0].text.lower()
 

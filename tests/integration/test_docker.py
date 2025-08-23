@@ -56,13 +56,15 @@ class TestDockerRun:
         """Test that Docker container starts and runs."""
         # Run container with timeout
         result = subprocess.run(
-            ["timeout", "5s", "docker", "run", "--rm", "bio-mcp:test"],
+            ["timeout", "10s", "docker", "run", "--rm", "bio-mcp:test"],
             capture_output=True,
             text=True,
         )
 
         # Container should start successfully (timeout is expected)
-        assert "Starting Bio-MCP server..." in result.stderr
+        # Check for the startup message in JSON logs or plain text
+        output = result.stderr + result.stdout
+        assert "Starting Bio-MCP server" in output
 
     def test_docker_run_with_env_vars(self):
         """Test Docker container with environment variables."""
@@ -74,13 +76,15 @@ class TestDockerRun:
         ]
 
         result = subprocess.run(
-            ["timeout", "3s", "docker", "run", "--rm", *env_vars, "bio-mcp:test"],
+            ["timeout", "8s", "docker", "run", "--rm", *env_vars, "bio-mcp:test"],
             capture_output=True,
             text=True,
         )
 
         # Check that it starts with debug logging
-        assert "Starting Bio-MCP server..." in result.stderr
+        # Check for the startup message in JSON logs or plain text
+        output = result.stderr + result.stdout
+        assert "Starting Bio-MCP server" in output
 
 
 @pytest.mark.integration

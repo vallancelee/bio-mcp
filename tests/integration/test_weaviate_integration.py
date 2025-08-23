@@ -12,6 +12,7 @@ testcontainers to validate end-to-end functionality including:
 """
 
 import asyncio
+import time
 from typing import Any
 
 import pytest
@@ -19,6 +20,35 @@ import pytest_asyncio
 from testcontainers.compose import DockerCompose
 
 from bio_mcp.shared.clients.weaviate_client import WeaviateClient
+
+
+def _wait_for_weaviate_ready(url: str, timeout: int = 30) -> None:
+    """Wait for Weaviate to be ready using health checks instead of fixed sleep."""
+    import requests
+    
+    print(f"Waiting for Weaviate to be ready at {url}...")
+    start_time = time.time()
+    
+    while time.time() - start_time < timeout:
+        try:
+            # Check Weaviate readiness endpoint
+            response = requests.get(f"{url}/v1/.well-known/ready", timeout=2.0)
+            if response.status_code == 200:
+                # Also check if we can query (transformers ready)
+                try:
+                    response = requests.get(f"{url}/v1/meta", timeout=2.0)
+                    if response.status_code == 200:
+                        elapsed = time.time() - start_time
+                        print(f"✓ Weaviate ready in {elapsed:.1f}s (was sleeping 10s)")
+                        return
+                except Exception:
+                    pass  # Transformers not ready yet
+        except Exception:
+            pass  # Service not ready yet
+        
+        time.sleep(0.5)
+    
+    raise TimeoutError(f"Weaviate not ready after {timeout}s")
 
 
 class WeaviateTestHelpers:
@@ -143,10 +173,8 @@ def weaviate_container():
             f"✓ Weaviate with transformers started at {url} (gRPC: {weaviate_url}:{grpc_port})"
         )
 
-        # Wait a bit for transformers service to be ready
-        import time
-
-        time.sleep(10)
+        # Wait for Weaviate and transformers to be ready with health checks
+        _wait_for_weaviate_ready(url, timeout=20)
 
         # Return connection info
         yield {
@@ -157,9 +185,9 @@ def weaviate_container():
         }
 
 
-@pytest_asyncio.fixture(scope="function")
-async def weaviate_client(weaviate_container):
-    """Create a fresh Weaviate client for each test function."""
+@pytest_asyncio.fixture(scope="class")  # Changed to class scope for better reuse
+async def weaviate_client_base(weaviate_container):
+    """Create a Weaviate client shared across test class."""
     container_info = weaviate_container
     url = container_info["http_url"]
     client = WeaviateClient(url=url)
@@ -168,9 +196,20 @@ async def weaviate_client(weaviate_container):
     client._grpc_host = container_info["grpc_host"]
     client._grpc_port = container_info["grpc_port"]
 
-    # Initialize and clean up any existing data
+    # Initialize the client once per class
     await client.initialize()
 
+    yield client
+
+    # Cleanup after all tests in class
+    await client.close()
+
+
+@pytest_asyncio.fixture(scope="function") 
+async def weaviate_client(weaviate_client_base):
+    """Provide a clean Weaviate client for each test function with data isolation."""
+    client = weaviate_client_base
+    
     # Clean up collection if it exists (for fresh state)
     if client.client and client.client.collections.exists(client.collection_name):
         try:
@@ -180,15 +219,14 @@ async def weaviate_client(weaviate_container):
             pass  # Ignore cleanup errors
 
     yield client
-
-    # Clean up after test
-    try:
-        if client.client and client.client.collections.exists(client.collection_name):
+    
+    # Clean up after each test
+    if client.client and client.client.collections.exists(client.collection_name):
+        try:
             collection = client.client.collections.get(client.collection_name)
             collection.data.delete_many()
-        await client.close()
-    except Exception:
-        pass  # Ignore cleanup errors
+        except Exception:
+            pass  # Ignore cleanup errors
 
 
 class TestWeaviateClientInitialization:
