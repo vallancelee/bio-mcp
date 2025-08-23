@@ -6,6 +6,7 @@
 .PHONY: deps-update version bump-patch bump-minor bump-major
 .PHONY: manual-test test-health test-server test-logs test-signals test-docker-health test-all-manual
 .PHONY: bootstrap up down reset migrate migrate-create migrate-rollback db-reset run-worker quickstart health-check
+.PHONY: weaviate-create-v2 weaviate-info weaviate-info-v2 weaviate-recreate-v2 test-weaviate-v2
 
 # Default target
 .DEFAULT_GOAL := help
@@ -150,6 +151,35 @@ run-http: ## Run the HTTP server locally
 run-worker: ## Run the async job worker
 	@echo "$(YELLOW)Starting job worker...$(NC)"
 	@$(UV) run python -m bio_mcp.http.jobs.worker
+
+# ============================================================================
+# WEAVIATE V2 COMMANDS
+# ============================================================================
+
+weaviate-create-v2: ## Create DocumentChunk_v2 collection
+	@echo "$(YELLOW)Creating DocumentChunk_v2 collection...$(NC)"
+	@$(UV) run python -m scripts.create_weaviate_schema
+	@echo "$(GREEN)✓ DocumentChunk_v2 collection created$(NC)"
+
+weaviate-info: ## Show Weaviate collection information
+	@echo "$(YELLOW)Getting Weaviate collection info...$(NC)"
+	@$(UV) run python -m scripts.weaviate_info
+
+weaviate-info-v2: ## Show DocumentChunk_v2 collection information
+	@echo "$(YELLOW)Getting DocumentChunk_v2 collection info...$(NC)"
+	@$(UV) run python -m scripts.weaviate_info --collection DocumentChunk_v2 --validate
+
+weaviate-recreate-v2: ## Recreate DocumentChunk_v2 collection (WARNING: deletes data)
+	@echo "$(RED)⚠️  This will delete DocumentChunk_v2 collection data! Press Ctrl+C to cancel...$(NC)"
+	@sleep 3
+	@echo "$(YELLOW)Recreating DocumentChunk_v2 collection...$(NC)"
+	@$(UV) run python -m scripts.create_weaviate_schema --force
+	@echo "$(GREEN)✓ DocumentChunk_v2 collection recreated$(NC)"
+
+test-weaviate-v2: ## Run Weaviate V2 integration tests
+	@echo "$(YELLOW)Running Weaviate V2 integration tests...$(NC)"
+	@$(UV) run --with pytest-asyncio pytest tests/integration/test_weaviate_v2.py -v
+	@echo "$(GREEN)✓ Weaviate V2 tests completed$(NC)"
 
 # ============================================================================
 # DATABASE COMMANDS
