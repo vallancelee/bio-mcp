@@ -349,7 +349,8 @@ class AbstractChunker:
         """Create default tokenizer."""
         try:
             from bio_mcp.config.config import config
-            return HuggingFaceTokenizer(config.tokenizer_model)
+            # Use BioBERT model for tokenization to match vectorizer
+            return HuggingFaceTokenizer(config.biobert_model_name)
         except Exception as e:
             logger.warning(f"Failed to load HF tokenizer: {e}, using fallback")
             return FallbackTokenizer()

@@ -23,7 +23,7 @@ from bio_mcp.mcp.response_builder import (
     format_rag_search_human,
     get_format_preference,
 )
-from bio_mcp.services.embedding_service import EmbeddingService
+from bio_mcp.services.document_chunk_service import DocumentChunkService
 from bio_mcp.shared.clients.database import get_database_manager
 from bio_mcp.sources.pubmed.quality import JournalQualityScorer
 
@@ -55,7 +55,7 @@ class RAGToolsManager:
     """Manager for RAG-related operations."""
 
     def __init__(self):
-        self.embedding_service = EmbeddingService()
+        self.document_chunk_service = DocumentChunkService()
         self.db_manager = get_database_manager()
         self.quality_scorer = JournalQualityScorer()
 
@@ -93,16 +93,16 @@ class RAGToolsManager:
         search_start_time = time.time()
 
         try:
-            await self.embedding_service.initialize()
+            await self.document_chunk_service.initialize()
 
             # Perform search with specified mode using the chunk-based approach
             search_time_start = time.time()
-            results = await self.embedding_service.search_chunks(
+            results = await self.document_chunk_service.search_chunks(
                 query=query,
                 limit=top_k,
                 search_mode=search_mode,
                 alpha=alpha,
-                filters=filters,
+                filters=filters
             )
             search_time_ms = (time.time() - search_time_start) * 1000
 
@@ -207,7 +207,7 @@ class RAGToolsManager:
         logger.info("RAG get document", doc_id=doc_id, include_chunks=include_chunks)
 
         try:
-            await self.embedding_service.initialize()
+            await self.document_chunk_service.initialize()
 
             # For chunk-based approach, search for chunks by parent_uid
             if doc_id.startswith("pmid:"):

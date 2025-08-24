@@ -52,6 +52,13 @@ class Config:
     # Weaviate (defaults to local for Phase 1A)
     weaviate_url: str = "http://localhost:8080"
 
+    # BioBERT Embedding Configuration (local model only)
+    biobert_model_name: str = "pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb"
+    biobert_max_tokens: int = 512
+
+    # Collection Configuration
+    weaviate_collection_v2: str = "DocumentChunk_v2"
+
     # Model configuration
     uuid_namespace: uuid.UUID = None  # Set in __post_init__
     document_schema_version: int = 1
@@ -63,9 +70,6 @@ class Config:
     chunker_min_tokens: int = 120
     chunker_overlap_tokens: int = 50
     
-    # Tokenizer configuration
-    tokenizer_model: str = "pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb"
-    tokenizer_fallback: bool = True
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -82,14 +86,16 @@ class Config:
             openai_api_key=os.getenv("BIO_MCP_OPENAI_API_KEY"),
             database_url=os.getenv("BIO_MCP_DATABASE_URL", "sqlite:///:memory:"),
             weaviate_url=os.getenv("BIO_MCP_WEAVIATE_URL", "http://localhost:8080"),
+            # BioBERT Configuration (local model only)
+            biobert_model_name=os.getenv("BIO_MCP_EMBED_MODEL", "pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb"),
+            biobert_max_tokens=int(os.getenv("BIO_MCP_EMBED_MAX_TOKENS", "512")),
+            # Collection Configuration
+            weaviate_collection_v2=os.getenv("BIO_MCP_WEAVIATE_COLLECTION_V2", "DocumentChunk_v2"),
             # Chunking configuration
             chunker_target_tokens=int(os.getenv("BIO_MCP_CHUNKER_TARGET_TOKENS", "325")),
             chunker_max_tokens=int(os.getenv("BIO_MCP_CHUNKER_MAX_TOKENS", "450")),
             chunker_min_tokens=int(os.getenv("BIO_MCP_CHUNKER_MIN_TOKENS", "120")),
             chunker_overlap_tokens=int(os.getenv("BIO_MCP_CHUNKER_OVERLAP_TOKENS", "50")),
-            # Tokenizer configuration
-            tokenizer_model=os.getenv("BIO_MCP_TOKENIZER_MODEL", "pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb"),
-            tokenizer_fallback=os.getenv("BIO_MCP_TOKENIZER_FALLBACK", "true").lower() == "true",
             # Model configuration will be set in __post_init__
         )
 

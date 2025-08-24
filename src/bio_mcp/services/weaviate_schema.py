@@ -205,7 +205,8 @@ class WeaviateSchemaManager:
         
         elif self.config.vectorizer_type == VectorizerType.TRANSFORMERS_LOCAL:
             return Configure.Vectors.text2vec_transformers(
-                pooling_strategy="masked_mean"
+                pooling_strategy="masked_mean",
+                vectorize_collection_name=False
             )
         
         elif self.config.vectorizer_type == VectorizerType.OPENAI:

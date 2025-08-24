@@ -22,31 +22,32 @@ class TestVectorService:
         service = VectorService()
 
         assert service.embedding_service is None
+        assert service.embedding_service_v2 is None
         assert not service._initialized
 
     @pytest.mark.asyncio
-    @patch("bio_mcp.services.services.EmbeddingService")
+    @patch("bio_mcp.services.services.EmbeddingServiceV2")
     async def test_initialize(self, mock_embedding_class):
         """Test VectorService initialization process."""
         mock_embedding = AsyncMock()
         mock_embedding_class.return_value = mock_embedding
 
-        service = VectorService()
+        service = VectorService(use_v2=True)
         await service.initialize()
 
         assert service._initialized
-        assert service.embedding_service is not None
-        mock_embedding.initialize.assert_called_once()
+        assert service.embedding_service_v2 is not None
+        mock_embedding.connect.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("bio_mcp.services.services.EmbeddingService")
+    @patch("bio_mcp.services.services.EmbeddingServiceV2")
     async def test_store_document_chunks(self, mock_embedding_class):
         """Test storing document as chunks."""
         mock_embedding = AsyncMock()
         mock_embedding.store_document_chunks.return_value = ["uuid1", "uuid2", "uuid3"]
         mock_embedding_class.return_value = mock_embedding
 
-        service = VectorService()
+        service = VectorService(use_v2=True)
         await service.initialize()
 
         # Create test document
@@ -65,8 +66,9 @@ class TestVectorService:
 
         result = await service.store_document_chunks(document)
 
+        # Should return the exact mocked values
         assert result == ["uuid1", "uuid2", "uuid3"]
-        mock_embedding.store_document_chunks.assert_called_once_with(document)
+        mock_embedding.store_document_chunks.assert_called_once_with(document, None)
 
     @pytest.mark.asyncio
     @patch("bio_mcp.services.services.EmbeddingService")

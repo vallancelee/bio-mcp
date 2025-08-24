@@ -8,7 +8,7 @@ from typing import Any
 
 from bio_mcp.config.logging_config import get_logger
 from bio_mcp.models.document import Document
-from bio_mcp.services.embedding_service import EmbeddingService
+from bio_mcp.services.document_chunk_service import DocumentChunkService
 from bio_mcp.shared.clients.database import DatabaseConfig, DatabaseManager
 from bio_mcp.sources.pubmed.client import PubMedClient
 from bio_mcp.sources.pubmed.config import PubMedConfig
@@ -130,9 +130,10 @@ class VectorService:
     Service for vector store operations using the Document/Chunk model.
     """
 
-    def __init__(self):
+    def __init__(self, use_v2: bool = True):
         """Initialize VectorService with chunk-based approach."""
-        self.embedding_service: EmbeddingService | None = None
+        self.use_v2 = use_v2
+        self.document_chunk_service: DocumentChunkService | None = None
         self._initialized = False
 
     async def initialize(self) -> None:
@@ -140,26 +141,32 @@ class VectorService:
         if self._initialized:
             return
 
-        logger.info("Initializing vector service")
-        self.embedding_service = EmbeddingService()
-        await self.embedding_service.initialize()
+        logger.info("Initializing vector service", use_v2=self.use_v2)
+        
+        if self.use_v2:
+            self.document_chunk_service = DocumentChunkService()
+            await self.document_chunk_service.connect()
+        else:
+            raise ValueError("Legacy embedding service (use_v2=False) is no longer supported")
+            
         self._initialized = True
-        logger.info("Vector service initialized successfully")
+        logger.info("Vector service initialized successfully", use_v2=self.use_v2)
 
     async def close(self) -> None:
         """Close vector store connections."""
-        if self.embedding_service:
-            await self.embedding_service.close()
-            self.embedding_service = None
+        if self.document_chunk_service:
+            await self.document_chunk_service.disconnect()
+            self.document_chunk_service = None
         self._initialized = False
         logger.info("Vector service closed")
 
-    async def store_document_chunks(self, document: Document) -> list[str]:
+    async def store_document_chunks(self, document: Document, quality_score: float | None = None) -> list[str]:
         """
         Store document as chunks in vector store.
 
         Args:
             document: Document to chunk and store
+            quality_score: Optional quality score for V2 service
 
         Returns:
             List of Weaviate UUIDs for stored chunks
@@ -167,10 +174,9 @@ class VectorService:
         if not self._initialized:
             await self.initialize()
 
-        if not self.embedding_service:
-            raise ValueError("Embedding service not initialized")
-
-        return await self.embedding_service.store_document_chunks(document)
+        if not self.document_chunk_service:
+            raise ValueError("Document chunk service not initialized")
+        return await self.document_chunk_service.store_document_chunks(document, quality_score)
 
     async def search_chunks(
         self,
@@ -179,6 +185,10 @@ class VectorService:
         search_mode: str = "semantic",
         alpha: float = 0.5,
         filters: dict | None = None,
+        source_filter: str | None = None,
+        year_filter: tuple[int, int] | None = None,
+        section_filter: list[str] | None = None,
+        quality_threshold: float | None = None,
     ) -> list[dict[str, Any]]:
         """
         Search chunks using different search modes.
@@ -187,8 +197,12 @@ class VectorService:
             query: Search query text
             limit: Maximum number of chunks to return
             search_mode: 'semantic', 'bm25', or 'hybrid'
-            alpha: Hybrid search balance (0.0=BM25, 1.0=semantic)
-            filters: Additional filters for search
+            alpha: Hybrid search balance (0.0=BM25, 1.0=vector)
+            filters: Generic filters dict for flexible filtering
+            source_filter: Filter by source (convenience parameter)
+            year_filter: Filter by year range (convenience parameter)
+            section_filter: Filter by sections (convenience parameter)
+            quality_threshold: Filter by quality threshold (convenience parameter)
 
         Returns:
             List of matching chunk results with metadata
@@ -196,15 +210,18 @@ class VectorService:
         if not self._initialized:
             await self.initialize()
 
-        if not self.embedding_service:
-            raise ValueError("Embedding service not initialized")
-
-        return await self.embedding_service.search_chunks(
+        if not self.document_chunk_service:
+            raise ValueError("Document chunk service not initialized")
+        return await self.document_chunk_service.search_chunks(
             query=query,
             limit=limit,
             search_mode=search_mode,
             alpha=alpha,
             filters=filters,
+            source_filter=source_filter,
+            year_filter=year_filter,
+            section_filter=section_filter,
+            quality_threshold=quality_threshold,
         )
 
     async def store_document(
@@ -230,8 +247,8 @@ class VectorService:
         if not self._initialized:
             await self.initialize()
 
-        if not self.embedding_service:
-            raise ValueError("Embedding service not initialized")
+        if not self.document_chunk_service:
+            raise ValueError("Document chunk service not initialized")
 
         # Convert legacy parameters to Document model using the normalizer
         from bio_mcp.services.normalization.pubmed import PubMedNormalizer
@@ -253,7 +270,7 @@ class VectorService:
             content_hash=f"temp_{pmid}",  # Placeholder hash
         )
 
-        chunk_uuids = await self.embedding_service.store_document_chunks(document)
+        chunk_uuids = await self.document_chunk_service.store_document_chunks(document)
         logger.info(
             "Stored document as chunks", pmid=pmid, chunk_count=len(chunk_uuids)
         )
@@ -275,15 +292,12 @@ class VectorService:
         if not self._initialized:
             await self.initialize()
 
-        if not self.embedding_service:
-            raise ValueError("Embedding service not initialized")
+        if not self.document_chunk_service:
+            raise ValueError("Document chunk service not initialized")
 
-        return await self.embedding_service.search_chunks(
+        return await self.document_chunk_service.search_chunks(
             query=query,
-            limit=limit,
-            search_mode=search_mode,
-            alpha=alpha,
-            filters=filters,
+            limit=limit
         )
 
 

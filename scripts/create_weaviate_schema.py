@@ -26,7 +26,7 @@ logger = get_logger(__name__)
 
 async def create_collection(
     collection_name: str = "DocumentChunk_v2",
-    vectorizer_type: str = "huggingface",
+    vectorizer_type: str = "transformers",
     model_name: str = "pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb",
     force: bool = False
 ) -> bool:
@@ -121,7 +121,7 @@ def main():
     parser.add_argument(
         "--vectorizer",
         choices=["huggingface", "transformers", "openai"],
-        default="huggingface",
+        default="transformers",
         help="Vectorizer type to use"
     )
     parser.add_argument(
