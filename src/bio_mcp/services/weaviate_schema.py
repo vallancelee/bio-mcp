@@ -30,11 +30,12 @@ class CollectionConfig:
     
     # Collection settings
     name: str = "DocumentChunk_v2"
-    description: str = "Biomedical document chunks with BioBERT embeddings"
+    description: str = "Biomedical document chunks with OpenAI embeddings"
     
     # Vectorizer settings
-    vectorizer_type: VectorizerType = VectorizerType.TRANSFORMERS_LOCAL
-    model_name: str = "pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb"
+    vectorizer_type: VectorizerType = VectorizerType.OPENAI
+    model_name: str = "text-embedding-3-small"
+    dimensions: int | None = 1536
     
     # Vector index settings
     ef_construction: int = 200
@@ -70,12 +71,22 @@ class WeaviateSchemaManager:
             # Configure vectorizer
             vectorizer_config = self._build_vectorizer_config()
             
+            # Prepare create arguments
+            create_args = {
+                "name": self.config.name,
+                "description": self.config.description,
+                "properties": properties,
+            }
+            
+            # Only add vector config if vectorizer is available
+            if vectorizer_config:
+                create_args["vector_config"] = vectorizer_config
+            else:
+                logger.info("Creating collection without vectorizer (BM25-only search)")
+            
             # Create collection
             self.client.collections.create(
-                name=self.config.name,
-                description=self.config.description,
-                properties=properties,
-                vector_config=vectorizer_config,
+                **create_args,
                 replication_config=Configure.replication(factor=self.config.replication_factor),
                 sharding_config=Configure.sharding(
                     virtual_per_physical=self.config.shard_count,
@@ -195,7 +206,26 @@ class WeaviateSchemaManager:
     
     def _build_vectorizer_config(self) -> dict[str, Any]:
         """Build vectorizer configuration based on vectorizer type."""
-        if self.config.vectorizer_type == VectorizerType.HUGGINGFACE_API:
+        from bio_mcp.config.config import config
+        
+        if self.config.vectorizer_type == VectorizerType.OPENAI:
+            # Check if OpenAI API key is configured
+            if not config.openai_api_key:
+                logger.warning("OpenAI API key not configured, falling back to BM25-only search")
+                return None
+            
+            vectorizer_config = {
+                "model": config.openai_embedding_model,
+                "vectorize_collection_name": False
+            }
+            
+            # Add dimensions if specified (for cost optimization)
+            if config.openai_embedding_dimensions:
+                vectorizer_config["dimensions"] = config.openai_embedding_dimensions
+                
+            return Configure.Vectors.text2vec_openai(**vectorizer_config)
+        
+        elif self.config.vectorizer_type == VectorizerType.HUGGINGFACE_API:
             return Configure.Vectors.text2vec_huggingface(
                 model=self.config.model_name,
                 wait_for_model=True,
@@ -204,6 +234,7 @@ class WeaviateSchemaManager:
             )
         
         elif self.config.vectorizer_type == VectorizerType.TRANSFORMERS_LOCAL:
+            logger.warning("Using local transformers - requires PyTorch")
             return Configure.Vectors.text2vec_transformers(
                 pooling_strategy="masked_mean",
                 vectorize_collection_name=False

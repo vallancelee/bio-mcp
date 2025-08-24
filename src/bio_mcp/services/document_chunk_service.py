@@ -1,8 +1,8 @@
 """
-Embedding service for DocumentChunk_v2 with Weaviate BioBERT vectorizer.
+Document chunking service for DocumentChunk_v2 with Weaviate OpenAI vectorizer.
 
 This service handles document chunking and storage, while Weaviate manages
-BioBERT embeddings through its text2vec-transformers module.
+OpenAI embeddings through its text2vec-openai module.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ logger = get_logger(__name__)
 
 
 class DocumentChunkService:
-    """Document chunking and storage service with Weaviate BioBERT vectorizer."""
+    """Document chunking and storage service with Weaviate OpenAI vectorizer."""
     
     def __init__(self, 
                  weaviate_client: WeaviateClient | None = None,
@@ -92,8 +92,8 @@ class DocumentChunkService:
         # Start with chunking metadata
         meta = {
             "chunker_version": self.config.chunker_version,
-            "vectorizer": "text2vec-transformers",
-            "model": self.config.biobert_model_name,
+            "vectorizer": "text2vec-openai",
+            "model": self.config.openai_embedding_model,
             **chunk_metadata
         }
         
@@ -399,6 +399,20 @@ class DocumentChunkService:
                 
                 # Calculate final score
                 base_score = item.metadata.score or 0.0
+                
+                # Handle Weaviate's different score formats
+                if base_score == 0.0:
+                    # For semantic search, Weaviate returns distance instead of score
+                    distance = getattr(item.metadata, 'distance', None)
+                    if distance is not None:
+                        # Convert distance (0-2 range) to similarity score (0-1 range)
+                        # Lower distance = higher similarity
+                        base_score = max(0.0, 1.0 - (distance / 2.0))
+                    else:
+                        # For BM25 or other searches, use minimal base score
+                        # so quality boosting still has an effect
+                        base_score = 0.1
+                
                 final_score = base_score * (1 + section_boost + quality_boost)
                 
                 result = {
@@ -558,7 +572,7 @@ class DocumentChunkService:
                 "total_chunks": total_count,
                 "source_breakdown": source_counts,
                 "collection_name": self.collection_name,
-                "model_name": self.config.biobert_model_name
+                "model_name": self.config.openai_embedding_model
             }
             
         except Exception as e:
@@ -566,7 +580,7 @@ class DocumentChunkService:
             return {}
     
     async def health_check(self) -> dict[str, Any]:
-        """Check health of embedding service."""
+        """Check health of embedding service with OpenAI vectorizer testing."""
         try:
             if not self._initialized:
                 await self.connect()
@@ -585,17 +599,85 @@ class DocumentChunkService:
                     "error": f"Collection {self.collection_name} does not exist"
                 }
             
+            collection = self.weaviate_client.client.collections.get(self.collection_name)
+            
+            # Test OpenAI embedding generation by inserting a test document
+            embeddings_working = True
+            embedding_error = None
+            
+            if self.config.openai_api_key:
+                try:
+                    # Create test document for embedding verification
+                    test_doc = Document(
+                        uid="health:test",
+                        source="health_check", 
+                        title="Health Check Test",
+                        text="Diabetes mellitus treatment with metformin therapy"
+                    )
+                    
+                    # Generate single chunk and store it
+                    chunks = self.chunking_service.chunk_document(test_doc)
+                    if chunks:
+                        test_chunk = chunks[0]
+                        test_properties = {
+                            "parent_uid": test_chunk.parent_uid,
+                            "source": "health_check",
+                            "title": "Health Check Test",
+                            "text": test_chunk.text,
+                            "section": "Test",
+                            "tokens": test_chunk.tokens,
+                            "n_sentences": test_chunk.n_sentences,
+                            "quality_total": 1.0,
+                            "meta": {"chunker_version": self.config.chunker_version}
+                        }
+                        
+                        # Insert test chunk (will generate embedding)
+                        collection.data.insert(
+                            uuid=test_chunk.uuid,
+                            properties=test_properties
+                        )
+                        
+                        # Verify embedding was generated
+                        retrieved = collection.query.fetch_object_by_id(
+                            test_chunk.uuid,
+                            include_vector=True
+                        )
+                        
+                        if not retrieved or not retrieved.vector:
+                            embeddings_working = False
+                            embedding_error = "No vector generated for test document"
+                        elif len(retrieved.vector) != (self.config.openai_embedding_dimensions or 1536):
+                            embeddings_working = False
+                            embedding_error = f"Vector dimension mismatch: expected {self.config.openai_embedding_dimensions or 1536}, got {len(retrieved.vector)}"
+                        
+                        # Clean up test document
+                        collection.data.delete_by_id(test_chunk.uuid)
+                        
+                except Exception as e:
+                    embeddings_working = False
+                    embedding_error = f"Embedding test failed: {e!s}"
+            else:
+                embeddings_working = False
+                embedding_error = "OpenAI API key not configured - falling back to BM25-only search"
+            
             # Get basic stats
             stats = await self.get_collection_stats()
             
-            return {
-                "status": "healthy",
+            health_status = {
+                "status": "healthy" if embeddings_working else "degraded",
                 "collection": self.collection_name,
                 "total_chunks": stats.get("total_chunks", 0),
                 "sources": list(stats.get("source_breakdown", {}).keys()),
-                "vectorizer": "text2vec-transformers",
-                "model": self.config.biobert_model_name
+                "vectorizer": "text2vec-openai" if embeddings_working else "none (BM25-only)",
+                "model": self.config.openai_embedding_model,
+                "dimensions": self.config.openai_embedding_dimensions,
+                "embeddings_working": embeddings_working
             }
+            
+            if embedding_error:
+                health_status["embedding_error"] = embedding_error
+                
+            return health_status
             
         except Exception as e:
             logger.error(f"Health check failed: {e}")

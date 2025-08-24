@@ -1,0 +1,74 @@
+{
+  "timestamp": "2025-08-23T13:58:55.361564",
+  "system_info": {
+    "python_version": "3.12.7 (main, Nov 25 2024, 21:32:33) [Clang 16.0.0 (clang-1600.0.26.4)]",
+    "cpu_count": 12,
+    "memory_total_mb": 24576.0
+  },
+  "config": {
+    "biobert_model": "pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb",
+    "collection": "DocumentChunk_v2_microbench"
+  },
+  "baseline_overhead_ms": 0.01588664,
+  "benchmarks": {
+    "storage": {
+      "mean": 99.42772913777777,
+      "std": 8.721685183625764,
+      "median": 97.10894635999999,
+      "p95": 116.28798825999999,
+      "p99": 117.05918227999999,
+      "min_val": 82.91498836,
+      "max_val": 117.10044635999999,
+      "samples": 27,
+      "outliers_removed": 3,
+      "confidence_interval_95": [
+        95.97754538812947,
+        102.87791288742608
+      ]
+    },
+    "search": {
+      "mean": 13.73854490736842,
+      "std": 2.922655825770191,
+      "median": 13.89053036,
+      "p95": 18.197283959999996,
+      "p99": 19.308948899999997,
+      "min_val": 6.81852936,
+      "max_val": 19.330530359999997,
+      "samples": 95,
+      "outliers_removed": 5,
+      "confidence_interval_95": [
+        13.14316949989762,
+        14.333920314839219
+      ]
+    },
+    "filtered_search": {
+      "mean": 13.396874099130438,
+      "std": 3.7853968561612334,
+      "median": 12.38327986,
+      "p95": 20.26946761,
+      "p99": 21.37095261,
+      "min_val": 7.84390536,
+      "max_val": 21.59094636,
+      "samples": 46,
+      "outliers_removed": 4,
+      "confidence_interval_95": [
+        12.272749992042971,
+        14.520998206217904
+      ]
+    }
+  },
+  "system_metrics": {
+    "start": {
+      "cpu_percent": 0.0,
+      "memory_mb": 251.15625,
+      "memory_peak_mb": 251.15625,
+      "gc_collections": 524
+    },
+    "end": {
+      "cpu_percent": 60.8,
+      "memory_mb": 258.5,
+      "memory_peak_mb": 258.5,
+      "gc_collections": 931
+    }
+  }
+}

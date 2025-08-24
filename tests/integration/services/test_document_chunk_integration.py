@@ -2,13 +2,10 @@
 Integration tests for DocumentChunkService with real Weaviate.
 """
 
-import warnings
-import pytest
-import pytest_asyncio
 from datetime import datetime
 
-# Suppress transformers warning about missing PyTorch/TensorFlow
-warnings.filterwarnings("ignore", message=".*PyTorch.*TensorFlow.*Flax.*", category=UserWarning)
+import pytest
+import pytest_asyncio
 
 from bio_mcp.config.config import Config
 from bio_mcp.models.document import Document
@@ -261,7 +258,6 @@ class TestDocumentChunkIntegration:
             assert chunk is not None
             
             # Token count should be reasonable for the text length
-            text_length = len(chunk["text"])
             token_count = chunk["tokens"]
             
             # Chunking service should provide reasonable token estimates
@@ -294,18 +290,20 @@ class TestDocumentChunkIntegration:
         assert "pubmed" in stats["source_breakdown"]
         assert stats["source_breakdown"]["pubmed"] >= len(chunk_uuids)
         assert stats["collection_name"] == embedding_service.collection_name
-        assert stats["model_name"] == embedding_service.config.biobert_model_name
+        assert stats["model_name"] == embedding_service.config.openai_embedding_model
     
     @pytest.mark.asyncio
     async def test_health_check_integration(self, embedding_service):
         """Test health check with real Weaviate connection."""
         health = await embedding_service.health_check()
         
-        assert health["status"] == "healthy"
+        # Status should be degraded since no OpenAI API key is configured in tests
+        assert health["status"] in ["healthy", "degraded"]
         assert health["collection"] == embedding_service.collection_name
-        assert health["vectorizer"] == "text2vec-transformers"
-        assert health["model"] == embedding_service.config.biobert_model_name
+        assert health["vectorizer"] in ["text2vec-openai", "none (BM25-only)"]
+        assert health["model"] == embedding_service.config.openai_embedding_model
         assert "total_chunks" in health
+        assert "embeddings_working" in health
         assert "sources" in health
     
     @pytest.mark.asyncio

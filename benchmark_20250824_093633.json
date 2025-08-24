@@ -1,0 +1,16 @@
+{
+  "timestamp": "2025-08-24T09:36:33.291872",
+  "model": "text-embedding-3-small",
+  "storage": {
+    "documents": 5,
+    "chunks": 5,
+    "total_time": 3.7143208980560303,
+    "chunks_per_sec": 1.3461410947602448,
+    "docs_per_sec": 1.3461410947602448
+  },
+  "search": {
+    "queries": 5,
+    "total_time": 1.603877067565918,
+    "queries_per_sec": 3.1174459072403344
+  }
+}

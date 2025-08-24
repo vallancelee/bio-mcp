@@ -2,10 +2,10 @@
 Unit tests for DocumentChunkService with Weaviate BioBERT vectorizer.
 """
 
-import pytest
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
-from uuid import uuid4
+from unittest.mock import Mock
+
+import pytest
 
 from bio_mcp.config.config import Config
 from bio_mcp.models.document import Document

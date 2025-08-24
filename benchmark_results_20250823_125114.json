@@ -1,0 +1,314 @@
+{
+  "timestamp": "2025-08-23T12:51:14.220623",
+  "config": {
+    "biobert_model": "pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb",
+    "collection": "DocumentChunk_v2_benchmark",
+    "test_documents": 10,
+    "test_queries": 10
+  },
+  "storage": {
+    "documents_processed": 10,
+    "total_chunks": 10,
+    "elapsed_seconds": 0.6703698635101318,
+    "docs_per_second": 14.917138350520231,
+    "chunks_per_second": 14.917138350520231,
+    "avg_chunks_per_doc": 1.0,
+    "avg_storage_time_ms": 67.03357696533203,
+    "median_storage_time_ms": 58.873891830444336,
+    "memory_start_mb": 206.171875,
+    "memory_end_mb": 209.046875,
+    "memory_peak_mb": 209.046875,
+    "memory_increase_mb": 2.875
+  },
+  "search": {
+    "total_queries": 30,
+    "total_results": 300,
+    "elapsed_seconds": 0.2734959125518799,
+    "queries_per_second": 109.69085322000655,
+    "avg_latency_ms": 9.116530418395996,
+    "median_latency_ms": 8.28409194946289,
+    "p95_latency_ms": 13.331174850463867,
+    "p99_latency_ms": 18.54991912841797,
+    "avg_results_per_query": 10,
+    "query_breakdown": {
+      "biomarker cancer detection sensitivity": {
+        "avg_latency_ms": 9.149471918741861,
+        "min_latency_ms": 6.634950637817383,
+        "max_latency_ms": 11.60430908203125
+      },
+      "cardiovascular intervention clinical trial": {
+        "avg_latency_ms": 9.64824358622233,
+        "min_latency_ms": 7.815837860107422,
+        "max_latency_ms": 12.681961059570312
+      },
+      "machine learning drug discovery model": {
+        "avg_latency_ms": 9.125550587972006,
+        "min_latency_ms": 6.649255752563477,
+        "max_latency_ms": 13.331174850463867
+      },
+      "therapeutic efficacy randomized controlled": {
+        "avg_latency_ms": 12.894233067830404,
+        "min_latency_ms": 9.283781051635742,
+        "max_latency_ms": 18.54991912841797
+      },
+      "diagnostic accuracy screening protocol": {
+        "avg_latency_ms": 7.592121760050456,
+        "min_latency_ms": 6.409168243408203,
+        "max_latency_ms": 9.47713851928711
+      },
+      "pharmaceutical artificial intelligence": {
+        "avg_latency_ms": 7.37309455871582,
+        "min_latency_ms": 6.147146224975586,
+        "max_latency_ms": 8.121252059936523
+      },
+      "molecular structure biological activity": {
+        "avg_latency_ms": 7.6185862223307295,
+        "min_latency_ms": 7.13801383972168,
+        "max_latency_ms": 8.475065231323242
+      },
+      "clinical benefit cardiovascular protection": {
+        "avg_latency_ms": 7.894357045491537,
+        "min_latency_ms": 7.721185684204102,
+        "max_latency_ms": 8.104085922241211
+      },
+      "computational approach drug development": {
+        "avg_latency_ms": 9.558916091918945,
+        "min_latency_ms": 6.741762161254883,
+        "max_latency_ms": 11.241912841796875
+      },
+      "biomedical research innovative treatment": {
+        "avg_latency_ms": 10.310729344685873,
+        "min_latency_ms": 8.477210998535156,
+        "max_latency_ms": 11.646032333374023
+      }
+    }
+  },
+  "quality": {
+    "queries_tested": 3,
+    "quality_analysis": [
+      {
+        "query": "biomarker cancer detection",
+        "quality_groups": {
+          "0.9": [
+            {
+              "score": 1.0765690755844117,
+              "base_score": 0.987678050994873,
+              "quality_boost": 0.09
+            },
+            {
+              "score": 0.0,
+              "base_score": 0.0,
+              "quality_boost": 0.09
+            }
+          ],
+          "0.8": [
+            {
+              "score": 1.0756965994834902,
+              "base_score": 0.9960153698921204,
+              "quality_boost": 0.08
+            },
+            {
+              "score": 0.32792856931686404,
+              "base_score": 0.3036375641822815,
+              "quality_boost": 0.08
+            }
+          ],
+          "0.6": [
+            {
+              "score": 1.06,
+              "base_score": 1.0,
+              "quality_boost": 0.06
+            },
+            {
+              "score": 0.028742561861872674,
+              "base_score": 0.027115624397993088,
+              "quality_boost": 0.06
+            }
+          ],
+          "0.5": [
+            {
+              "score": 1.0221677541732788,
+              "base_score": 0.9734930992126465,
+              "quality_boost": 0.05
+            },
+            {
+              "score": 0.3022645220160484,
+              "base_score": 0.28787097334861755,
+              "quality_boost": 0.05
+            }
+          ],
+          "0.7": [
+            {
+              "score": 0.2990966734290123,
+              "base_score": 0.2795296013355255,
+              "quality_boost": 0.06999999999999999
+            },
+            {
+              "score": 0.015740110334008933,
+              "base_score": 0.014710383489727974,
+              "quality_boost": 0.06999999999999999
+            }
+          ]
+        },
+        "total_results": 10
+      },
+      {
+        "query": "cardiovascular intervention therapy",
+        "quality_groups": {
+          "0.9": [
+            {
+              "score": 1.06140451669693,
+              "base_score": 0.9737656116485596,
+              "quality_boost": 0.09
+            },
+            {
+              "score": 0.026225409861654045,
+              "base_score": 0.02406000904738903,
+              "quality_boost": 0.09
+            }
+          ],
+          "0.6": [
+            {
+              "score": 1.06,
+              "base_score": 1.0,
+              "quality_boost": 0.06
+            },
+            {
+              "score": 0.04164982430636883,
+              "base_score": 0.039292287081480026,
+              "quality_boost": 0.06
+            }
+          ],
+          "0.7": [
+            {
+              "score": 1.033578949570656,
+              "base_score": 0.9659616351127625,
+              "quality_boost": 0.06999999999999999
+            },
+            {
+              "score": 0.009183990294113755,
+              "base_score": 0.008583168499171734,
+              "quality_boost": 0.06999999999999999
+            }
+          ],
+          "0.5": [
+            {
+              "score": 0.022128309030085804,
+              "base_score": 0.021074580028653145,
+              "quality_boost": 0.05
+            },
+            {
+              "score": 0.0,
+              "base_score": 0.0,
+              "quality_boost": 0.05
+            }
+          ],
+          "0.8": [
+            {
+              "score": 0.016740778237581255,
+              "base_score": 0.015500720590353012,
+              "quality_boost": 0.08
+            },
+            {
+              "score": 0.0004197241365909577,
+              "base_score": 0.00038863345980644226,
+              "quality_boost": 0.08
+            }
+          ]
+        },
+        "total_results": 10
+      },
+      {
+        "query": "machine learning drug discovery",
+        "quality_groups": {
+          "0.7": [
+            {
+              "score": 1.0650425523519516,
+              "base_score": 0.9953668713569641,
+              "quality_boost": 0.06999999999999999
+            },
+            {
+              "score": 0.033367831632494925,
+              "base_score": 0.031184889376163483,
+              "quality_boost": 0.06999999999999999
+            }
+          ],
+          "0.5": [
+            {
+              "score": 1.05,
+              "base_score": 1.0,
+              "quality_boost": 0.05
+            },
+            {
+              "score": 0.21215803921222687,
+              "base_score": 0.20205527544021606,
+              "quality_boost": 0.05
+            }
+          ],
+          "0.8": [
+            {
+              "score": 1.039851257801056,
+              "base_score": 0.9628252387046814,
+              "quality_boost": 0.08
+            },
+            {
+              "score": 0.25072330713272095,
+              "base_score": 0.23215121030807495,
+              "quality_boost": 0.08
+            }
+          ],
+          "0.6": [
+            {
+              "score": 0.2556559047102928,
+              "base_score": 0.24118481576442719,
+              "quality_boost": 0.06
+            },
+            {
+              "score": 0.0,
+              "base_score": 0.0,
+              "quality_boost": 0.06
+            }
+          ],
+          "0.9": [
+            {
+              "score": 0.22867360815405846,
+              "base_score": 0.20979230105876923,
+              "quality_boost": 0.09
+            },
+            {
+              "score": 8.140177858876997e-05,
+              "base_score": 7.468053081538528e-05,
+              "quality_boost": 0.09
+            }
+          ]
+        },
+        "total_results": 10
+      }
+    ]
+  },
+  "requirements": {
+    "all_requirements_met": false,
+    "requirements": {
+      "storage_chunks_per_sec": {
+        "requirement": "> 100 chunks/sec",
+        "actual": 14.917138350520231,
+        "passed": false
+      },
+      "search_queries_per_sec": {
+        "requirement": "> 10 queries/sec",
+        "actual": 109.69085322000655,
+        "passed": true
+      },
+      "memory_peak_usage": {
+        "requirement": "< 500MB peak",
+        "actual": 209.046875,
+        "passed": true
+      },
+      "search_avg_latency": {
+        "requirement": "< 100ms average",
+        "actual": 9.116530418395996,
+        "passed": true
+      }
+    }
+  }
+}

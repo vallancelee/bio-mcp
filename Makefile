@@ -181,6 +181,13 @@ test-weaviate-v2: ## Run Weaviate V2 integration tests
 	@$(UV) run --with pytest-asyncio pytest tests/integration/test_weaviate_v2.py -v
 	@echo "$(GREEN)✓ Weaviate V2 tests completed$(NC)"
 
+test-openai: ## Run OpenAI embedding tests (requires API key)
+	@echo "$(YELLOW)Running OpenAI embedding tests...$(NC)"
+	@test -n "$$OPENAI_API_KEY" || (echo "$(RED)Error: OPENAI_API_KEY environment variable required$(NC)" && exit 1)
+	@$(UV) run --with pytest-asyncio pytest tests/integration/test_openai_embeddings.py -v
+	@echo "$(GREEN)✓ OpenAI embedding tests completed$(NC)"
+
+
 # ============================================================================
 # DATABASE COMMANDS
 # ============================================================================
@@ -269,7 +276,20 @@ up: ## Start all development services (ONBOARDING alias)
 	@$(MAKE) health-check || echo "$(YELLOW)Some services may still be starting...$(NC)"
 	@echo "$(GREEN)✅ Services ready!$(NC)"
 	@echo "$(BLUE)PostgreSQL: localhost:5433$(NC)"
-	@echo "$(BLUE)Weaviate: http://localhost:8080$(NC)"
+	@echo "$(BLUE)Weaviate: http://localhost:8080 (hybrid: OpenAI + local transformers)$(NC)"
+	@echo "$(BLUE)MinIO S3: http://localhost:9000$(NC)"
+	@echo "$(BLUE)MinIO Console: http://localhost:9001 (minioadmin/minioadmin)$(NC)"
+
+up-openai: ## Start services with OpenAI-only configuration (requires API key)
+	@echo "$(YELLOW)Starting OpenAI-enabled development services...$(NC)"
+	@test -n "$$OPENAI_API_KEY" || (echo "$(RED)Error: OPENAI_API_KEY environment variable required$(NC)" && exit 1)
+	@docker-compose -f docker-compose.openai.yml up -d postgres weaviate minio
+	@echo "$(YELLOW)Waiting for services to be healthy...$(NC)"
+	@sleep 5
+	@$(MAKE) health-check || echo "$(YELLOW)Some services may still be starting...$(NC)"
+	@echo "$(GREEN)✅ OpenAI services ready!$(NC)"
+	@echo "$(BLUE)PostgreSQL: localhost:5433$(NC)"
+	@echo "$(BLUE)Weaviate: http://localhost:8080 (OpenAI embeddings)$(NC)"
 	@echo "$(BLUE)MinIO S3: http://localhost:9000$(NC)"
 	@echo "$(BLUE)MinIO Console: http://localhost:9001 (minioadmin/minioadmin)$(NC)"
 
@@ -281,7 +301,13 @@ docker-down: ## Stop development services
 down: ## Stop all development services (ONBOARDING alias)
 	@echo "$(YELLOW)Stopping development services...$(NC)"
 	@docker-compose down
+	@docker-compose -f docker-compose.openai.yml down 2>/dev/null || true
 	@echo "$(GREEN)✅ Services stopped$(NC)"
+
+down-openai: ## Stop OpenAI-specific services
+	@echo "$(YELLOW)Stopping OpenAI development services...$(NC)"
+	@docker-compose -f docker-compose.openai.yml down
+	@echo "$(GREEN)✅ OpenAI services stopped$(NC)"
 
 reset: down ## Reset everything (WARNING: destroys data)
 	@echo "$(RED)⚠️  This will delete all local data! Press Ctrl+C to cancel...$(NC)"

@@ -52,7 +52,11 @@ class Config:
     # Weaviate (defaults to local for Phase 1A)
     weaviate_url: str = "http://localhost:8080"
 
-    # BioBERT Embedding Configuration (local model only)
+    # OpenAI Embedding Configuration
+    openai_embedding_model: str = "text-embedding-3-small"
+    openai_embedding_dimensions: int | None = 1536
+    
+    # Legacy - kept for backward compatibility during migration
     biobert_model_name: str = "pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb"
     biobert_max_tokens: int = 512
 
@@ -83,10 +87,13 @@ class Config:
             server_name=os.getenv("BIO_MCP_SERVER_NAME", "bio-mcp"),
             log_level=os.getenv("BIO_MCP_LOG_LEVEL", "INFO"),
             pubmed_api_key=os.getenv("BIO_MCP_PUBMED_API_KEY"),
-            openai_api_key=os.getenv("BIO_MCP_OPENAI_API_KEY"),
+            openai_api_key=os.getenv("OPENAI_API_KEY") or os.getenv("BIO_MCP_OPENAI_API_KEY"),
             database_url=os.getenv("BIO_MCP_DATABASE_URL", "sqlite:///:memory:"),
             weaviate_url=os.getenv("BIO_MCP_WEAVIATE_URL", "http://localhost:8080"),
-            # BioBERT Configuration (local model only)
+            # OpenAI Embedding Configuration
+            openai_embedding_model=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"),
+            openai_embedding_dimensions=int(os.getenv("OPENAI_EMBEDDING_DIMENSIONS", "1536")) if os.getenv("OPENAI_EMBEDDING_DIMENSIONS") else None,
+            # Legacy BioBERT Configuration (backward compatibility)
             biobert_model_name=os.getenv("BIO_MCP_EMBED_MODEL", "pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb"),
             biobert_max_tokens=int(os.getenv("BIO_MCP_EMBED_MAX_TOKENS", "512")),
             # Collection Configuration

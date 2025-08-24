@@ -33,9 +33,19 @@ class WeaviateClient:
 
         try:
             logger.debug("Connecting to Weaviate", url=self.url)
+            
+            # Prepare headers for API keys
+            headers = {}
+            if config.openai_api_key:
+                headers["X-OpenAI-Api-Key"] = config.openai_api_key
+                logger.debug("Added OpenAI API key to Weaviate headers")
+            
             # Use the provided URL instead of hardcoded localhost
             if self.url.startswith("http://localhost:8080"):
-                self.client = weaviate.connect_to_local()
+                if headers:
+                    self.client = weaviate.connect_to_local(headers=headers)
+                else:
+                    self.client = weaviate.connect_to_local()
             else:
                 # Parse URL components
                 host = self.url.split("://")[1].split(":")[0]
@@ -46,14 +56,19 @@ class WeaviateClient:
                 grpc_host = getattr(self, "_grpc_host", host)
                 grpc_port = getattr(self, "_grpc_port", 50051)
 
-                self.client = weaviate.connect_to_custom(
-                    http_host=host,
-                    http_port=port,
-                    http_secure=secure,
-                    grpc_host=grpc_host,
-                    grpc_port=grpc_port,
-                    grpc_secure=secure,
-                )
+                connection_args = {
+                    "http_host": host,
+                    "http_port": port,
+                    "http_secure": secure,
+                    "grpc_host": grpc_host,
+                    "grpc_port": grpc_port,
+                    "grpc_secure": secure,
+                }
+                
+                if headers:
+                    connection_args["headers"] = headers
+                    
+                self.client = weaviate.connect_to_custom(**connection_args)
 
             logger.debug("Testing Weaviate connection")
             meta = self.client.get_meta()

@@ -1,4 +1,5 @@
-# Docker Compose for Bio-MCP Development Environment
+# Docker Compose for Bio-MCP Development Environment with OpenAI Embeddings
+# This configuration uses OpenAI embeddings exclusively (no local transformers)
 
 services:
   bio-mcp:
@@ -6,50 +7,51 @@ services:
     container_name: bio-mcp-server
     environment:
       - BIO_MCP_LOG_LEVEL=DEBUG
-      - BIO_MCP_SERVER_NAME=bio-mcp-dev
-      # Phase 1A: Basic setup with environment defaults
+      - BIO_MCP_SERVER_NAME=bio-mcp-dev-openai
+      # Database configuration
       - DATABASE_URL=sqlite:///data/bio-mcp.db
-      - WEAVIATE_URL=http://weaviate:8080  # Internal container-to-container communication still uses 8080
-      # API keys can be set via .env file
+      - WEAVIATE_URL=http://weaviate:8080
+      # API keys - OpenAI required for this configuration
       - PUBMED_API_KEY=${PUBMED_API_KEY:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - BIO_MCP_OPENAI_API_KEY=${BIO_MCP_OPENAI_API_KEY:-${OPENAI_API_KEY}}
+      # OpenAI embedding configuration
+      - OPENAI_EMBEDDING_MODEL=${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      - OPENAI_EMBEDDING_DIMENSIONS=${OPENAI_EMBEDDING_DIMENSIONS:-1536}
     volumes:
       - ./data:/app/data
     depends_on:
       - weaviate
     stdin_open: true
     tty: true
-    # MCP uses stdio, so we'll run interactively for testing
 
-  # Weaviate vector database - hybrid configuration with OpenAI and local fallback
+  # Weaviate vector database - OpenAI-only configuration
   weaviate:
+    command:
+      - --host
+      - 0.0.0.0
+      - --port
+      - '8080'
+      - --scheme
+      - http
     image: semitechnologies/weaviate:1.30.0
-    container_name: bio-mcp-weaviate
+    container_name: bio-mcp-weaviate-openai
     ports:
-      - "8080:8080"   # HTTP/REST API - standard port for local dev
-      - "50051:50051" # gRPC API - standard port for local dev
+      - "8080:8080"   # HTTP/REST API
+      - "50051:50051" # gRPC API
+    restart: on-failure:0
     environment:
       QUERY_DEFAULTS_LIMIT: 25
       AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
       PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
       DEFAULT_VECTORIZER_MODULE: 'text2vec-openai'
-      ENABLE_MODULES: 'text2vec-openai,text2vec-transformers,generative-openai'
-      TRANSFORMERS_INFERENCE_API: 'http://t2v-transformers:8080'
-      OPENAI_APIKEY: '${OPENAI_API_KEY:-}'
+      ENABLE_MODULES: 'text2vec-openai,generative-openai'
+      OPENAI_APIKEY: '${OPENAI_API_KEY}'
       CLUSTER_HOSTNAME: 'node1'
-    depends_on:
-      - t2v-transformers
-
-  # Transformer model for embeddings (fallback when OpenAI not available)
-  t2v-transformers:
-    image: semitechnologies/transformers-inference:sentence-transformers-all-MiniLM-L6-v2
-    container_name: bio-mcp-transformers
-    environment:
-      ENABLE_CUDA: '0'  # Set to '1' if you have GPU support
     volumes:
       - ./data/weaviate:/var/lib/weaviate
 
-  # PostgreSQL for future phases
+  # PostgreSQL for metadata storage
   postgres:
     image: postgres:15-alpine
     container_name: bio-mcp-postgres
@@ -81,4 +83,11 @@ services:
       timeout: 20s
       retries: 3
 
-# Using local bind mounts instead of named volumes for project isolation
+# Using local bind mounts for development
+volumes:
+  weaviate_data:
+    driver: local
+  postgres_data:
+    driver: local
+  minio_data:
+    driver: local

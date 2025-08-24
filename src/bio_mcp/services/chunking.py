@@ -79,6 +79,34 @@ class HuggingFaceTokenizer(BaseTokenizer):
         return f"hf:{self.model_name}"
 
 
+class TikTokenTokenizer(BaseTokenizer):
+    """Tokenizer using OpenAI's tiktoken library (aligned with OpenAI embeddings)."""
+    
+    def __init__(self, encoding_name: str = "cl100k_base"):
+        self.encoding_name = encoding_name
+        try:
+            import tiktoken
+            self.encoding = tiktoken.get_encoding(encoding_name)
+        except ImportError:
+            logger.warning("tiktoken not available, falling back to approximation")
+            self.encoding = None
+        except Exception as e:
+            logger.warning(f"Failed to load tiktoken encoding {encoding_name}: {e}")
+            self.encoding = None
+    
+    def count_tokens(self, text: str) -> int:
+        """Count tokens using tiktoken."""
+        if self.encoding:
+            return len(self.encoding.encode(text))
+        else:
+            # Fallback approximation: ~4 characters per token
+            return max(1, len(text) // 4)
+    
+    def get_identifier(self) -> str:
+        """Get tokenizer identifier."""
+        return f"tiktoken:{self.encoding_name}"
+
+
 class FallbackTokenizer(BaseTokenizer):
     """Simple fallback tokenizer for testing."""
     
@@ -346,14 +374,23 @@ class AbstractChunker:
         self.safety_expander = NumericSafetyExpander()
     
     def _create_default_tokenizer(self) -> BaseTokenizer:
-        """Create default tokenizer."""
+        """Create default tokenizer that matches the configured embedding model."""
         try:
             from bio_mcp.config.config import config
-            # Use BioBERT model for tokenization to match vectorizer
-            return HuggingFaceTokenizer(config.biobert_model_name)
+            
+            # Require OpenAI configuration for consistent tokenization with embeddings
+            if not (hasattr(config, 'openai_api_key') and config.openai_api_key):
+                raise ValueError(
+                    "Chunking service requires OpenAI API key for consistent tokenization. "
+                    "Please configure OPENAI_API_KEY or use keyword-only search modes."
+                )
+            
+            # Use TikToken to match OpenAI embedding tokenization
+            return TikTokenTokenizer()
+            
         except Exception as e:
-            logger.warning(f"Failed to load HF tokenizer: {e}, using fallback")
-            return FallbackTokenizer()
+            logger.error(f"Failed to create tokenizer: {e}")
+            raise
     
     def chunk_document(self, document: Document) -> list[Chunk]:
         """Chunk a document into optimized chunks."""
