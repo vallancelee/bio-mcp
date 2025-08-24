@@ -67,6 +67,8 @@ class RAGToolsManager:
         filters: dict | None = None,
         rerank_by_quality: bool = True,
         alpha: float = 0.5,
+        return_chunks: bool = False,  # New parameter
+        enhance_query: bool = True,   # New parameter
     ) -> RAGSearchResult:
         """
         Search documents using hybrid, semantic, or BM25 search.
@@ -82,12 +84,17 @@ class RAGToolsManager:
         Returns:
             RAGSearchResult with found documents
         """
+        # Enhance query for biomedical context if requested
+        search_query = self._enhance_biomedical_query(query) if enhance_query else query
+        
         logger.info(
             "RAG hybrid search",
             query=query[:50],
+            enhanced_query=search_query[:50] if search_query != query else None,
             top_k=top_k,
             mode=search_mode,
             alpha=alpha,
+            return_chunks=return_chunks,
         )
 
         search_start_time = time.time()
@@ -96,10 +103,13 @@ class RAGToolsManager:
             await self.document_chunk_service.initialize()
 
             # Perform search with specified mode using the chunk-based approach
+            # Get more chunks if we're reconstructing documents
+            search_limit = top_k * 3 if not return_chunks else top_k
+            
             search_time_start = time.time()
             results = await self.document_chunk_service.search_chunks(
-                query=query,
-                limit=top_k,
+                query=search_query,
+                limit=search_limit,
                 search_mode=search_mode,
                 alpha=alpha,
                 filters=filters
@@ -115,52 +125,84 @@ class RAGToolsManager:
             # Calculate total processing time
             total_time_ms = (time.time() - search_start_time) * 1000
 
+            # Process results based on return type
+            if return_chunks:
+                # Return raw chunks for backward compatibility
+                formatted_results = []
+                for result in results:
+                    # Extract PMID from parent_uid (format: "pubmed:12345678")
+                    pmid = ""
+                    if "parent_uid" in result:
+                        parent_uid = result["parent_uid"]
+                        if parent_uid.startswith("pubmed:"):
+                            pmid = parent_uid[7:]  # Remove "pubmed:" prefix
+
+                    # Handle date serialization
+                    pub_date = result.get("published_at", "")
+                    if hasattr(pub_date, "isoformat"):
+                        pub_date = pub_date.isoformat()
+                    elif pub_date is None:
+                        pub_date = ""
+
+                    formatted_result = {
+                        "uuid": result["uuid"],
+                        "pmid": pmid,
+                        "title": result.get("title", ""),
+                        "abstract": result.get("text", ""),  # chunks have 'text' not 'abstract'
+                        "journal": "",  # journal info not stored in chunks currently
+                        "publication_date": pub_date,
+                        "score": result.get("score", 0.0),
+                        "distance": result.get("distance"),
+                        "content": self._truncate_content(result.get("text", "")),
+                        "search_mode": search_mode,
+                    }
+
+                    # Include hybrid search explanation if available
+                    if "explain_score" in result:
+                        formatted_result["explain_score"] = result["explain_score"]
+
+                    formatted_results.append(formatted_result)
+            else:
+                # Reconstruct documents from chunks
+                reconstructed_docs = self._reconstruct_documents(results)
+                
+                # Format reconstructed documents
+                formatted_results = []
+                for doc in reconstructed_docs[:top_k]:
+                    # Handle date serialization
+                    pub_date = doc.get("published_at", "")
+                    if hasattr(pub_date, "isoformat"):
+                        pub_date = pub_date.isoformat()
+                    elif pub_date is None:
+                        pub_date = ""
+
+                    formatted_result = {
+                        "uuid": doc.get("uid", ""),
+                        "pmid": doc.get("pmid", ""),
+                        "title": doc.get("title", ""),
+                        "abstract": doc.get("abstract", ""),
+                        "journal": "",  # journal info not stored in chunks currently  
+                        "publication_date": pub_date,
+                        "score": doc.get("best_score", 0.0),
+                        "sections_found": doc.get("sections_found", []),
+                        "chunk_count": doc.get("chunk_count", 0),
+                        "source_url": doc.get("source_url", ""),
+                        "quality_total": doc.get("quality_total", 0.0),
+                        "content": self._truncate_content(doc.get("abstract", "")),
+                        "search_mode": search_mode,
+                    }
+
+                    formatted_results.append(formatted_result)
+
             # Log performance metrics
             logger.info(
                 "RAG search performance",
                 search_time_ms=f"{search_time_ms:.1f}",
                 quality_time_ms=f"{quality_time_ms:.1f}",
                 total_time_ms=f"{total_time_ms:.1f}",
-                results_count=len(results),
+                results_count=len(formatted_results),
+                return_chunks=return_chunks,
             )
-
-            # Format chunk results for consistent output
-            formatted_results = []
-            for result in results:
-                # Extract PMID from parent_uid (format: "pubmed:12345678")
-                pmid = ""
-                if "parent_uid" in result:
-                    parent_uid = result["parent_uid"]
-                    if parent_uid.startswith("pubmed:"):
-                        pmid = parent_uid[7:]  # Remove "pubmed:" prefix
-
-                # Handle date serialization
-                pub_date = result.get("published_at", "")
-                if hasattr(pub_date, "isoformat"):
-                    pub_date = pub_date.isoformat()
-                elif pub_date is None:
-                    pub_date = ""
-
-                formatted_result = {
-                    "uuid": result["uuid"],
-                    "pmid": pmid,
-                    "title": result.get("title", ""),
-                    "abstract": result.get(
-                        "text", ""
-                    ),  # chunks have 'text' not 'abstract'
-                    "journal": "",  # journal info not stored in chunks currently
-                    "publication_date": pub_date,
-                    "score": result.get("score", 0.0),
-                    "distance": result.get("distance"),
-                    "content": self._truncate_content(result.get("text", "")),
-                    "search_mode": search_mode,
-                }
-
-                # Include hybrid search explanation if available
-                if "explain_score" in result:
-                    formatted_result["explain_score"] = result["explain_score"]
-
-                formatted_results.append(formatted_result)
 
             # Add performance metadata to the result
             search_result = RAGSearchResult(
@@ -176,6 +218,8 @@ class RAGToolsManager:
                 "quality_time_ms": quality_time_ms,
                 "total_time_ms": total_time_ms,
                 "target_time_ms": 200.0,  # Phase 4B.1 target
+                "enhanced_query": search_query != query,
+                "reconstructed_docs": not return_chunks,
             }
 
             return search_result
@@ -267,6 +311,173 @@ class RAGToolsManager:
         except Exception as e:
             logger.error("RAG get document failed", doc_id=doc_id, error=str(e))
             return RAGGetResult(doc_id=doc_id, found=False)
+    
+    def _reconstruct_documents(self, chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """
+        Group chunks by parent document and reconstruct clean abstracts.
+        """
+        from collections import defaultdict
+        
+        # Group chunks by parent_uid
+        doc_chunks = defaultdict(list)
+        for chunk in chunks:
+            parent_uid = chunk.get("parent_uid")
+            if parent_uid:
+                doc_chunks[parent_uid].append(chunk)
+        
+        # Reconstruct each document
+        documents = []
+        for parent_uid, chunks_list in doc_chunks.items():
+            if not chunks_list:
+                continue
+                
+            # Use first chunk for metadata
+            first_chunk = chunks_list[0]
+            
+            # Reconstruct abstract without title duplication
+            abstract = self._reconstruct_abstract(chunks_list)
+            
+            document = {
+                "uid": parent_uid,
+                "pmid": parent_uid.split(":")[-1] if ":" in parent_uid else parent_uid,
+                "source": first_chunk.get("source", ""),
+                "title": first_chunk.get("title", ""),
+                "abstract": abstract,
+                "published_at": first_chunk.get("published_at"),
+                "year": first_chunk.get("year"),
+                "quality_total": first_chunk.get("quality_total", 0.0),
+                "chunk_count": len(chunks_list),
+                "sections_found": list(set(c.get("section", "Unstructured") for c in chunks_list)),
+                "best_score": max((c.get("score", 0) for c in chunks_list), default=0),
+                "avg_score": sum(c.get("score", 0) for c in chunks_list) / len(chunks_list) if chunks_list else 0,
+                "meta": first_chunk.get("meta", {})
+            }
+            
+            # Add source URL if PubMed
+            if document["source"] == "pubmed" and ":" in parent_uid:
+                pmid = parent_uid.split(":")[-1]
+                document["source_url"] = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
+            
+            documents.append(document)
+        
+        # Sort by best chunk score
+        documents.sort(key=lambda x: x.get("best_score", 0), reverse=True)
+        
+        return documents
+    
+    def _reconstruct_abstract(self, chunks: list[dict[str, Any]]) -> str:
+        """
+        Reconstruct abstract from chunks without title duplication.
+        """
+        if not chunks:
+            return ""
+        
+        # Sort chunks by section order and chunk index
+        section_order = {
+            "Background": 0,
+            "Methods": 1, 
+            "Results": 2,
+            "Conclusions": 3,
+            "Other": 4,
+            "Unstructured": 5
+        }
+        
+        def chunk_sort_key(chunk):
+            section = chunk.get("section", "Unstructured")
+            section_priority = section_order.get(section, 99)
+            
+            # Try to extract chunk index from UUID pattern
+            uuid = chunk.get("uuid", "")
+            chunk_idx = 0
+            if ":" in uuid:
+                try:
+                    # Pattern like "pubmed:12345678:s0" or "pubmed:12345678:w1"
+                    parts = uuid.split(":")
+                    if len(parts) > 2 and parts[-1]:
+                        idx_part = parts[-1][1:]  # Remove 's' or 'w' prefix
+                        if idx_part.isdigit():
+                            chunk_idx = int(idx_part)
+                except ValueError:
+                    pass
+            
+            return (section_priority, chunk_idx)
+        
+        sorted_chunks = sorted(chunks, key=chunk_sort_key)
+        
+        # Get title to avoid duplication
+        title = chunks[0].get("title", "") if chunks else ""
+        
+        # Reconstruct text
+        text_parts = []
+        for chunk in sorted_chunks:
+            text = chunk.get("text", "").strip()
+            
+            # Remove title if it appears at the start of chunk text
+            if title and text.startswith(title):
+                text = text[len(title):].strip()
+            
+            # Remove section headers if present
+            section = chunk.get("section", "")
+            if section and section != "Unstructured":
+                # Common header patterns to remove
+                headers = [
+                    f"[Section] {section}",
+                    f"{section}:",
+                    f"{section} -",
+                    f"{section}.",
+                    section
+                ]
+                for header in headers:
+                    if text.startswith(header):
+                        text = text[len(header):].strip()
+                        break
+            
+            if text:
+                text_parts.append(text)
+        
+        # Join with single space and clean up
+        abstract = " ".join(text_parts)
+        
+        # Clean up multiple spaces
+        import re
+        abstract = re.sub(r'\s+', ' ', abstract)
+        abstract = abstract.strip()
+        
+        return abstract
+    
+    def _enhance_biomedical_query(self, query: str) -> str:
+        """
+        Simple biomedical query enhancement with common synonyms and expansions.
+        """
+        query_lower = query.lower()
+        enhanced = query
+        
+        # Common biomedical synonyms
+        synonyms = {
+            "covid-19": "coronavirus SARS-CoV-2 COVID",
+            "covid": "COVID-19 coronavirus SARS-CoV-2",
+            "diabetes": "diabetes mellitus diabetic",
+            "cancer": "neoplasm tumor malignancy carcinoma",
+            "heart disease": "cardiovascular disease cardiac",
+            "alzheimer": "alzheimer's disease AD dementia",
+            "parkinson": "parkinson's disease PD",
+        }
+        
+        # Add synonyms if found
+        for term, expansion in synonyms.items():
+            if term in query_lower:
+                enhanced = f"{enhanced} {expansion}"
+        
+        # Clinical trial indicators
+        if any(term in query_lower for term in ["trial", "rct", "study"]):
+            enhanced = f"{enhanced} clinical trial randomized controlled"
+        
+        # Treatment indicators
+        if any(term in query_lower for term in ["treatment", "therapy", "drug"]):
+            enhanced = f"{enhanced} therapeutic intervention efficacy"
+        
+        # Only return enhanced if actually changed
+        return enhanced if enhanced != query else query
 
     def _truncate_content(self, content: str) -> str:
         """Truncate content for display based on configuration."""

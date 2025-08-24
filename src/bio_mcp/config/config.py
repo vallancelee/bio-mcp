@@ -74,6 +74,16 @@ class Config:
     chunker_min_tokens: int = 120
     chunker_overlap_tokens: int = 50
     
+    # Search boosting configuration
+    boost_results_section: str = "0.15"
+    boost_conclusions_section: str = "0.12"
+    boost_methods_section: str = "0.05"
+    boost_background_section: str = "0.02"
+    quality_boost_factor: str = "0.1"
+    recency_recent_years: str = "2"
+    recency_moderate_years: str = "5"
+    recency_old_years: str = "10"
+    
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -103,6 +113,15 @@ class Config:
             chunker_max_tokens=int(os.getenv("BIO_MCP_CHUNKER_MAX_TOKENS", "450")),
             chunker_min_tokens=int(os.getenv("BIO_MCP_CHUNKER_MIN_TOKENS", "120")),
             chunker_overlap_tokens=int(os.getenv("BIO_MCP_CHUNKER_OVERLAP_TOKENS", "50")),
+            # Search boosting configuration
+            boost_results_section=os.getenv("BIO_MCP_BOOST_RESULTS_SECTION", "0.15"),
+            boost_conclusions_section=os.getenv("BIO_MCP_BOOST_CONCLUSIONS_SECTION", "0.12"),
+            boost_methods_section=os.getenv("BIO_MCP_BOOST_METHODS_SECTION", "0.05"),
+            boost_background_section=os.getenv("BIO_MCP_BOOST_BACKGROUND_SECTION", "0.02"),
+            quality_boost_factor=os.getenv("BIO_MCP_QUALITY_BOOST_FACTOR", "0.1"),
+            recency_recent_years=os.getenv("BIO_MCP_RECENCY_RECENT_YEARS", "2"),
+            recency_moderate_years=os.getenv("BIO_MCP_RECENCY_MODERATE_YEARS", "5"),
+            recency_old_years=os.getenv("BIO_MCP_RECENCY_OLD_YEARS", "10"),
             # Model configuration will be set in __post_init__
         )
 

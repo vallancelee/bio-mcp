@@ -194,7 +194,7 @@ class DocumentChunkService:
                     "section": chunk.section or "Unstructured", 
                     "title": chunk.title or "",
                     "text": chunk.text,
-                    "published_at": document.published_at.isoformat() + 'Z' if document.published_at else None,
+                    "published_at": document.published_at.isoformat() if document.published_at else None,
                     "year": document.published_at.year if document.published_at else None,
                     "tokens": chunk.tokens,
                     "n_sentences": chunk.n_sentences,
@@ -382,20 +382,18 @@ class DocumentChunkService:
                         return_metadata=MetadataQuery(score=True, distance=True)
                     )
             
-            # Process results with quality boosting
+            # Process results with enhanced quality boosting
             results = []
             for item in response.objects:
-                # Apply section boost
-                section_boost = 0.0
-                section = item.properties.get("section", "")
-                if section == "Results":
-                    section_boost = 0.1
-                elif section == "Conclusions":
-                    section_boost = 0.05
+                # Apply enhanced section boost
+                section_boost = self._get_section_boost(item.properties.get("section", ""))
                 
                 # Apply quality boost
                 quality_total = item.properties.get("quality_total", 0.0)
-                quality_boost = quality_total / 10.0  # Scale 0-1 quality to 0-0.1 boost
+                quality_boost = quality_total * float(self.config.quality_boost_factor)
+                
+                # Apply recency boost
+                recency_boost = self._get_recency_boost(item.properties.get("year"))
                 
                 # Calculate final score
                 base_score = item.metadata.score or 0.0
@@ -413,7 +411,7 @@ class DocumentChunkService:
                         # so quality boosting still has an effect
                         base_score = 0.1
                 
-                final_score = base_score * (1 + section_boost + quality_boost)
+                final_score = base_score * (1 + section_boost + quality_boost + recency_boost)
                 
                 result = {
                     "uuid": str(item.uuid),
@@ -430,6 +428,7 @@ class DocumentChunkService:
                     "base_score": base_score,
                     "section_boost": section_boost,
                     "quality_boost": quality_boost,
+                    "recency_boost": recency_boost,
                     "meta": item.properties.get("meta", {})
                 }
                 results.append(result)
@@ -444,6 +443,35 @@ class DocumentChunkService:
             logger.error(f"Failed to search chunks: {e}")
             raise
     
+    def _get_section_boost(self, section: str) -> float:
+        """Get boost factor for document section."""
+        section_weights = {
+            "Results": float(self.config.boost_results_section),
+            "Conclusions": float(self.config.boost_conclusions_section),
+            "Methods": float(self.config.boost_methods_section),
+            "Background": float(self.config.boost_background_section),
+            "Unstructured": 0.0,
+            "Other": 0.0
+        }
+        return section_weights.get(section, 0.0)
+    
+    def _get_recency_boost(self, year: int | None) -> float:
+        """Get boost factor for document recency."""
+        if not year or not isinstance(year, int):
+            return 0.0
+        
+        from datetime import datetime
+        current_year = datetime.now().year
+        years_old = current_year - year
+        
+        if years_old <= int(self.config.recency_recent_years):
+            return 0.1  # Strong boost for very recent
+        elif years_old <= int(self.config.recency_moderate_years):
+            return 0.05  # Moderate boost for recent
+        elif years_old <= int(self.config.recency_old_years):
+            return 0.02  # Small boost for somewhat recent
+        else:
+            return 0.0  # No boost for old documents
     
     async def get_chunk_by_uuid(self, chunk_uuid: str) -> dict[str, Any] | None:
         """Retrieve a specific chunk by UUID."""
