@@ -686,6 +686,7 @@ class DocumentChunkService:
                 "error": str(e)
             }
     
+    
     # Legacy compatibility methods
     async def initialize(self) -> None:
         """Initialize the embedding service (legacy compatibility)."""

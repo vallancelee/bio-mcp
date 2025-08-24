@@ -8,6 +8,7 @@ import pytest
 
 @pytest.mark.integration
 @pytest.mark.docker
+@pytest.mark.slow
 class TestDockerBuild:
     """Test Docker image building."""
 
@@ -49,6 +50,7 @@ class TestDockerBuild:
 
 @pytest.mark.integration
 @pytest.mark.docker
+@pytest.mark.slow
 class TestDockerRun:
     """Test running Docker containers."""
 
@@ -89,6 +91,7 @@ class TestDockerRun:
 
 @pytest.mark.integration
 @pytest.mark.docker
+@pytest.mark.slow
 class TestDockerHealthCheck:
     """Test Docker health check functionality."""
 

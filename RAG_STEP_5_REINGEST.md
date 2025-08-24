@@ -1,14 +1,16 @@
 # RAG Step 5: Data Re-ingestion Workflow
 
-**Objective:** Implement comprehensive data re-ingestion workflow for migrating existing PubMed data to DocumentChunk_v2 collection with proper batching, error handling, and progress tracking.
+**Objective:** Implement comprehensive data re-ingestion workflow for migrating existing PubMed data to DocumentChunk_v2 collection with OpenAI embeddings, proper batching, error handling, and progress tracking.
 
 **Success Criteria:**
 - Safe migration of existing PubMed data without data loss
+- OpenAI embeddings properly generated via Weaviate text2vec-openai module
 - Batched processing with proper memory management
 - Comprehensive error handling and retry logic
 - Progress tracking and monitoring capabilities
 - Rollback mechanism for failed migrations
 - Performance meets requirements (>500 docs/minute)
+- Integration tests skip properly when OpenAI API key is not configured
 
 ---
 
@@ -17,7 +19,9 @@
 ### 1.1 Migration Strategy Overview
 
 ```
-Existing Data (S3 + DB) → Document Model → Chunking → DocumentChunk_v2
+Existing Data (S3 + DB) → Document Model → Chunking → Weaviate → OpenAI Embeddings
+                                                        ↓
+                                                 DocumentChunk_v2
                        ↓
                Progress Tracking & Error Handling
                        ↓
@@ -55,8 +59,8 @@ import json
 
 from bio_mcp.config.config import Config
 from bio_mcp.models.document import Document
-from bio_mcp.services.embedding_service_v2 import EmbeddingServiceV2
-from bio_mcp.sources.pubmed.normalizer import PubMedNormalizer
+from bio_mcp.services.document_chunk_service import DocumentChunkService
+from bio_mcp.services.normalization.pubmed import PubMedNormalizer
 from bio_mcp.shared.models.database_models import JobStatus
 from bio_mcp.services.s3_service import S3Service
 from bio_mcp.services.db_service import DatabaseService
@@ -117,8 +121,8 @@ class ReingestionService:
     
     def __init__(self, config: Config):
         self.config = config
-        self.embedding_service = EmbeddingServiceV2(config)
-        self.normalizer = PubMedNormalizer()
+        self.document_chunk_service = DocumentChunkService()
+        # Note: PubMedNormalizer uses static methods, no instantiation needed
         self.s3_service = S3Service(config)
         self.db_service = DatabaseService(config)
         
@@ -152,7 +156,7 @@ class ReingestionService:
         job_id = await self.db_service.create_job(
             operation="reingest",
             parameters=job_params,
-            status=JobStatus.QUEUED
+            status=JobStatus.PENDING
         )
         
         logger.info(f"Created re-ingestion job {job_id} with mode {mode.value}")
@@ -175,7 +179,10 @@ class ReingestionService:
             logger.info(f"Starting re-ingestion job {job_id} in {mode.value} mode")
             
             # Initialize services
-            await self.embedding_service.connect()
+            await self.document_chunk_service.connect()
+            # Note: OpenAI API key required for embeddings
+            if not self.config.openai_api_key:
+                logger.warning("No OpenAI API key configured - embeddings will use fallback")
             await self.s3_service.connect()
             
             # Get document list based on mode and filters
@@ -245,7 +252,7 @@ class ReingestionService:
             raise
         
         finally:
-            await self.embedding_service.disconnect()
+            await self.document_chunk_service.disconnect()
             await self.s3_service.disconnect()
     
     async def _process_document_with_semaphore(
@@ -276,19 +283,10 @@ class ReingestionService:
                     raise ValueError(f"Failed to load document from S3: {doc_ref['s3_key']}")
                 
                 # Normalize to Document model
-                normalized = await self.normalizer.normalize(raw_data)
-                document = Document(
-                    uid=normalized["uid"],
-                    source=normalized["source"],
-                    source_id=normalized["source_id"],
-                    title=normalized.get("title"),
-                    text=normalized.get("text", ""),
-                    published_at=normalized.get("published_at"),
-                    fetched_at=normalized.get("fetched_at"),
-                    authors=normalized.get("authors", []),
-                    identifiers=normalized.get("identifiers", {}),
-                    provenance=normalized.get("provenance", {}),
-                    detail=normalized.get("detail", {})
+                document = PubMedNormalizer.from_raw_dict(
+                    raw_data,
+                    s3_raw_uri=doc_ref.get("s3_key", "unknown"),
+                    content_hash=doc_ref.get("content_hash", "unknown")
                 )
                 
                 if dry_run:
@@ -296,10 +294,10 @@ class ReingestionService:
                     chunk_count = await self._validate_document_chunks(document)
                     stats.add_success(doc_uid, chunk_count, len(json.dumps(raw_data)))
                 else:
-                    # Store chunks
-                    chunk_uuids = await self.embedding_service.store_document_chunks(
+                    # Store chunks using DocumentChunkService  
+                    chunk_uuids = await self.document_chunk_service.store_document_chunks(
                         document=document,
-                        quality_score=normalized.get("quality_score")
+                        quality_score=0.5  # Default quality score
                     )
                     stats.add_success(doc_uid, len(chunk_uuids), len(json.dumps(raw_data)))
                 
@@ -321,7 +319,8 @@ class ReingestionService:
     
     async def _validate_document_chunks(self, document: Document) -> int:
         """Validate document chunking without storing (for dry run)."""
-        chunks = await self.embedding_service.chunking_service.chunk_document(document)
+        # Use the chunking service from DocumentChunkService
+        chunks = self.document_chunk_service.chunking_service.chunk_document(document)
         return len(chunks)
     
     async def _get_document_list(
@@ -391,7 +390,7 @@ class ReingestionService:
         if not job:
             return False
         
-        if job.status not in [JobStatus.QUEUED, JobStatus.RUNNING]:
+        if job.status not in [JobStatus.PENDING, JobStatus.RUNNING]:
             return False
         
         await self.db_service.update_job_status(job_id, JobStatus.CANCELLED)
@@ -688,17 +687,17 @@ import click
 from typing import Dict, Any
 
 from bio_mcp.config.config import Config
-from bio_mcp.services.embedding_service_v2 import EmbeddingServiceV2
+from bio_mcp.services.document_chunk_service import DocumentChunkService
 from bio_mcp.services.db_service import DatabaseService
 
 async def validate_chunk_counts(
-    embedding_service: EmbeddingServiceV2,
+    document_chunk_service: DocumentChunkService,
     db_service: DatabaseService
 ) -> Dict[str, Any]:
     """Validate that chunk counts match expected values."""
     
-    # Get collection stats
-    collection_stats = await embedding_service.get_collection_stats()
+    # Get collection stats from DocumentChunkService
+    collection_stats = await document_chunk_service.get_collection_stats()
     
     # Get database document counts
     db_stats = await db_service.get_document_stats()
@@ -714,7 +713,7 @@ async def validate_chunk_counts(
     }
 
 async def validate_sample_documents(
-    embedding_service: EmbeddingServiceV2,
+    document_chunk_service: DocumentChunkService,
     sample_size: int = 10
 ) -> Dict[str, Any]:
     """Validate a sample of documents for data integrity."""
@@ -727,7 +726,7 @@ async def validate_sample_documents(
     }
     
     # Get random sample of chunks
-    search_results = await embedding_service.search_chunks(
+    search_results = await document_chunk_service.search_chunks(
         query="test",
         limit=sample_size * 5  # Get more to ensure variety
     )
@@ -788,22 +787,22 @@ async def validate_sample_documents(
 async def main(sample_size):
     """Validate migration results."""
     config = Config()
-    embedding_service = EmbeddingServiceV2(config)
+    document_chunk_service = DocumentChunkService()
     db_service = DatabaseService(config)
     
     try:
-        await embedding_service.connect()
+        await document_chunk_service.connect()
         await db_service.connect()
         
         click.echo("Validating chunk counts...")
-        count_validation = await validate_chunk_counts(embedding_service, db_service)
+        count_validation = await validate_chunk_counts(document_chunk_service, db_service)
         
         click.echo(f"Weaviate chunks: {count_validation['weaviate_chunks']}")
         click.echo(f"Database documents: {count_validation['database_documents']}")
         click.echo(f"Average chunks per document: {count_validation['avg_chunks_per_doc']:.1f}")
         
         click.echo(f"\nValidating sample of {sample_size} documents...")
-        sample_validation = await validate_sample_documents(embedding_service, sample_size)
+        sample_validation = await validate_sample_documents(document_chunk_service, sample_size)
         
         click.echo(f"Valid documents: {sample_validation['valid_documents']}")
         click.echo(f"Invalid documents: {sample_validation['invalid_documents']}")
@@ -825,7 +824,7 @@ async def main(sample_size):
             click.echo(f"\n❌ Migration validation FAILED with significant issues ({total_issues} issues)")
     
     finally:
-        await embedding_service.disconnect()
+        await document_chunk_service.disconnect()
         await db_service.disconnect()
 
 if __name__ == "__main__":
@@ -867,6 +866,7 @@ reingest-status:
 **File:** `tests/integration/services/test_reingest_integration.py`
 
 ```python
+import os
 import pytest
 from datetime import datetime
 from unittest.mock import AsyncMock
@@ -875,6 +875,10 @@ from bio_mcp.services.reingest_service import ReingestionService, ReingestionMod
 from bio_mcp.config.config import Config
 
 @pytest.mark.integration
+@pytest.mark.skipif(
+    not os.getenv("OPENAI_API_KEY"),
+    reason="Re-ingestion requires OpenAI API key for embeddings"
+)
 class TestReingestionIntegration:
     """Integration tests for re-ingestion service."""
     
@@ -936,8 +940,8 @@ class TestReingestionIntegration:
         service._process_single_document = AsyncMock()
         
         # Mock services
-        service.embedding_service.connect = AsyncMock()
-        service.embedding_service.disconnect = AsyncMock()
+        service.document_chunk_service.connect = AsyncMock()
+        service.document_chunk_service.disconnect = AsyncMock()
         service.s3_service.connect = AsyncMock()
         service.s3_service.disconnect = AsyncMock()
         service.db_service.update_job_status = AsyncMock()

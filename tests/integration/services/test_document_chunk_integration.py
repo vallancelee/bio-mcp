@@ -22,7 +22,9 @@ class TestDocumentChunkIntegration:
         # Use test collection to avoid conflicts
         config = Config.from_env()
         config.weaviate_collection_v2 = "DocumentChunk_v2_test"
-        config.biobert_model_name = "pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb"
+        # Ensure OpenAI configuration is set
+        config.openai_embedding_model = "text-embedding-3-small"
+        config.openai_embedding_dimensions = 1536
         return config
     
     @pytest.fixture
@@ -49,6 +51,15 @@ class TestDocumentChunkIntegration:
         try:
             await service.connect()
             
+            # Drop existing test collection if it exists (to ensure proper OpenAI vectorizer setup)
+            if service.weaviate_client.client.collections.exists(integration_config.weaviate_collection_v2):
+                service.weaviate_client.client.collections.delete(integration_config.weaviate_collection_v2)
+                print(f"Dropped existing test collection: {integration_config.weaviate_collection_v2}")
+            
+            # Disconnect and reconnect to recreate collection with proper configuration
+            await service.disconnect()
+            await service.connect()
+            
             # Ensure clean test environment
             try:
                 await service.delete_document_chunks("pubmed:99999999")
@@ -58,9 +69,11 @@ class TestDocumentChunkIntegration:
             yield service
             
         finally:
-            # Cleanup
+            # Cleanup test data but preserve collection for debugging if needed
             try:
                 await service.delete_document_chunks("pubmed:99999999")
+                await service.delete_document_chunks("pubmed:99999998")  # High quality test doc
+                await service.delete_document_chunks("pubmed:99999997")  # Low quality test doc
             except Exception:
                 pass
             

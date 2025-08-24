@@ -7,6 +7,7 @@
 .PHONY: manual-test test-health test-server test-logs test-signals test-docker-health test-all-manual
 .PHONY: bootstrap up down reset migrate migrate-create migrate-rollback db-reset run-worker quickstart health-check
 .PHONY: weaviate-create-v2 weaviate-info weaviate-info-v2 weaviate-recreate-v2 test-weaviate-v2
+.PHONY: reingest-full reingest-incremental reingest-sample validate-migration reingest-status
 
 # Default target
 .DEFAULT_GOAL := help
@@ -186,6 +187,34 @@ test-openai: ## Run OpenAI embedding tests (requires API key)
 	@test -n "$$OPENAI_API_KEY" || (echo "$(RED)Error: OPENAI_API_KEY environment variable required$(NC)" && exit 1)
 	@$(UV) run --with pytest-asyncio pytest tests/integration/test_openai_embeddings.py -v
 	@echo "$(GREEN)✓ OpenAI embedding tests completed$(NC)"
+
+# ============================================================================
+# RE-INGESTION COMMANDS
+# ============================================================================
+
+reingest-full: ## Run full data re-ingestion
+	@echo "$(YELLOW)Starting full re-ingestion...$(NC)"
+	$(UV) run python scripts/reingest_data.py start --mode full
+	@echo "$(GREEN)✓ Full re-ingestion completed$(NC)"
+
+reingest-incremental: ## Run incremental data re-ingestion
+	@echo "$(YELLOW)Starting incremental re-ingestion...$(NC)"
+	$(UV) run python scripts/reingest_data.py start --mode incremental
+	@echo "$(GREEN)✓ Incremental re-ingestion completed$(NC)"
+
+reingest-sample: ## Run re-ingestion on sample PMIDs (dry-run)
+	@echo "$(YELLOW)Testing re-ingestion on sample data...$(NC)"
+	$(UV) run python scripts/reingest_data.py start --mode validation --pmids "12345678,87654321" --dry-run
+	@echo "$(GREEN)✓ Sample re-ingestion completed$(NC)"
+
+validate-migration: ## Validate migration results and data integrity
+	@echo "$(YELLOW)Validating migration results...$(NC)"
+	$(UV) run python scripts/validate_migration.py --sample-size 100
+	@echo "$(GREEN)✓ Migration validation completed$(NC)"
+
+reingest-status: ## Check status of recent re-ingestion jobs
+	@echo "$(YELLOW)Recent re-ingestion jobs:$(NC)"
+	$(UV) run python scripts/reingest_data.py list-jobs
 
 
 # ============================================================================
