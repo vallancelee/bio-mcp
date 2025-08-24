@@ -5,6 +5,7 @@ Tests the VectorService after legacy adapter cleanup, using only
 the new Document/Chunk approach.
 """
 
+import os
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
@@ -14,6 +15,10 @@ from bio_mcp.models.document import Document
 from bio_mcp.services.services import VectorService
 
 
+@pytest.mark.skipif(
+    not os.getenv("OPENAI_API_KEY"),
+    reason="VectorService requires OpenAI API key for chunking operations"
+)
 class TestVectorService:
     """Test VectorService with cleaned up API."""
 
@@ -199,6 +204,10 @@ class TestVectorService:
         mock_embedding.close.assert_called_once()
 
 
+@pytest.mark.skipif(
+    not os.getenv("OPENAI_API_KEY"),
+    reason="VectorService requires OpenAI API key for chunking operations"
+)
 class TestVectorServiceErrorHandling:
     """Test error handling in VectorService."""
 

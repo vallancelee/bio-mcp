@@ -2,6 +2,7 @@
 Unit tests for DocumentChunkService with Weaviate BioBERT vectorizer.
 """
 
+import os
 from datetime import datetime
 from unittest.mock import Mock
 
@@ -12,6 +13,10 @@ from bio_mcp.models.document import Document
 from bio_mcp.services.document_chunk_service import DocumentChunkService
 
 
+@pytest.mark.skipif(
+    not os.getenv("OPENAI_API_KEY"),
+    reason="DocumentChunkService requires OpenAI API key for chunking"
+)
 class TestDocumentChunkService:
     """Test document chunk service with Weaviate vectorizer."""
     

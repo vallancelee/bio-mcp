@@ -8,7 +8,6 @@ These tests verify that:
 4. Cost-aware testing with dimension reduction
 """
 
-import os
 import uuid
 
 import pytest
@@ -37,10 +36,6 @@ def is_openai_module_available() -> bool:
 
 
 @pytest.mark.integration
-@pytest.mark.skipif(
-    not os.getenv("OPENAI_API_KEY"),
-    reason="OpenAI API key not configured"
-)
 class TestOpenAIEmbeddings:
     """Test OpenAI embedding generation and search.
     
@@ -399,11 +394,7 @@ class TestOpenAIEmbeddings:
             await schema_manager.drop_collection(collection_name)
 
 
-@pytest.mark.integration 
-@pytest.mark.skipif(
-    not os.getenv("OPENAI_API_KEY"),
-    reason="OpenAI API key not configured"
-)
+@pytest.mark.integration
 class TestOpenAIScaleFeatures:
     """Scale tests for OpenAI embeddings (uses more API calls but standard model)."""
     

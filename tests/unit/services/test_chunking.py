@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 
 import pytest
@@ -138,6 +139,10 @@ class TestNumericSafetyExpander:
         assert end >= 3  # Include significance test
 
 
+@pytest.mark.skipif(
+    not os.getenv("OPENAI_API_KEY"),
+    reason="Chunking requires OpenAI API key for consistent tokenization"
+)
 class TestChunkingIntegration:
     """Test complete chunking workflow with golden examples."""
     

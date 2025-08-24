@@ -5,8 +5,11 @@ Tests both the new chunk_document() method and backward compatibility
 with the legacy chunk_abstract() method.
 """
 
+import os
 from datetime import UTC, datetime
 from unittest.mock import patch
+
+import pytest
 
 from bio_mcp.models.document import Chunk, Document
 from bio_mcp.shared.core.embeddings import (
@@ -18,6 +21,10 @@ from bio_mcp.shared.core.embeddings import (
 )
 
 
+@pytest.mark.skipif(
+    not os.getenv("OPENAI_API_KEY"),
+    reason="Chunking requires OpenAI API key for consistent tokenization"
+)
 class TestDocumentChunking:
     """Test the new chunk_document() method with Document model."""
 
@@ -142,6 +149,10 @@ class TestDocumentChunking:
         assert chunk.uuid == expected_uuid
 
 
+@pytest.mark.skipif(
+    not os.getenv("OPENAI_API_KEY"),
+    reason="Chunking requires OpenAI API key for consistent tokenization"
+)
 class TestBackwardCompatibility:
     """Test backward compatibility with legacy chunk_abstract() method."""
 
@@ -268,6 +279,10 @@ class TestChunkConversion:
         assert doc_chunk.edat == "2020/05/10"
 
 
+@pytest.mark.skipif(
+    not os.getenv("OPENAI_API_KEY"),
+    reason="Chunking requires OpenAI API key for consistent tokenization"
+)
 class TestChunkerFactory:
     """Test chunker factory function."""
 
@@ -285,6 +300,10 @@ class TestChunkerFactory:
         assert isinstance(custom_chunker, AbstractChunker)
 
 
+@pytest.mark.skipif(
+    not os.getenv("OPENAI_API_KEY"),
+    reason="Chunking requires OpenAI API key for consistent tokenization"
+)
 class TestDeprecationWarnings:
     """Test deprecation behavior."""
 
