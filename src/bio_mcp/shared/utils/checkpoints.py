@@ -2,7 +2,7 @@
 Watermark management utilities for incremental sync.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,7 +56,7 @@ class CheckpointManager:
                 .where(
                     SyncWatermark.source == source, SyncWatermark.query_key == query_key
                 )
-                .values(last_sync=timestamp, updated_at=datetime.utcnow())
+                .values(last_sync=timestamp, updated_at=datetime.now(UTC))
             )
             await self.db_session.execute(update_stmt)
             logger.info(f"Updated watermark for {source}:{query_key}: {timestamp}")

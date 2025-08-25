@@ -131,11 +131,10 @@ class TestJobData:
         assert job.duration_ms is None
 
         # Duration calculated from start to completion
+        from datetime import timedelta
         start_time = datetime.now(UTC)
         job.started_at = start_time
-        job.completed_at = start_time.replace(
-            microsecond=start_time.microsecond + 100000
-        )
+        job.completed_at = start_time + timedelta(milliseconds=100)
 
         duration = job.duration_ms
         assert duration is not None

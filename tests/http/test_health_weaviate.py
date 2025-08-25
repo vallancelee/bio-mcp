@@ -38,15 +38,19 @@ class TestWeaviateHealthChecker:
         # Mock Weaviate client and responses
         mock_client = AsyncMock()
 
-        # Mock cluster health check
-        mock_client.cluster.get_nodes_status.return_value = {
-            "nodes": [{"name": "node-1", "status": "HEALTHY", "version": "1.24.0"}]
-        }
+        # Mock cluster health check (needs to be awaitable)
+        async def mock_get_nodes_status():
+            return {
+                "nodes": [{"name": "node-1", "status": "HEALTHY", "version": "1.24.0"}]
+            }
+        mock_client.cluster.get_nodes_status = mock_get_nodes_status
 
-        # Mock schema check
-        mock_client.schema.get.return_value = {
-            "classes": [{"class": "PubmedDocument", "vectorizer": "none"}]
-        }
+        # Mock schema check (needs to be awaitable)
+        async def mock_get_schema():
+            return {
+                "classes": [{"class": "PubmedDocument", "vectorizer": "none"}]
+            }
+        mock_client.schema.get = mock_get_schema
 
         # Mock live/ready endpoints
         mock_client.is_live.return_value = True
@@ -95,10 +99,19 @@ class TestWeaviateHealthChecker:
         """Test Weaviate health check with unhealthy cluster."""
         mock_client = AsyncMock()
 
-        # Mock unhealthy cluster
-        mock_client.cluster.get_nodes_status.return_value = {
-            "nodes": [{"name": "node-1", "status": "UNHEALTHY", "version": "1.24.0"}]
-        }
+        # Mock unhealthy cluster (needs to be awaitable)
+        async def mock_get_nodes_status():
+            return {
+                "nodes": [{"name": "node-1", "status": "UNHEALTHY", "version": "1.24.0"}]
+            }
+        mock_client.cluster.get_nodes_status = mock_get_nodes_status
+
+        # Mock schema check (still needed even for unhealthy cluster)
+        async def mock_get_schema():
+            return {
+                "classes": [{"class": "PubmedDocument", "vectorizer": "none"}]
+            }
+        mock_client.schema.get = mock_get_schema
 
         mock_client.is_live.return_value = True
         mock_client.is_ready.return_value = True
@@ -125,13 +138,17 @@ class TestWeaviateHealthChecker:
         """Test Weaviate health check with missing schema."""
         mock_client = AsyncMock()
 
-        # Mock healthy cluster but missing schema
-        mock_client.cluster.get_nodes_status.return_value = {
-            "nodes": [{"name": "node-1", "status": "HEALTHY", "version": "1.24.0"}]
-        }
+        # Mock healthy cluster but missing schema (needs to be awaitable)
+        async def mock_get_nodes_status():
+            return {
+                "nodes": [{"name": "node-1", "status": "HEALTHY", "version": "1.24.0"}]
+            }
+        mock_client.cluster.get_nodes_status = mock_get_nodes_status
 
-        # Empty schema
-        mock_client.schema.get.return_value = {"classes": []}
+        # Empty schema (needs to be awaitable)
+        async def mock_get_schema():
+            return {"classes": []}
+        mock_client.schema.get = mock_get_schema
 
         mock_client.is_live.return_value = True
         mock_client.is_ready.return_value = True

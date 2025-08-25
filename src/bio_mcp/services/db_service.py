@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import text
@@ -51,9 +51,9 @@ class DatabaseService:
                 status=status,
                 parameters=parameters,
                 trace_id=str(uuid.uuid4()),
-                created_at=datetime.utcnow(),
-                expires_at=datetime.utcnow().replace(
-                    year=datetime.utcnow().year + 1
+                created_at=datetime.now(UTC),
+                expires_at=datetime.now(UTC).replace(
+                    year=datetime.now(UTC).year + 1
                 ),  # 1 year expiry
             )
             session.add(job)
@@ -85,13 +85,13 @@ class DatabaseService:
                     job.error_message = error_message
 
                 if status == JobStatus.RUNNING and job.started_at is None:
-                    job.started_at = datetime.utcnow()
+                    job.started_at = datetime.now(UTC)
                 elif status in [
                     JobStatus.COMPLETED,
                     JobStatus.FAILED,
                     JobStatus.CANCELLED,
                 ]:
-                    job.completed_at = datetime.utcnow()
+                    job.completed_at = datetime.now(UTC)
 
                 await session.commit()
 

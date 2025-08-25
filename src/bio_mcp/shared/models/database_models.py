@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import JSON, Column, DateTime, Enum, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
 
@@ -26,13 +26,13 @@ class UniversalDocument(Base):
     abstract = Column(Text)
     content = Column(Text)  # Full searchable content
     authors = Column(JSON)
-    publication_date = Column(DateTime, index=True)
+    publication_date = Column(DateTime(timezone=True), index=True)
     source_metadata = Column(JSON)  # Source-specific fields
     quality_score = Column(Integer, index=True, default=0)
-    last_updated = Column(DateTime, index=True)  # For sync watermarking
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    last_updated = Column(DateTime(timezone=True), index=True)  # For sync watermarking
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
     updated_at = Column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC), nullable=False
     )
 
 
@@ -44,10 +44,10 @@ class SyncWatermark(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     source = Column(String(50), nullable=False)
     query_key = Column(String(255), nullable=False)
-    last_sync = Column(DateTime, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    last_sync = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
     updated_at = Column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC), nullable=False
     )
 
     __table_args__ = (
@@ -71,9 +71,9 @@ class CorpusCheckpoint(Base):
     primary_queries = Column(JSON)  # List of primary search queries
     total_documents = Column(String(50))
     total_vectors = Column(String(50))
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False)
     updated_at = Column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC), nullable=False
     )
 
 

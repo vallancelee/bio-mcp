@@ -27,7 +27,7 @@ dependencies = [
     "structlog>=25.4.0",
     "jsonschema>=4.25.0",
     "transformers>=4.35.0",
-    "spacy>=3.8.0",
+    "spacy>=3.8.7",
     "numpy>=1.21.0,<2.0.0", # Pin numpy to compatible version for spaCy compatibility
     "en-core-web-sm",
 ]
@@ -90,6 +90,7 @@ markers = [
     "testcontainers: marks tests that use testcontainers library",
     "slow: marks tests as slow (may be skipped in CI)",
     "migrations: marks tests related to database migrations",
+    "no_weaviate: marks tests that skip Weaviate integration",
 ]
 
 [dependency-groups]
