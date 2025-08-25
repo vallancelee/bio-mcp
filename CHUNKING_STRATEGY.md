@@ -1,17 +1,28 @@
-Here’s a pragmatic chunking recipe tuned for **PubMed abstracts** that keeps retrieval strong and simple:
+# Bio-MCP Chunking Strategy
 
-# Goals
+**Implementation**: `src/bio_mcp/services/chunking.py`
+
+This document outlines the section-aware chunking strategy optimized for PubMed abstracts, designed to maximize retrieval effectiveness for biomedical research.
+
+## Goals
 
 * Maximize chance a single chunk contains the **claim + number + comparator**.
 * Preserve section semantics (Background/Methods/Results/Conclusions).
-* Keep **stable chunk ids** for idempotent upserts.
+* Keep **stable chunk IDs** for idempotent upserts.
+* Support deterministic UUIDv5-based chunk identifiers.
 
-# Defaults (good starting points)
+## Implementation Parameters
 
-* **Target tokens per chunk:** 250–350 (≈ 1,000–1,400 chars).
-* **Max tokens:** 450 (hard cap).
-* **Overlap:** 50 tokens (only when an abstract is unusually long).
-* **Tokenizer:** same family as your embedding model (or tiktoken for OpenAI).
+**Current Configuration (ChunkingConfig):**
+* **Target tokens per chunk:** 325 (configurable via `BIO_MCP_CHUNKER_TARGET_TOKENS`)
+* **Max tokens:** 450 (hard cap, configurable via `BIO_MCP_CHUNKER_MAX_TOKENS`)
+* **Min tokens:** 120 (minimum section size, configurable via `BIO_MCP_CHUNKER_MIN_TOKENS`)
+* **Overlap:** 50 tokens (configurable via `BIO_MCP_CHUNKER_OVERLAP_TOKENS`)
+* **Chunker version:** v1.2.0 (configurable via `BIO_MCP_CHUNKER_VERSION`)
+
+**Supported Tokenizers:**
+* **TikToken (OpenAI):** `cl100k_base` encoding (aligned with OpenAI embeddings)
+* **HuggingFace:** BioBERT tokenizer (`pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb`)
 
 ---
 
@@ -26,12 +37,23 @@ Here’s a pragmatic chunking recipe tuned for **PubMed abstracts** that keeps r
 
 ## Step 2 — Detect structure
 
-Most PubMed abstracts are either:
+The implementation supports both structured and unstructured abstracts:
 
-* **Structured**: headings like *Background, Methods, Results, Conclusions* (or *Objective, Design, Setting, Participants, Interventions, Main Outcome Measures, Results, Conclusions*).
-* **Unstructured**: one or two paragraphs.
+* **Structured**: headings like *Background, Methods, Results, Conclusions*
+* **Unstructured**: continuous text without explicit sections
 
-Detection: look for heading prefixes `^\s*(Background|Objective|Methods?|Results?|Conclusions?|Interpretation|Limitations)\s*[:\-–]`.
+**Section Detection Pattern:**
+```python
+r'^\s*([A-Za-z\s&/-]+?)\s*[:：\-–—]\s*(.*?)(?=^\s*[A-Za-z\s&/-]+?\s*[:：\-–—]|$)'
+```
+
+**Section Name Normalization:**
+The implementation maps various section heading variations to standardized names:
+- `background`, `introduction`, `rationale` → `Background`
+- `objective`, `objectives`, `aim`, `aims`, `purpose`, `goal`, `goals` → `Objective`  
+- `methods`, `method`, `materials`, `design`, `setting`, `participants`, `interventions`, `measures` → `Methods`
+- `results`, `result`, `findings`, `outcomes` → `Results`
+- `conclusions`, `conclusion`, `interpretation`, `implications`, `limitations` → `Conclusions`
 
 ---
 
@@ -67,29 +89,31 @@ This header text counts toward tokens but dramatically helps BM25/hybrid.
 
 ---
 
-## Step 5 — Metadata & IDs
+## Step 5 — Metadata & IDs (Implementation)
 
-For every chunk produce:
+The implementation generates chunks with comprehensive metadata using the `Chunk` model:
 
-```json
-{
-  "pmid": "12345",
-  "chunk_id": "s0"          // stable: sN for section index, or wN for window index
-  "title": "...",
-  "section": "Results",     // or "Unstructured"
-  "text": "...",            // the actual chunk text
-  "n_sentences": 6,
-  "token_count": 285,
-  "quality_total": 8,       // inherit from document-level score
-  "year": 2024,
-  "edat": "2024-06-02T00:00:00Z",
-  "lr": "2024-06-15T00:00:00Z",
-  "source_url": "https://pubmed.ncbi.nlm.nih.gov/12345/"
-}
+```python
+@dataclass 
+class Chunk(BaseModel):
+    chunk_id: str           # stable: "s0", "w1" format 
+    uuid: str               # UUIDv5: uuid5(namespace, f"{parent_uid}:{chunk_id}")
+    parent_uid: str         # e.g., "pubmed:12345678"
+    source: str            # "pubmed"
+    chunk_idx: int         # 0, 1, 2, ...
+    text: str              # actual chunk content
+    title: str | None      # document title
+    section: str | None    # Background/Methods/Results/Conclusions/Unstructured
+    tokens: int | None     # token count via tokenizer
+    n_sentences: int | None # sentence count
+    published_at: datetime | None
+    meta: dict[str, Any]   # additional metadata including chunker_version
 ```
 
-**Stable UUID** for Weaviate: `uuid5(namespace, f"{pmid}:{chunk_id}")`.
-This guarantees idempotent re-upserts even if you re-run chunking.
+**Deterministic UUIDs**: Uses UUIDv5 with a fixed namespace (`BIO_MCP_UUID_NAMESPACE`) ensuring idempotent re-upserts:
+```python
+chunk.uuid = uuid5(CHUNK_UUID_NAMESPACE, f"{parent_uid}:{chunk_id}")
+```
 
 ---
 
@@ -119,11 +143,22 @@ This guarantees idempotent re-upserts even if you re-run chunking.
 
 ---
 
-## Step 9 — Quality-aware retrieval
+## Step 9 — Quality-aware retrieval (Implementation)
 
-* Store `quality_total` on every chunk (inherit from the doc).
-* At query-time: `final_score = sim * (1 + quality_total/10)`.
-* Optionally **boost** sections: `Results: +0.1`, `Conclusions: +0.05`.
+The implementation provides configurable section boosting via search configuration:
+
+**Section Boost Weights** (configurable via environment variables):
+- `Results`: +0.15 (configurable via `BIO_MCP_BOOST_RESULTS_SECTION`)
+- `Conclusions`: +0.12 (configurable via `BIO_MCP_BOOST_CONCLUSIONS_SECTION`) 
+- `Methods`: +0.05 (configurable via `BIO_MCP_BOOST_METHODS_SECTION`)
+- `Background`: +0.02 (configurable via `BIO_MCP_BOOST_BACKGROUND_SECTION`)
+
+**Quality Boost Factor**: +0.1 (configurable via `BIO_MCP_QUALITY_BOOST_FACTOR`)
+
+**Recency Boosting** (configurable via environment variables):
+- Recent (≤2 years): Enhanced boost
+- Moderate (≤5 years): Medium boost  
+- Older (≤10 years): Minimal boost
 
 ---
 
@@ -180,4 +215,37 @@ def chunk_abstract(pmid, title, abstract, sections=None, tgt=325, max_tok=450, o
 * Section-awareness improves precision (especially for queries like “primary endpoint”, “adverse events”).
 * Numeric-guard rule reduces the classic failure where the **effect size** is separated from the **comparator**.
 
-If you want, I can turn this into a ready-to-drop `lib/chunking.py` with a tiny spaCy-based splitter and a tiktoken counter that matches your embedding model.
+---
+
+## Implementation Reference
+
+The complete implementation is available in:
+- **Main chunking service**: `src/bio_mcp/services/chunking.py`
+- **Document models**: `src/bio_mcp/models/document.py`
+- **Configuration**: `src/bio_mcp/config/config.py`
+
+**Key Classes:**
+- `ChunkingConfig`: Configuration parameters
+- `HuggingFaceTokenizer` / `TikTokenTokenizer`: Tokenizer implementations
+- `SectionDetector`: Section parsing with normalization
+- `SentenceSplitter`: spaCy and fallback sentence splitting
+- `AbstractChunker`: Main chunking orchestration
+
+**Usage Example:**
+```python
+from bio_mcp.services.chunking import AbstractChunker, ChunkingConfig
+from bio_mcp.models.document import Document
+
+config = ChunkingConfig(target_tokens=325, max_tokens=450)
+chunker = AbstractChunker(config)
+
+document = Document(
+    uid="pubmed:12345678",
+    source="pubmed", 
+    source_id="12345678",
+    title="Study Title",
+    text="Background: ... Methods: ... Results: ... Conclusions: ..."
+)
+
+chunks = chunker.chunk_document(document)
+```

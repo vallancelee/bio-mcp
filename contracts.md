@@ -6,88 +6,9 @@ This document defines the public contracts between MCP clients and the bio-mcp s
 
 ## 🔄 MCP API (Public)
 
-### Tool: `pubmed.sync_delta`
+### Tool: `pubmed.sync.incremental`
 
-**Purpose:** Incrementally sync PubMed records for a query using EDAT windowing, upsert metadata, chunk+embed, and push to Weaviate.
-
-#### Request Schema
-```json
-{
-  "type": "object",
-  "required": ["query_key", "term"],
-  "properties": {
-    "query_key": { 
-      "type": "string", 
-      "minLength": 1,
-      "description": "Unique identifier for the query"
-    },
-    "term": { 
-      "type": "string", 
-      "minLength": 1,
-      "description": "PubMed search term"
-    },
-    "overlap_days": { 
-      "type": "integer", 
-      "minimum": 0, 
-      "default": 5,
-      "description": "Days to overlap with previous sync to ensure completeness"
-    }
-  },
-  "additionalProperties": false
-}
-```
-
-#### Response Schema
-```json
-{
-  "type": "object",
-  "required": ["job_id", "inserted", "updated", "skipped", "pmids_processed"],
-  "properties": {
-    "job_id": { 
-      "type": "string",
-      "description": "Unique identifier for this sync job"
-    },
-    "inserted": { 
-      "type": "integer", 
-      "minimum": 0,
-      "description": "Number of new records inserted"
-    },
-    "updated": { 
-      "type": "integer", 
-      "minimum": 0,
-      "description": "Number of existing records updated"
-    },
-    "skipped": { 
-      "type": "integer", 
-      "minimum": 0,
-      "description": "Number of records skipped (no changes)"
-    },
-    "pmids_processed": { 
-      "type": "integer", 
-      "minimum": 0,
-      "description": "Total PMIDs processed in this sync"
-    },
-    "max_edat_seen": { 
-      "type": ["string","null"], 
-      "description": "Latest EDAT timestamp seen (ISO8601 UTC) or null"
-    },
-    "warnings": {
-      "type": "array",
-      "items": { "type": "string" },
-      "description": "Non-fatal warnings during sync"
-    }
-  },
-  "additionalProperties": false
-}
-```
-
-#### Guarantees
-- ✅ **Idempotent**: Safe to replay; watermark uses EDAT with overlap
-- ✅ **Versioning**: Bumps on content change or LR (Last Revised) advance
-
-### Tool: `rag.search`
-
-**Purpose:** Retrieve top-K chunks from Weaviate using hybrid search, optionally reranked by quality.
+**Purpose:** Search PubMed and sync documents incrementally using EDAT watermarks for efficient updates.
 
 #### Request Schema
 ```json
@@ -98,19 +19,14 @@ This document defines the public contracts between MCP clients and the bio-mcp s
     "query": { 
       "type": "string", 
       "minLength": 1,
-      "description": "Search query text"
+      "description": "Search query for PubMed documents to sync incrementally"
     },
-    "top_k": { 
+    "limit": { 
       "type": "integer", 
       "minimum": 1, 
-      "maximum": 100, 
-      "default": 20,
-      "description": "Maximum number of results to return"
-    },
-    "quality_bias": { 
-      "type": "boolean", 
-      "default": true,
-      "description": "Whether to apply quality-based reranking"
+      "maximum": 500,
+      "default": 100,
+      "description": "Maximum number of new documents to sync in this batch"
     }
   },
   "additionalProperties": false
@@ -121,44 +37,168 @@ This document defines the public contracts between MCP clients and the bio-mcp s
 ```json
 {
   "type": "object",
-  "required": ["results"],
+  "required": ["synced_documents", "total_found"],
   "properties": {
-    "results": {
+    "synced_documents": { 
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of documents successfully synced"
+    },
+    "total_found": { 
+      "type": "integer", 
+      "minimum": 0,
+      "description": "Total number of documents found in search"
+    },
+    "status": {
+      "type": "string",
+      "description": "Status message"
+    }
+  },
+  "additionalProperties": false
+}
+```
+
+#### Guarantees
+- ✅ **Idempotent**: Safe to replay multiple times
+- ✅ **Incremental**: Only syncs new documents not already in database
+
+### Tool: `rag.search`
+
+**Purpose:** Advanced hybrid search combining BM25 keyword search with vector similarity, optimized for biotech investment research.
+
+#### Request Schema
+```json
+{
+  "type": "object",
+  "required": ["query"],
+  "properties": {
+    "query": { 
+      "type": "string", 
+      "minLength": 1,
+      "description": "Search query for biomedical literature"
+    },
+    "top_k": { 
+      "type": "integer", 
+      "minimum": 1, 
+      "maximum": 50, 
+      "default": 10,
+      "description": "Number of results to return"
+    },
+    "search_mode": {
+      "type": "string",
+      "enum": ["hybrid", "semantic", "bm25"],
+      "description": "Search strategy: 'hybrid' (BM25+vector), 'semantic' (vector only), 'bm25' (keyword only)",
+      "default": "hybrid"
+    },
+    "alpha": {
+      "type": "number",
+      "description": "Hybrid search weighting: 0.0=pure BM25 keyword, 1.0=pure vector semantic, 0.5=balanced",
+      "default": 0.5,
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "rerank_by_quality": { 
+      "type": "boolean", 
+      "default": true,
+      "description": "Boost results by PubMed quality metrics, journal impact, and investment relevance"
+    },
+    "return_chunks": {
+      "type": "boolean",
+      "default": false,
+      "description": "Return individual chunks or reconstructed documents"
+    },
+    "enhance_query": {
+      "type": "boolean", 
+      "default": true,
+      "description": "Enhance query with biomedical synonyms and terms"
+    },
+    "filters": {
+      "type": "object",
+      "description": "Metadata filters for date ranges, journals, etc.",
+      "properties": {
+        "date_from": {
+          "type": "string",
+          "description": "Filter results from this date (YYYY-MM-DD)"
+        },
+        "date_to": {
+          "type": "string",
+          "description": "Filter results to this date (YYYY-MM-DD)"
+        },
+        "journals": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Filter by specific journals"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
+```
+
+#### Response Schema
+```json
+{
+  "type": "object",
+  "required": ["documents", "total_results"],
+  "properties": {
+    "documents": {
       "type": "array",
       "description": "Search results ordered by relevance score",
       "items": {
         "type": "object",
-        "required": ["doc_id", "uuid", "score"],
+        "description": "Document or chunk result with metadata",
         "properties": {
-          "doc_id": { 
-            "type": "string", 
-            "pattern": "^pmid:[0-9]+$",
-            "description": "Stable document identifier for lookup"
-          },
           "uuid": { 
-            "type": "string", 
-            "minLength": 10,
-            "description": "Unique chunk identifier"
+            "type": "string",
+            "description": "Unique document/chunk identifier"
           },
-          "sim": { 
-            "type": ["number","null"],
-            "description": "Semantic similarity score"
+          "title": {
+            "type": ["string", "null"],
+            "description": "Document title"
           },
-          "bm25": { 
-            "type": ["number","null"],
-            "description": "BM25 relevance score"
-          },
-          "quality": { 
-            "type": ["number","null"],
-            "description": "Document quality score"
+          "abstract": {
+            "type": ["string", "null"], 
+            "description": "Document abstract or chunk text"
           },
           "score": { 
             "type": "number",
             "description": "Final combined relevance score"
+          },
+          "sections_found": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Document sections found (for document results)"
+          },
+          "chunk_count": {
+            "type": "integer",
+            "description": "Number of chunks in document (for document results)"
+          },
+          "source_url": {
+            "type": ["string", "null"],
+            "description": "Source URL if available"
           }
         },
-        "additionalProperties": false
+        "additionalProperties": true
       }
+    },
+    "total_results": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total number of results returned"
+    },
+    "performance": {
+      "type": "object",
+      "description": "Performance and execution metadata",
+      "properties": {
+        "search_time_ms": {"type": "string"},
+        "total_time_ms": {"type": "string"}, 
+        "target_time_ms": {"type": "number"},
+        "enhanced_query": {"type": "boolean"},
+        "reconstructed_docs": {"type": "boolean"}
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false
@@ -270,82 +310,61 @@ This document defines the public contracts between MCP clients and the bio-mcp s
 }
 ```
 
-### Tools: `corpus.checkpoint.get` / `corpus.checkpoint.set`
+### Tool: `corpus.checkpoint.get`
 
-**Purpose:** Manage sync watermarks for query checkpoints.
+**Purpose:** Get corpus checkpoint details by ID.
 
-#### Get Request Schema
+#### Request Schema
 ```json
 {
   "type": "object",
-  "required": ["query_key"],
+  "required": ["checkpoint_id"],
   "properties": { 
-    "query_key": { 
+    "checkpoint_id": { 
       "type": "string", 
       "minLength": 1,
-      "description": "Unique query identifier"
+      "description": "Unique checkpoint identifier"
     } 
   },
   "additionalProperties": false
 }
 ```
 
-#### Get Response Schema
+#### Response Schema
 ```json
 {
   "type": "object",
-  "required": ["query_key"],
+  "required": ["checkpoint_id", "name", "created_at"],
   "properties": {
-    "query_key": { 
+    "checkpoint_id": { 
       "type": "string",
-      "description": "Query identifier"
+      "description": "Checkpoint identifier"
     },
-    "last_edat": { 
-      "type": ["string","null"], 
-      "description": "Last processed EDAT timestamp (ISO8601 UTC) or null if none"
-    }
-  },
-  "additionalProperties": false
-}
-```
-
-#### Set Request Schema
-```json
-{
-  "type": "object",
-  "required": ["query_key", "last_edat"],
-  "properties": {
-    "query_key": { 
+    "name": {
       "type": "string",
-      "description": "Query identifier"
+      "description": "Human-readable checkpoint name"
     },
-    "last_edat": { 
+    "description": {
+      "type": ["string", "null"],
+      "description": "Optional checkpoint description"
+    },
+    "created_at": { 
       "type": "string", 
-      "description": "New checkpoint timestamp (ISO8601 UTC)"
+      "description": "Creation timestamp (ISO8601 UTC)"
+    },
+    "primary_queries": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Primary queries associated with this checkpoint"
     }
-  },
-  "additionalProperties": false
-}
-```
-
-#### Set Response Schema
-```json
-{
-  "type": "object",
-  "required": ["ok"],
-  "properties": { 
-    "ok": { 
-      "type": "boolean",
-      "description": "Success indicator"
-    } 
   },
   "additionalProperties": false
 }
 ```
 
 #### Guarantees
-- ✅ **Monotonic Watermarks**: Server enforces monotonic watermarks on automatic advancement
-- ⚠️ **Manual Override**: Manual set may move backward for backfills (audited)
+- ✅ **Immutable**: Checkpoints are read-only once created
+- ✅ **Versioned**: Each checkpoint captures a point-in-time corpus state
 
 ---
 

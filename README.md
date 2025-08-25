@@ -172,22 +172,23 @@ make monitoring-setup
 ## 🔧 Available Tools
 
 ### Literature Search & Analysis
-- **`pubmed.search`**: Search curated biotech literature
-- **`pubmed.get`**: Retrieve specific research papers
-- **`pubmed.sync`**: Update corpus with latest research
-- **`pubmed.sync.incremental`**: Efficient real-time updates
+- **`pubmed.search`**: Search PubMed for documents with advanced filters
+- **`pubmed.get`**: Retrieve specific research papers by PMID
+- **`pubmed.sync`**: Batch sync documents to database
+- **`pubmed.sync.incremental`**: Incremental updates using EDAT watermarks
 
 ### Corpus Management
-- **`corpus.checkpoint.create`**: Create research snapshots
-- **`corpus.checkpoint.get`**: Retrieve research baselines
-- **`corpus.checkpoint.list`**: Browse available snapshots
-- **`corpus.checkpoint.delete`**: Clean up old research data
+- **`corpus.checkpoint.create`**: Create research snapshots for reproducibility
+- **`corpus.checkpoint.get`**: Retrieve checkpoint details by ID
+- **`corpus.checkpoint.list`**: Browse available snapshots with pagination
+- **`corpus.checkpoint.delete`**: Delete checkpoints permanently
 
 ### Intelligence Search
-- **`rag.search`**: Hybrid semantic + keyword search
-- **`rag.get`**: Retrieve documents with context
+- **`rag.search`**: Advanced hybrid search (BM25 + vector similarity) with quality ranking
+- **`rag.get`**: Retrieve documents with full context and metadata
 
 ### System Monitoring
+- **`ping`**: Simple connectivity test
 - **MCP Resources**: Real-time corpus health and metrics
 - **Health Checks**: Investment-grade monitoring
 
