@@ -87,10 +87,26 @@ class ClinicalTrialsClient(BaseClient["ClinicalTrialDocument"]):
             await self.session.aclose()
             self.session = None
 
+    async def _ensure_valid_session(self) -> None:
+        """Ensure we have a valid HTTP session for the current event loop."""
+        # Always create a fresh session for each request to avoid event loop issues
+        # This is safer for testing environments where event loops may change
+        if self.session:
+            try:
+                await self.session.aclose()
+            except Exception:
+                # Ignore errors when closing session
+                logger.debug("Ignoring error closing HTTP session")
+                pass
+            self.session = None
+        
+        # Create new session for current event loop
+        await self._init_session()
+
     async def _make_request(self, url: str, params: dict[str, Any]) -> dict[str, Any]:
         """Make HTTP request with rate limiting and error handling."""
-        if not self.session:
-            await self._init_session()
+        # Ensure we have a valid session for the current event loop
+        await self._ensure_valid_session()
 
         await self._rate_limiter.wait_if_needed()
 

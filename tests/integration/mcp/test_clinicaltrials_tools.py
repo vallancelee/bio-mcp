@@ -50,7 +50,6 @@ class TestClinicalTrialsToolsIntegration:
         print("✅ Basic ClinicalTrials Search Test Complete")
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Event loop issues in test suite - passes individually")
     async def test_clinicaltrials_search_with_filters(self, validator):
         """Test ClinicalTrials search with advanced filters."""
         
@@ -74,7 +73,6 @@ class TestClinicalTrialsToolsIntegration:
         print("✅ ClinicalTrials Search with Filters Test Complete")
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Event loop issues in test suite - passes individually")
     async def test_clinicaltrials_search_validation_errors(self, validator):
         """Test ClinicalTrials search parameter validation."""
         
@@ -102,7 +100,6 @@ class TestClinicalTrialsToolsIntegration:
         print("✅ ClinicalTrials Search Validation Test Complete")
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Event loop issues in test suite - passes individually")
     async def test_clinicaltrials_investment_search(self, validator):
         """Test investment-focused clinical trial search."""
         
@@ -243,7 +240,6 @@ class TestClinicalTrialsToolsIntegration:
         print("✅ Response Format Consistency Test Complete")
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Event loop issues in test suite - passes individually")
     async def test_clinical_trials_workflow_end_to_end(self, validator):
         """Test complete ClinicalTrials workflow from search to analysis."""
         
