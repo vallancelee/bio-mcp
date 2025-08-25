@@ -423,6 +423,64 @@ def get_clinicaltrials_tool_definitions() -> list[Tool]:
                 "additionalProperties": False,
             },
         ),
+        Tool(
+            name="clinicaltrials.sync.incremental",
+            description="Incrementally sync clinical trials using lastUpdatePostedDate watermarks for efficient updates",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query_key": {
+                        "type": "string",
+                        "description": "Unique identifier for checkpoint tracking (required)",
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Search query for trials to sync (structured or simple)",
+                        "default": "",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of trials to sync in this operation",
+                        "default": 100,
+                        "minimum": 1,
+                        "maximum": 1000,
+                    },
+                    "batch_size": {
+                        "type": "integer",
+                        "description": "Number of trials to process per API batch",
+                        "default": 50,
+                        "minimum": 1,
+                        "maximum": 200,
+                    },
+                    "min_quality_score": {
+                        "type": "number",
+                        "description": "Minimum investment quality score threshold (0.0-1.0)",
+                        "default": 0.5,
+                        "minimum": 0.0,
+                        "maximum": 1.0,
+                    },
+                },
+                "required": ["query_key"],
+                "additionalProperties": False,
+            },
+        ),
+        Tool(
+            name="clinicaltrials.quality.calculate",
+            description="Calculate investment-focused quality scores for clinical trials",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "nct_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of NCT IDs to calculate quality scores for",
+                        "maxItems": 100,
+                    }
+                },
+                "required": ["nct_ids"],
+                "additionalProperties": False,
+            },
+        ),
     ]
 
 
