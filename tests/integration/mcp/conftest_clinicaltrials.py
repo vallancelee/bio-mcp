@@ -5,9 +5,8 @@ Provides test fixtures with conservative rate limiting for integration tests.
 """
 
 import os
-import pytest
+
 import pytest_asyncio
-from collections.abc import AsyncGenerator
 
 from bio_mcp.sources.clinicaltrials.config import ClinicalTrialsConfig
 from bio_mcp.services.services import get_service_manager
@@ -57,3 +56,28 @@ async def conservative_clinicaltrials_config() -> ClinicalTrialsConfig:
         retries=2,  # Fewer retries to reduce total calls
         page_size=10,  # Smaller page size
     )
+
+
+@pytest_asyncio.fixture(scope="function", autouse=True)
+async def cleanup_service_manager():
+    """Clean up service manager between tests to prevent event loop issues."""
+    yield
+    
+    # Clean up the service manager after each test
+    service_manager = get_service_manager()
+    
+    # Clean up ClinicalTrials service if it exists
+    if service_manager._clinicaltrials_service:
+        try:
+            await service_manager._clinicaltrials_service.cleanup()
+        except Exception:
+            pass  # Ignore cleanup errors
+        service_manager._clinicaltrials_service = None
+    
+    # Clean up other services
+    if service_manager._pubmed_service:
+        try:
+            await service_manager._pubmed_service.close()
+        except Exception:
+            pass
+        service_manager._pubmed_service = None
