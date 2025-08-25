@@ -448,8 +448,12 @@ def pubmed_sync(
 
 @app.command("pubmed.sync.incremental")
 def pubmed_sync_incremental(
-    query: str = typer.Option(..., "--query", "-q", help="Search query for incremental sync"),
-    limit: int = typer.Option(100, "--limit", "-l", help="Maximum number of new documents to sync"),
+    query: str = typer.Option(
+        ..., "--query", "-q", help="Search query for incremental sync"
+    ),
+    limit: int = typer.Option(
+        100, "--limit", "-l", help="Maximum number of new documents to sync"
+    ),
 ):
     """Search PubMed and sync documents incrementally using EDAT watermarks."""
 
@@ -469,11 +473,21 @@ def pubmed_sync_incremental(
 
 @app.command("corpus.checkpoint.create")
 def corpus_checkpoint_create(
-    checkpoint_id: str = typer.Option(..., "--checkpoint-id", "-id", help="Unique checkpoint identifier"),
-    name: str = typer.Option(..., "--name", "-n", help="Human-readable checkpoint name"),
-    description: str = typer.Option("", "--description", "-d", help="Optional checkpoint description"),
-    primary_queries: str = typer.Option("", "--queries", "-q", help="Comma-separated list of primary queries"),
-    parent_checkpoint_id: str = typer.Option("", "--parent", "-p", help="Optional parent checkpoint ID"),
+    checkpoint_id: str = typer.Option(
+        ..., "--checkpoint-id", "-id", help="Unique checkpoint identifier"
+    ),
+    name: str = typer.Option(
+        ..., "--name", "-n", help="Human-readable checkpoint name"
+    ),
+    description: str = typer.Option(
+        "", "--description", "-d", help="Optional checkpoint description"
+    ),
+    primary_queries: str = typer.Option(
+        "", "--queries", "-q", help="Comma-separated list of primary queries"
+    ),
+    parent_checkpoint_id: str = typer.Option(
+        "", "--parent", "-p", help="Optional parent checkpoint ID"
+    ),
 ):
     """Create a new corpus checkpoint capturing current corpus state."""
 
@@ -488,11 +502,13 @@ def corpus_checkpoint_create(
                 "checkpoint_id": checkpoint_id,
                 "name": name,
             }
-            
+
             if description:
                 args["description"] = description
             if primary_queries:
-                args["primary_queries"] = [q.strip() for q in primary_queries.split(",")]
+                args["primary_queries"] = [
+                    q.strip() for q in primary_queries.split(",")
+                ]
             if parent_checkpoint_id:
                 args["parent_checkpoint_id"] = parent_checkpoint_id
 
@@ -504,14 +520,20 @@ def corpus_checkpoint_create(
 
 @app.command("corpus.checkpoint.list")
 def corpus_checkpoint_list(
-    limit: int = typer.Option(20, "--limit", "-l", help="Maximum number of checkpoints to return"),
-    offset: int = typer.Option(0, "--offset", "-o", help="Number of checkpoints to skip"),
+    limit: int = typer.Option(
+        20, "--limit", "-l", help="Maximum number of checkpoints to return"
+    ),
+    offset: int = typer.Option(
+        0, "--offset", "-o", help="Number of checkpoints to skip"
+    ),
 ):
     """List all available corpus checkpoints with pagination."""
 
     async def run_list():
         async with get_client() as client:
-            console.print(f"[blue]Listing corpus checkpoints (limit={limit}, offset={offset})[/blue]")
+            console.print(
+                f"[blue]Listing corpus checkpoints (limit={limit}, offset={offset})[/blue]"
+            )
 
             response = await client.call_tool(
                 "corpus.checkpoint.list", {"limit": limit, "offset": offset}
@@ -523,7 +545,9 @@ def corpus_checkpoint_list(
 
 @app.command("corpus.checkpoint.delete")
 def corpus_checkpoint_delete(
-    checkpoint_id: str = typer.Option(..., "--checkpoint-id", "-id", help="Checkpoint ID to delete"),
+    checkpoint_id: str = typer.Option(
+        ..., "--checkpoint-id", "-id", help="Checkpoint ID to delete"
+    ),
 ):
     """Delete a corpus checkpoint permanently."""
 
@@ -537,6 +561,78 @@ def corpus_checkpoint_delete(
             display_response(response, "corpus.checkpoint.delete")
 
     asyncio.run(run_delete())
+
+
+@app.command("clinicaltrials.search")
+def clinicaltrials_search(
+    query: str = typer.Option(..., "--query", "-q", help="Search query for clinical trials"),
+    condition: str = typer.Option(None, "--condition", help="Medical condition or disease"),
+    intervention: str = typer.Option(None, "--intervention", help="Drug, device, or treatment"),
+    phase: str = typer.Option(None, "--phase", help="Clinical trial phase (PHASE1, PHASE2, PHASE3, etc.)"),
+    status: str = typer.Option(None, "--status", help="Trial status (RECRUITING, COMPLETED, etc.)"),
+    sponsor_class: str = typer.Option(None, "--sponsor-class", help="Sponsor type (INDUSTRY, NIH, ACADEMIC, etc.)"),
+    limit: int = typer.Option(50, "--limit", "-l", help="Maximum number of results"),
+):
+    """Search ClinicalTrials.gov for clinical trials."""
+    
+    async def run_search():
+        async with get_client() as client:
+            console.print(f"[blue]Searching clinical trials: '{query}'[/blue]")
+            
+            args = {"query": query, "limit": limit}
+            if condition:
+                args["condition"] = condition
+            if intervention:
+                args["intervention"] = intervention
+            if phase:
+                args["phase"] = phase
+            if status:
+                args["status"] = status
+            if sponsor_class:
+                args["sponsor_class"] = sponsor_class
+            
+            response = await client.call_tool("clinicaltrials.search", args)
+            display_response(response, "clinicaltrials.search")
+
+    asyncio.run(run_search())
+
+
+@app.command("clinicaltrials.get")
+def clinicaltrials_get(
+    nct_id: str = typer.Option(..., "--nct-id", help="ClinicalTrials.gov NCT ID"),
+):
+    """Get detailed information for a specific clinical trial."""
+    
+    async def run_get():
+        async with get_client() as client:
+            console.print(f"[blue]Retrieving clinical trial: {nct_id}[/blue]")
+            
+            response = await client.call_tool("clinicaltrials.get", {"nct_id": nct_id})
+            display_response(response, "clinicaltrials.get")
+
+    asyncio.run(run_get())
+
+
+@app.command("clinicaltrials.investment_search")
+def clinicaltrials_investment_search(
+    query: str = typer.Option("", "--query", "-q", help="Search query for therapeutic areas"),
+    min_score: float = typer.Option(0.5, "--min-score", help="Minimum investment relevance score (0.0-1.0)"),
+    limit: int = typer.Option(25, "--limit", "-l", help="Maximum number of results"),
+):
+    """Search for investment-relevant clinical trials."""
+    
+    async def run_investment_search():
+        async with get_client() as client:
+            console.print(f"[blue]Investment search: '{query}' (min score: {min_score})[/blue]")
+            
+            response = await client.call_tool("clinicaltrials.investment_search", {
+                "query": query,
+                "min_investment_score": min_score,
+                "limit": limit
+            })
+            display_response(response, "clinicaltrials.investment_search")
+
+    asyncio.run(run_investment_search())
 
 
 if __name__ == "__main__":

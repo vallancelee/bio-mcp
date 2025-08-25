@@ -162,21 +162,21 @@ class ClinicalTrialsClient(BaseClient["ClinicalTrialDocument"]):
         url = f"{self.config.base_url}/studies"
         params: dict[str, Any] = {"pageSize": min(limit, self.config.page_size)}
 
-        # Build filter parameters
+        # Build query and filter parameters (API v2 format)
         if condition:
-            params["filter.condition"] = condition
+            params["query.cond"] = condition
         if intervention:
-            params["filter.intervention"] = intervention
+            params["query.intr"] = intervention
         if phase:
-            params["filter.phase"] = phase
+            # Use filter.advanced with AREA syntax for phase filtering
+            params["filter.advanced"] = f"AREA[Phase]{phase}"
         if status:
-            params["filter.status"] = status
+            params["filter.overallStatus"] = status
         if sponsor_class:
-            params["filter.sponsorType"] = sponsor_class
+            params["query.spons"] = sponsor_class
         if updated_after:
-            params["filter.lastUpdatePostedDate"] = (
-                f"{updated_after.isoformat()}:3000-12-31"
-            )
+            # Use query.term with AREA syntax for date filtering  
+            params["query.term"] = f"AREA[LastUpdatePostDate]RANGE[{updated_after.isoformat()},MAX]"
 
         logger.info(
             "Searching ClinicalTrials.gov",

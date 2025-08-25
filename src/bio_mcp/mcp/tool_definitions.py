@@ -289,10 +289,148 @@ def get_corpus_tool_definitions() -> list[Tool]:
     ]
 
 
+def get_clinicaltrials_tool_definitions() -> list[Tool]:
+    """Get ClinicalTrials.gov tool definitions."""
+    return [
+        Tool(
+            name="clinicaltrials.search",
+            description="Search ClinicalTrials.gov for clinical trials with investment-focused filtering",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query. Can be structured (condition:cancer phase:PHASE3) or simple text",
+                    },
+                    "condition": {
+                        "type": "string",
+                        "description": "Medical condition or disease",
+                    },
+                    "intervention": {
+                        "type": "string", 
+                        "description": "Drug, device, or treatment intervention",
+                    },
+                    "phase": {
+                        "type": "string",
+                        "enum": ["EARLY_PHASE1", "PHASE1", "PHASE2", "PHASE3", "PHASE4"],
+                        "description": "Clinical trial phase",
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["RECRUITING", "ACTIVE_NOT_RECRUITING", "COMPLETED", "TERMINATED"],
+                        "description": "Trial recruitment status",
+                    },
+                    "sponsor_class": {
+                        "type": "string",
+                        "enum": ["INDUSTRY", "NIH", "ACADEMIC", "OTHER"],
+                        "description": "Type of sponsor organization",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of results to return",
+                        "default": 50,
+                        "minimum": 1,
+                        "maximum": 200,
+                    },
+                },
+                "required": ["query"],
+                "additionalProperties": False,
+            },
+        ),
+        Tool(
+            name="clinicaltrials.get",
+            description="Get detailed information for a specific clinical trial by NCT ID",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "nct_id": {
+                        "type": "string",
+                        "description": "ClinicalTrials.gov identifier (e.g., NCT04567890)",
+                    }
+                },
+                "required": ["nct_id"],
+                "additionalProperties": False,
+            },
+        ),
+        Tool(
+            name="clinicaltrials.investment_search",
+            description="Search for investment-relevant clinical trials with automatic filtering for biotech research",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Base search query for therapeutic areas of interest",
+                        "default": "",
+                    },
+                    "min_investment_score": {
+                        "type": "number",
+                        "description": "Minimum investment relevance score (0.0-1.0)",
+                        "default": 0.5,
+                        "minimum": 0.0,
+                        "maximum": 1.0,
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of results to return",
+                        "default": 25,
+                        "minimum": 1,
+                        "maximum": 100,
+                    },
+                },
+                "additionalProperties": False,
+            },
+        ),
+        Tool(
+            name="clinicaltrials.investment_summary",
+            description="Get investment analysis summary for a list of clinical trials",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "nct_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of NCT IDs to analyze",
+                    }
+                },
+                "required": ["nct_ids"],
+                "additionalProperties": False,
+            },
+        ),
+        Tool(
+            name="clinicaltrials.sync",
+            description="Sync clinical trials from ClinicalTrials.gov to local database",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query for trials to sync",
+                    },
+                    "query_key": {
+                        "type": "string", 
+                        "description": "Unique identifier for this sync operation (for watermarking)",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of trials to sync in this batch",
+                        "default": 100,
+                        "minimum": 1,
+                        "maximum": 500,
+                    },
+                },
+                "required": ["query", "query_key"],
+                "additionalProperties": False,
+            },
+        ),
+    ]
+
+
 def get_all_tool_definitions() -> list[Tool]:
     """Get all available tool definitions."""
     tools = [get_ping_tool_definition()]
     tools.extend(get_pubmed_tool_definitions())
     tools.extend(get_rag_tool_definitions())
     tools.extend(get_corpus_tool_definitions())
+    tools.extend(get_clinicaltrials_tool_definitions())
     return tools

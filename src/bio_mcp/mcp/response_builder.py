@@ -21,6 +21,13 @@ class MCPResponseBuilder:
         self.operation = operation
         self.version = version
         self.start_time = time.time()
+        
+    @staticmethod
+    def json_response(data: Any) -> list[TextContent]:
+        """Create a simple JSON response."""
+        json_text = json.dumps(data, indent=2, ensure_ascii=False)
+        return [TextContent(type="text", text=f"```json\n{json_text}\n```")]
+        
 
     def success(
         self,
@@ -103,6 +110,13 @@ class ErrorCodes:
     UPSTREAM_ERROR = "UPSTREAM_ERROR"
     TIMEOUT_ERROR = "TIMEOUT_ERROR"
     RATE_LIMIT_ERROR = "RATE_LIMIT_ERROR"
+    
+    # Tool-specific errors
+    SEARCH_FAILED = "SEARCH_FAILED"
+    RETRIEVAL_FAILED = "RETRIEVAL_FAILED"
+    ANALYSIS_FAILED = "ANALYSIS_FAILED"
+    SYNC_FAILED = "SYNC_FAILED"
+    INVALID_REQUEST = "INVALID_REQUEST"
 
 
 def get_format_preference(arguments: dict[str, Any]) -> str:

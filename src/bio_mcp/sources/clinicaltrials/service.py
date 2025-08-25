@@ -83,7 +83,7 @@ class ClinicalTrialsService(BaseSourceService[ClinicalTrialDocument]):
         logger.info(f"Searching ClinicalTrials.gov with params: {search_params}")
 
         try:
-            nct_ids = await self.client.search(**search_params)
+            nct_ids = await self.client.search(query, **search_params)
             logger.info(f"Found {len(nct_ids)} trials matching query")
             return nct_ids
 
@@ -290,7 +290,7 @@ class ClinicalTrialsService(BaseSourceService[ClinicalTrialDocument]):
         try:
             if not self.client:
                 raise RuntimeError("ClinicalTrials.gov client not initialized")
-            nct_ids = await self.client.search(**search_params)
+            nct_ids = await self.client.search(query, **search_params)
 
             if not nct_ids or min_investment_score <= 0:
                 return nct_ids[:limit]

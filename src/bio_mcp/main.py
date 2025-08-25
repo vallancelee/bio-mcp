@@ -15,6 +15,13 @@ from mcp.types import Resource, TextContent, Tool
 
 from bio_mcp.config.config import config
 from bio_mcp.config.logging_config import auto_configure_logging, get_logger
+from bio_mcp.mcp.clinicaltrials_tools import (
+    handle_clinicaltrials_get,
+    handle_clinicaltrials_investment_search,
+    handle_clinicaltrials_investment_summary,
+    handle_clinicaltrials_search,
+    handle_clinicaltrials_sync,
+)
 from bio_mcp.mcp.corpus_tools import (
     corpus_checkpoint_create_tool,
     corpus_checkpoint_delete_tool,
@@ -140,6 +147,21 @@ Server Info:
 
         elif name == "corpus.checkpoint.delete":
             return await corpus_checkpoint_delete_tool(name, arguments)
+
+        elif name == "clinicaltrials.search":
+            return await handle_clinicaltrials_search(arguments)
+
+        elif name == "clinicaltrials.get":
+            return await handle_clinicaltrials_get(arguments)
+
+        elif name == "clinicaltrials.investment_search":
+            return await handle_clinicaltrials_investment_search(arguments)
+
+        elif name == "clinicaltrials.investment_summary":
+            return await handle_clinicaltrials_investment_summary(arguments)
+
+        elif name == "clinicaltrials.sync":
+            return await handle_clinicaltrials_sync(arguments)
 
         else:
             tool_logger.error("Unknown tool requested", tool=name)

@@ -10,6 +10,9 @@ from bio_mcp.config.logging_config import get_logger
 from bio_mcp.models.document import Document
 from bio_mcp.services.document_chunk_service import DocumentChunkService
 from bio_mcp.shared.clients.database import DatabaseConfig, DatabaseManager
+from bio_mcp.shared.utils.checkpoints import CheckpointManager
+from bio_mcp.sources.clinicaltrials.config import ClinicalTrialsConfig
+from bio_mcp.sources.clinicaltrials.service import ClinicalTrialsService
 from bio_mcp.sources.pubmed.client import PubMedClient
 from bio_mcp.sources.pubmed.config import PubMedConfig
 
@@ -142,13 +145,15 @@ class VectorService:
             return
 
         logger.info("Initializing vector service", use_v2=self.use_v2)
-        
+
         if self.use_v2:
             self.document_chunk_service = DocumentChunkService()
             await self.document_chunk_service.connect()
         else:
-            raise ValueError("Legacy embedding service (use_v2=False) is no longer supported")
-            
+            raise ValueError(
+                "Legacy embedding service (use_v2=False) is no longer supported"
+            )
+
         self._initialized = True
         logger.info("Vector service initialized successfully", use_v2=self.use_v2)
 
@@ -160,7 +165,9 @@ class VectorService:
         self._initialized = False
         logger.info("Vector service closed")
 
-    async def store_document_chunks(self, document: Document, quality_score: float | None = None) -> list[str]:
+    async def store_document_chunks(
+        self, document: Document, quality_score: float | None = None
+    ) -> list[str]:
         """
         Store document as chunks in vector store.
 
@@ -176,7 +183,9 @@ class VectorService:
 
         if not self.document_chunk_service:
             raise ValueError("Document chunk service not initialized")
-        return await self.document_chunk_service.store_document_chunks(document, quality_score)
+        return await self.document_chunk_service.store_document_chunks(
+            document, quality_score
+        )
 
     async def search_chunks(
         self,
@@ -295,10 +304,7 @@ class VectorService:
         if not self.document_chunk_service:
             raise ValueError("Document chunk service not initialized")
 
-        return await self.document_chunk_service.search_chunks(
-            query=query,
-            limit=limit
-        )
+        return await self.document_chunk_service.search_chunks(query=query, limit=limit)
 
 
 class SyncOrchestrator:
@@ -781,3 +787,114 @@ class CorpusCheckpointService:
                 break
 
         return lineage
+
+
+class ServiceManager:
+    """Central service manager for all Bio-MCP services."""
+    
+    def __init__(self):
+        self._clinicaltrials_service: ClinicalTrialsService | None = None
+        self._pubmed_service: PubMedService | None = None
+        self._document_service: DocumentService | None = None
+        self._vector_service: VectorService | None = None
+        self._sync_orchestrator: SyncOrchestrator | None = None
+        self._corpus_service: CorpusCheckpointService | None = None
+        self._checkpoint_manager: CheckpointManager | None = None
+        
+    async def get_clinicaltrials_service(self) -> ClinicalTrialsService:
+        """Get or create ClinicalTrials.gov service."""
+        if not self._clinicaltrials_service:
+            # Try to initialize checkpoint manager if possible
+            checkpoint_manager = None
+            try:
+                if not self._checkpoint_manager:
+                    db_manager = await self._get_database_manager()
+                    self._checkpoint_manager = CheckpointManager(db_manager)
+                checkpoint_manager = self._checkpoint_manager
+            except Exception as e:
+                logger.warning(f"Failed to initialize checkpoint manager: {e}")
+                logger.info("ClinicalTrials service will work without sync functionality")
+            
+            config = ClinicalTrialsConfig.from_env()
+            self._clinicaltrials_service = ClinicalTrialsService(
+                config=config,
+                checkpoint_manager=checkpoint_manager
+            )
+            await self._clinicaltrials_service.initialize()
+            
+        return self._clinicaltrials_service
+    
+    async def get_pubmed_service(self) -> PubMedService:
+        """Get or create PubMed service."""
+        if not self._pubmed_service:
+            self._pubmed_service = PubMedService()
+            await self._pubmed_service.initialize()
+        return self._pubmed_service
+        
+    async def get_document_service(self) -> DocumentService:
+        """Get or create document service."""
+        if not self._document_service:
+            self._document_service = DocumentService()
+            await self._document_service.initialize()
+        return self._document_service
+    
+    async def get_vector_service(self) -> VectorService:
+        """Get or create vector service."""
+        if not self._vector_service:
+            self._vector_service = VectorService()
+            await self._vector_service.initialize()
+        return self._vector_service
+        
+    async def get_sync_orchestrator(self) -> SyncOrchestrator:
+        """Get or create sync orchestrator."""
+        if not self._sync_orchestrator:
+            pubmed = await self.get_pubmed_service()
+            document = await self.get_document_service() 
+            vector = await self.get_vector_service()
+            self._sync_orchestrator = SyncOrchestrator(pubmed, document, vector)
+            await self._sync_orchestrator.initialize()
+        return self._sync_orchestrator
+        
+    async def get_corpus_service(self) -> CorpusCheckpointService:
+        """Get or create corpus checkpoint service."""
+        if not self._corpus_service:
+            self._corpus_service = CorpusCheckpointService()
+            await self._corpus_service.initialize()
+        return self._corpus_service
+        
+    async def _get_database_manager(self) -> DatabaseManager:
+        """Get database manager from document service."""
+        doc_service = await self.get_document_service()
+        if not doc_service.manager:
+            raise RuntimeError("Database manager not available")
+        return doc_service.manager
+        
+    async def close_all(self) -> None:
+        """Close all services."""
+        services = [
+            self._clinicaltrials_service,
+            self._pubmed_service, 
+            self._document_service,
+            self._vector_service,
+            self._sync_orchestrator,
+            self._corpus_service,
+        ]
+        
+        for service in services:
+            if service:
+                try:
+                    await service.close()
+                except Exception as e:
+                    logger.warning(f"Error closing service: {e}")
+
+
+# Global service manager instance
+_service_manager: ServiceManager | None = None
+
+
+def get_service_manager() -> ServiceManager:
+    """Get global service manager instance."""
+    global _service_manager
+    if not _service_manager:
+        _service_manager = ServiceManager()
+    return _service_manager
