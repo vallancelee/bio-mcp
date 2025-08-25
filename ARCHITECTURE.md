@@ -5,7 +5,7 @@
 Bio-MCP is a biomedical Model Context Protocol (MCP) server that provides AI assistants with curated access to PubMed literature for biotech and pharmaceutical investment research. The system implements a sophisticated RAG (Retrieval-Augmented Generation) architecture combining traditional database storage with vector search capabilities, optimized for biomedical content discovery and analysis.
 
 **Version**: 0.1.0  
-**Last Updated**: August 2024  
+**Last Updated**: August 2025  
 **Target Audience**: Software architects, senior developers, and technical leads
 
 ---
