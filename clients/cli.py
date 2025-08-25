@@ -446,6 +446,99 @@ def pubmed_sync(
     asyncio.run(run_sync())
 
 
+@app.command("pubmed.sync.incremental")
+def pubmed_sync_incremental(
+    query: str = typer.Option(..., "--query", "-q", help="Search query for incremental sync"),
+    limit: int = typer.Option(100, "--limit", "-l", help="Maximum number of new documents to sync"),
+):
+    """Search PubMed and sync documents incrementally using EDAT watermarks."""
+
+    async def run_incremental_sync():
+        async with get_client() as client:
+            console.print(
+                f"[blue]Incremental sync PubMed documents: '{query}' (limit={limit})[/blue]"
+            )
+
+            response = await client.call_tool(
+                "pubmed.sync.incremental", {"query": query, "limit": limit}
+            )
+            display_response(response, "pubmed.sync.incremental")
+
+    asyncio.run(run_incremental_sync())
+
+
+@app.command("corpus.checkpoint.create")
+def corpus_checkpoint_create(
+    checkpoint_id: str = typer.Option(..., "--checkpoint-id", "-id", help="Unique checkpoint identifier"),
+    name: str = typer.Option(..., "--name", "-n", help="Human-readable checkpoint name"),
+    description: str = typer.Option("", "--description", "-d", help="Optional checkpoint description"),
+    primary_queries: str = typer.Option("", "--queries", "-q", help="Comma-separated list of primary queries"),
+    parent_checkpoint_id: str = typer.Option("", "--parent", "-p", help="Optional parent checkpoint ID"),
+):
+    """Create a new corpus checkpoint capturing current corpus state."""
+
+    async def run_create():
+        async with get_client() as client:
+            console.print(
+                f"[blue]Creating corpus checkpoint: '{checkpoint_id}' - {name}[/blue]"
+            )
+
+            # Prepare arguments
+            args = {
+                "checkpoint_id": checkpoint_id,
+                "name": name,
+            }
+            
+            if description:
+                args["description"] = description
+            if primary_queries:
+                args["primary_queries"] = [q.strip() for q in primary_queries.split(",")]
+            if parent_checkpoint_id:
+                args["parent_checkpoint_id"] = parent_checkpoint_id
+
+            response = await client.call_tool("corpus.checkpoint.create", args)
+            display_response(response, "corpus.checkpoint.create")
+
+    asyncio.run(run_create())
+
+
+@app.command("corpus.checkpoint.list")
+def corpus_checkpoint_list(
+    limit: int = typer.Option(20, "--limit", "-l", help="Maximum number of checkpoints to return"),
+    offset: int = typer.Option(0, "--offset", "-o", help="Number of checkpoints to skip"),
+):
+    """List all available corpus checkpoints with pagination."""
+
+    async def run_list():
+        async with get_client() as client:
+            console.print(f"[blue]Listing corpus checkpoints (limit={limit}, offset={offset})[/blue]")
+
+            response = await client.call_tool(
+                "corpus.checkpoint.list", {"limit": limit, "offset": offset}
+            )
+            display_response(response, "corpus.checkpoint.list")
+
+    asyncio.run(run_list())
+
+
+@app.command("corpus.checkpoint.delete")
+def corpus_checkpoint_delete(
+    checkpoint_id: str = typer.Option(..., "--checkpoint-id", "-id", help="Checkpoint ID to delete"),
+):
+    """Delete a corpus checkpoint permanently."""
+
+    async def run_delete():
+        async with get_client() as client:
+            console.print(f"[blue]Deleting corpus checkpoint: '{checkpoint_id}'[/blue]")
+
+            response = await client.call_tool(
+                "corpus.checkpoint.delete", {"checkpoint_id": checkpoint_id}
+            )
+            display_response(response, "corpus.checkpoint.delete")
+
+    asyncio.run(run_delete())
+
+
 if __name__ == "__main__":
     try:
         app()

@@ -361,8 +361,8 @@ tests/
 │   └── test_quality.py      # Algorithms
 ├── integration/          # Real system tests
 │   ├── database/           # PostgreSQL via testcontainers  
-│   ├── test_rag_quality.py # End-to-end RAG pipeline
-│   └── conftest.py         # Test fixtures
+│   ├── test_rag_quality.py # End-to-end RAG pipeline (Docker Compose Weaviate)
+│   └── conftest.py         # Test fixtures and populated data
 └── e2e/                  # Full system tests
     └── test_mcp_protocol.py # MCP compliance
 ```
@@ -371,7 +371,7 @@ tests/
 
 **Zero Mocking for Integration Tests**
 - Real PostgreSQL via testcontainers
-- Real Weaviate via Docker Compose  
+- Real Weaviate via Docker Compose (shared development environment)
 - Real OpenAI API calls (with test API keys)
 - Rationale: Catches integration issues that mocks miss
 

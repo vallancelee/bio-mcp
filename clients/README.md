@@ -21,6 +21,16 @@ A command-line client for testing the Bio-MCP server using JSON-RPC calls over s
    python clients/cli.py pubmed.search --term "CRISPR" --limit 5
    python clients/cli.py pubmed.get --pmid "12345678"
    python clients/cli.py pubmed.sync --query "weight loss" --limit 3
+   python clients/cli.py pubmed.sync.incremental --query "diabetes" --limit 50
+   
+   # Test RAG search
+   python clients/cli.py rag.search --query "gene therapy" --top-k 5
+   python clients/cli.py rag.get --doc-id "pmid:12345678"
+   
+   # Test corpus management
+   python clients/cli.py corpus.checkpoint.create --checkpoint-id "research-v1" --name "Initial Research Corpus"
+   python clients/cli.py corpus.checkpoint.list --limit 10
+   python clients/cli.py corpus.checkpoint.get --query-key "research-v1"
    ```
 
 ## Available Commands
@@ -33,11 +43,17 @@ A command-line client for testing the Bio-MCP server using JSON-RPC calls over s
 - `pubmed.search` - Search PubMed for documents
 - `pubmed.get` - Get a specific PubMed document by PMID
 - `pubmed.sync` - Search PubMed and sync documents to database
+- `pubmed.sync.incremental` - Incremental PubMed sync using EDAT watermarks
 
-### Future RAG/Corpus Tools (not yet implemented)
-- `rag.search` - Search the RAG corpus for relevant documents
+### RAG Search Tools
+- `rag.search` - Hybrid search with BM25 + vector similarity
 - `rag.get` - Get a specific document from the RAG corpus
-- `corpus.checkpoint.get` - Get corpus checkpoint for a query key
+
+### Corpus Management Tools
+- `corpus.checkpoint.create` - Create corpus checkpoints for reproducible research
+- `corpus.checkpoint.get` - Get corpus checkpoint details by ID
+- `corpus.checkpoint.list` - List all available corpus checkpoints
+- `corpus.checkpoint.delete` - Delete a corpus checkpoint permanently
 
 ## Configuration Options
 
@@ -67,6 +83,39 @@ python clients/cli.py pubmed.get --pmid "34529645"
 
 # Sync diabetes research to local database
 python clients/cli.py pubmed.sync --query "diabetes treatment" --limit 20
+
+# Incremental sync to get only new documents
+python clients/cli.py pubmed.sync.incremental --query "CRISPR gene editing" --limit 100
+```
+
+### Testing RAG Search
+
+```bash
+# Hybrid semantic + keyword search
+python clients/cli.py rag.search --query "cancer immunotherapy efficacy" --top-k 5
+
+# Get specific document with full context
+python clients/cli.py rag.get --doc-id "pmid:12345678"
+```
+
+### Testing Corpus Management
+
+```bash
+# Create a research checkpoint
+python clients/cli.py corpus.checkpoint.create \
+  --checkpoint-id "oncology-research-2024" \
+  --name "Oncology Research Q1 2024" \
+  --description "Comprehensive oncology literature review" \
+  --queries "cancer therapy,immunotherapy,clinical trials"
+
+# List all checkpoints
+python clients/cli.py corpus.checkpoint.list --limit 20
+
+# Get specific checkpoint details  
+python clients/cli.py corpus.checkpoint.get --query-key "oncology-research-2024"
+
+# Delete a checkpoint (permanent!)
+python clients/cli.py corpus.checkpoint.delete --checkpoint-id "old-checkpoint-id"
 ```
 
 ### Debugging Server Issues
