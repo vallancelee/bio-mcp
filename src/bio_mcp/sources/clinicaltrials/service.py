@@ -38,7 +38,6 @@ class ClinicalTrialsService(BaseSourceService[ClinicalTrialDocument]):
 
         # Initialize ClinicalTrials.gov client
         self.client = ClinicalTrialsClient(self.config)
-        await self.client._init_session()
 
         # Initialize sync strategy if checkpoint manager available
         if self.checkpoint_manager:

@@ -25,10 +25,10 @@ from bio_mcp.shared.clients.weaviate_client import WeaviateClient
 def _wait_for_weaviate_ready(url: str, timeout: int = 30) -> None:
     """Wait for Weaviate to be ready using health checks instead of fixed sleep."""
     import requests
-    
+
     print(f"Waiting for Weaviate to be ready at {url}...")
     start_time = time.time()
-    
+
     while time.time() - start_time < timeout:
         try:
             # Check Weaviate readiness endpoint
@@ -45,9 +45,9 @@ def _wait_for_weaviate_ready(url: str, timeout: int = 30) -> None:
                     pass  # Transformers not ready yet
         except Exception:
             pass  # Service not ready yet
-        
+
         time.sleep(0.5)
-    
+
     raise TimeoutError(f"Weaviate not ready after {timeout}s")
 
 
@@ -205,11 +205,11 @@ async def weaviate_client_base(weaviate_container):
     await client.close()
 
 
-@pytest_asyncio.fixture(scope="function") 
+@pytest_asyncio.fixture(scope="function")
 async def weaviate_client(weaviate_client_base):
     """Provide a clean Weaviate client for each test function with data isolation."""
     client = weaviate_client_base
-    
+
     # Clean up collection if it exists (for fresh state)
     if client.client and client.client.collections.exists(client.collection_name):
         try:
@@ -219,7 +219,7 @@ async def weaviate_client(weaviate_client_base):
             pass  # Ignore cleanup errors
 
     yield client
-    
+
     # Clean up after each test
     if client.client and client.client.collections.exists(client.collection_name):
         try:

@@ -6,6 +6,7 @@ comprehensive coverage of the ClinicalTrials.gov integration.
 """
 
 import asyncio
+
 import pytest
 from mcp.types import TextContent
 

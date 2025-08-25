@@ -4,7 +4,7 @@ Unit tests for ClinicalTrials.gov API client.
 
 import asyncio
 from datetime import date
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
 import pytest
@@ -76,7 +76,6 @@ class TestClinicalTrialsClient:
         """Test client initialization."""
         client = ClinicalTrialsClient()
         assert client.config is not None
-        assert client.session is None
 
         # Test with custom config
         custom_config = ClinicalTrialsConfig(rate_limit_per_second=1)
@@ -85,30 +84,23 @@ class TestClinicalTrialsClient:
 
     @pytest.mark.asyncio
     async def test_session_management(self):
-        """Test HTTP session initialization and cleanup."""
+        """Test that client doesn't maintain persistent sessions."""
         client = ClinicalTrialsClient(self.config)
 
-        # Session should be None initially
-        assert client.session is None
+        # Client should not have a session attribute
+        assert not hasattr(client, 'session')
 
-        # Initialize session
-        await client._init_session()
-        assert client.session is not None
-        assert isinstance(client.session, httpx.AsyncClient)
-
-        # Close session
+        # Close should be a no-op
         await client.close()
-        # Session reference should be cleared
-        assert client.session is None
 
     @pytest.mark.asyncio
     async def test_context_manager(self):
         """Test async context manager functionality."""
         async with ClinicalTrialsClient(self.config) as client:
-            assert client.session is not None
-
-        # Session should be closed after exiting context
-        assert client.session is None
+            # Client should not maintain a session
+            assert not hasattr(client, 'session')
+            # But client should be usable
+            assert client.config is not None
 
     @pytest.mark.asyncio
     async def test_make_request_success(self):
@@ -119,17 +111,18 @@ class TestClinicalTrialsClient:
             ]
         }
 
-        with patch.object(self.client, "session") as mock_session:
-            mock_response = Mock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = mock_response_data
-            mock_response.raise_for_status.return_value = None
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = mock_response_data
+        mock_response.raise_for_status.return_value = None
 
-            # Make get method async
-            async def mock_get(*args, **kwargs):
-                return mock_response
-
-            mock_session.get = mock_get
+        # Mock httpx.AsyncClient
+        with patch('bio_mcp.sources.clinicaltrials.client.httpx.AsyncClient') as mock_client_class:
+            mock_session = Mock()
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock()
+            mock_session.get = AsyncMock(return_value=mock_response)
+            mock_client_class.return_value = mock_session
 
             result = await self.client._make_request(
                 "https://test.com/api", {"param": "value"}
@@ -140,35 +133,73 @@ class TestClinicalTrialsClient:
     @pytest.mark.asyncio
     async def test_make_request_rate_limit_error(self):
         """Test handling of rate limit errors."""
-        with patch.object(self.client, "session") as mock_session:
-            mock_response = Mock()
-            mock_response.status_code = 429
-            mock_session.get.side_effect = httpx.HTTPStatusError(
-                "Rate limit exceeded", request=Mock(), response=mock_response
-            )
+        mock_response = Mock()
+        mock_response.status_code = 429
 
+        # Create a mock context manager that raises the exception
+        class MockAsyncClient:
+            def __init__(self, *args, **kwargs):
+                pass
+                
+            async def __aenter__(self):
+                return self
+                
+            async def __aexit__(self, exc_type, exc_val, exc_tb):
+                pass
+                
+            async def get(self, *args, **kwargs):
+                raise httpx.HTTPStatusError(
+                    "Rate limit exceeded", request=Mock(), response=mock_response
+                )
+
+        with patch('bio_mcp.sources.clinicaltrials.client.httpx.AsyncClient', MockAsyncClient):
             with pytest.raises(RateLimitError, match="Rate limit exceeded"):
                 await self.client._make_request("https://test.com/api", {})
 
     @pytest.mark.asyncio
     async def test_make_request_http_error(self):
         """Test handling of HTTP errors."""
-        with patch.object(self.client, "session") as mock_session:
-            mock_response = Mock()
-            mock_response.status_code = 500
-            mock_session.get.side_effect = httpx.HTTPStatusError(
-                "Server error", request=Mock(), response=mock_response
-            )
+        mock_response = Mock()
+        mock_response.status_code = 500
 
+        # Create a mock context manager that raises the exception
+        class MockAsyncClient:
+            def __init__(self, *args, **kwargs):
+                pass
+                
+            async def __aenter__(self):
+                return self
+                
+            async def __aexit__(self, exc_type, exc_val, exc_tb):
+                pass
+                
+            async def get(self, *args, **kwargs):
+                raise httpx.HTTPStatusError(
+                    "Server error", request=Mock(), response=mock_response
+                )
+
+        with patch('bio_mcp.sources.clinicaltrials.client.httpx.AsyncClient', MockAsyncClient):
             with pytest.raises(ClinicalTrialsAPIError, match="HTTP 500"):
                 await self.client._make_request("https://test.com/api", {})
 
     @pytest.mark.asyncio
     async def test_make_request_generic_error(self):
         """Test handling of generic errors."""
-        with patch.object(self.client, "session") as mock_session:
-            mock_session.get.side_effect = Exception("Connection error")
+        # Create a mock context manager that raises the exception
+        class MockAsyncClient:
+            def __init__(self, *args, **kwargs):
+                pass
+                
+            async def __aenter__(self):
+                return self
+                
+            async def __aexit__(self, exc_type, exc_val, exc_tb):
+                pass
+                
+            async def get(self, *args, **kwargs):
+                raise Exception("Connection error")
 
+        with patch('bio_mcp.sources.clinicaltrials.client.httpx.AsyncClient', MockAsyncClient):
             with pytest.raises(ClinicalTrialsAPIError, match="Request failed"):
                 await self.client._make_request("https://test.com/api", {})
 
@@ -211,12 +242,13 @@ class TestClinicalTrialsClient:
             call_args = mock_request.call_args
             params = call_args[0][1]  # Second argument is params
 
-            assert params["filter.condition"] == "cancer"
-            assert params["filter.intervention"] == "drug x"
-            assert params["filter.phase"] == "PHASE3"
-            assert params["filter.status"] == "RECRUITING"
-            assert params["filter.sponsorType"] == "INDUSTRY"
-            assert params["filter.lastUpdatePostedDate"] == "2024-01-01:3000-12-31"
+            # API v2 uses query.cond, query.intr, etc.
+            assert params["query.cond"] == "cancer"
+            assert params["query.intr"] == "drug x"
+            assert params["filter.advanced"] == "AREA[Phase]PHASE3"
+            assert params["filter.overallStatus"] == "RECRUITING"
+            assert params["query.spons"] == "INDUSTRY"
+            assert params["query.term"] == "AREA[LastUpdatePostDate]RANGE[2024-01-01,MAX]"
             assert params["pageSize"] == 50  # Should be integer, not string
 
     @pytest.mark.asyncio
@@ -420,17 +452,17 @@ class TestClinicalTrialsClient:
 
         mock_response = {"studies": []}
 
-        with patch.object(client, "session") as mock_session:
-            mock_response_obj = Mock()
-            mock_response_obj.status_code = 200
-            mock_response_obj.json.return_value = mock_response
-            mock_response_obj.raise_for_status.return_value = None
+        mock_response_obj = Mock()
+        mock_response_obj.status_code = 200
+        mock_response_obj.json.return_value = mock_response
+        mock_response_obj.raise_for_status.return_value = None
 
-            # Make get method async
-            async def mock_get(*args, **kwargs):
-                return mock_response_obj
-
-            mock_session.get = mock_get
+        with patch('bio_mcp.sources.clinicaltrials.client.httpx.AsyncClient') as mock_client_class:
+            mock_session = Mock()
+            mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session.__aexit__ = AsyncMock()
+            mock_session.get = AsyncMock(return_value=mock_response_obj)
+            mock_client_class.return_value = mock_session
 
             # Make two requests and measure time
             start_time = asyncio.get_event_loop().time()

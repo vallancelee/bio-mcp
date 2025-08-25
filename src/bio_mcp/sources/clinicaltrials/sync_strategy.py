@@ -261,7 +261,7 @@ class ClinicalTrialsSyncStrategy(BaseSyncStrategy):
                 "synced": 0,
                 "parse_errors": 0,
                 "investment_relevant_count": 0,
-                "avg_investment_score": 0.0,
+                "avg_quality_score": 0.0,
                 "success": True,
             }
 
@@ -295,7 +295,7 @@ class ClinicalTrialsSyncStrategy(BaseSyncStrategy):
                 "investment_relevant_count": sum(
                     1 for doc in documents if doc.investment_relevance_score > 0.5
                 ),
-                "avg_investment_score": sum(
+                "avg_quality_score": sum(
                     doc.investment_relevance_score for doc in documents
                 )
                 / len(documents)

@@ -33,13 +33,13 @@ class WeaviateClient:
 
         try:
             logger.debug("Connecting to Weaviate", url=self.url)
-            
+
             # Prepare headers for API keys
             headers = {}
             if config.openai_api_key:
                 headers["X-OpenAI-Api-Key"] = config.openai_api_key
                 logger.debug("Added OpenAI API key to Weaviate headers")
-            
+
             # Use the provided URL instead of hardcoded localhost
             if self.url.startswith("http://localhost:8080"):
                 if headers:
@@ -64,10 +64,10 @@ class WeaviateClient:
                     "grpc_port": grpc_port,
                     "grpc_secure": secure,
                 }
-                
+
                 if headers:
                     connection_args["headers"] = headers
-                    
+
                 self.client = weaviate.connect_to_custom(**connection_args)
 
             logger.debug("Testing Weaviate connection")

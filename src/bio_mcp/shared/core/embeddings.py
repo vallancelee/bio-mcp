@@ -20,9 +20,9 @@ logger = get_logger(__name__)
 
 class ChunkingConfig:
     """Legacy configuration - redirects to new system."""
-    
+
     TARGET_TOKENS = 325  # Target tokens per chunk
-    MAX_TOKENS = 450  # Hard maximum tokens per chunk  
+    MAX_TOKENS = 450  # Hard maximum tokens per chunk
     MIN_TOKENS = 120  # Minimum tokens for merging sections
     OVERLAP_TOKENS = 50  # Overlap tokens when splitting
     TOKENIZER_MODEL = "gpt-4"  # Model to use for token counting
@@ -93,7 +93,7 @@ class AbstractChunker:
             target_tokens=ChunkingConfig.TARGET_TOKENS,
             max_tokens=ChunkingConfig.MAX_TOKENS,
             min_tokens=ChunkingConfig.MIN_TOKENS,
-            overlap_tokens=ChunkingConfig.OVERLAP_TOKENS
+            overlap_tokens=ChunkingConfig.OVERLAP_TOKENS,
         )
         self._chunker = NewChunker(config)
         logger.info("Using enhanced chunking system")
@@ -124,7 +124,7 @@ class AbstractChunker:
     ) -> list[DocumentChunk]:
         """
         Legacy method: chunk abstract text into DocumentChunk objects.
-        
+
         Converts to new Document format and back for compatibility.
         """
         # Convert to new Document format
@@ -134,27 +134,33 @@ class AbstractChunker:
             source_id=pmid,
             title=title,
             text=abstract,
-            detail={"quality_total": quality_total, "year": year, "source_url": source_url}
+            detail={
+                "quality_total": quality_total,
+                "year": year,
+                "source_url": source_url,
+            },
         )
-        
+
         # Use enhanced chunker
         chunks = self._chunker.chunk_document(document)
-        
+
         # Handle empty content - create a minimal chunk for backward compatibility
         if not chunks and not abstract.strip():
-            legacy_chunks = [DocumentChunk(
-                pmid=pmid,
-                chunk_id="title",
-                title=title,
-                section="Title Only",
-                text="No content available",
-                tokens=0,
-                quality_total=quality_total,
-                year=year,
-                source_url=source_url
-            )]
+            legacy_chunks = [
+                DocumentChunk(
+                    pmid=pmid,
+                    chunk_id="title",
+                    title=title,
+                    section="Title Only",
+                    text="No content available",
+                    tokens=0,
+                    quality_total=quality_total,
+                    year=year,
+                    source_url=source_url,
+                )
+            ]
             return legacy_chunks
-        
+
         # Convert back to legacy DocumentChunk format
         legacy_chunks = []
         for chunk in chunks:
@@ -167,28 +173,30 @@ class AbstractChunker:
                 tokens=chunk.tokens or 0,
                 quality_total=quality_total,
                 year=year,
-                source_url=source_url
+                source_url=source_url,
             )
             legacy_chunks.append(legacy_chunk)
-        
+
         return legacy_chunks
 
 
 # Conversion functions for backward compatibility
-def document_chunk_to_chunk(doc_chunk: DocumentChunk, parent_uid: str, chunk_idx: int) -> "Chunk":
+def document_chunk_to_chunk(
+    doc_chunk: DocumentChunk, parent_uid: str, chunk_idx: int
+) -> "Chunk":
     """Convert legacy DocumentChunk to new Chunk format."""
     from bio_mcp.models.document import Chunk
-    
+
     # Extract PMID from parent_uid if it's in pubmed:PMID format
     if parent_uid.startswith("pubmed:"):
         source = "pubmed"
     else:
         parts = parent_uid.split(":", 1)
         source = parts[0] if len(parts) > 1 else "unknown"
-    
+
     # Create standardized chunk_id
     chunk_id = f"s{chunk_idx}"
-    
+
     chunk = Chunk(
         chunk_id=chunk_id,
         uuid=Chunk.generate_uuid(parent_uid, chunk_id),
@@ -208,25 +216,25 @@ def document_chunk_to_chunk(doc_chunk: DocumentChunk, parent_uid: str, chunk_idx
             "source_url": doc_chunk.source_url,
             "chunker_version": "1.0_legacy",
             "legacy_chunk_id": doc_chunk.chunk_id,
-        }
+        },
     )
-    
+
     return chunk
 
 
 def chunk_to_document_chunk(chunk: "Chunk") -> DocumentChunk:
     """Convert new Chunk to legacy DocumentChunk format."""
-    
+
     # Extract PMID from parent_uid
     if chunk.parent_uid.startswith("pubmed:"):
         pmid = chunk.parent_uid.split(":", 1)[1]
     else:
         # For non-pubmed sources, use the source_id
         pmid = getattr(chunk, "source_id", chunk.parent_uid.split(":", 1)[-1])
-    
+
     # Get legacy chunk_id from meta or generate one
     legacy_chunk_id = chunk.meta.get("legacy_chunk_id", chunk.chunk_id)
-    
+
     doc_chunk = DocumentChunk(
         pmid=pmid,
         chunk_id=legacy_chunk_id,
@@ -236,9 +244,9 @@ def chunk_to_document_chunk(chunk: "Chunk") -> DocumentChunk:
         tokens=chunk.tokens or 0,
         quality_total=chunk.meta.get("quality_total", 0.0),
         year=chunk.meta.get("year"),
-        source_url=chunk.meta.get("source_url", "")
+        source_url=chunk.meta.get("source_url", ""),
     )
-    
+
     # Add optional attributes if they exist in meta
     if "n_sentences" in chunk.meta:
         doc_chunk.n_sentences = chunk.meta["n_sentences"]
@@ -246,7 +254,7 @@ def chunk_to_document_chunk(chunk: "Chunk") -> DocumentChunk:
         doc_chunk.edat = chunk.meta["edat"]
     if "lr" in chunk.meta:
         doc_chunk.lr = chunk.meta["lr"]
-    
+
     return doc_chunk
 
 

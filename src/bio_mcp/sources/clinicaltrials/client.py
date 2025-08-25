@@ -60,90 +60,63 @@ class ClinicalTrialsClient(BaseClient["ClinicalTrialDocument"]):
 
     def __init__(self, config: ClinicalTrialsConfig | None = None):
         self.config = config or ClinicalTrialsConfig.from_env()
-        self.session: httpx.AsyncClient | None = None
         self._rate_limiter = RateLimiter(self.config.rate_limit_per_second)
 
     async def __aenter__(self):
         """Async context manager entry."""
-        await self._init_session()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
-        await self.close()
-
-    async def _init_session(self) -> None:
-        """Initialize HTTP session."""
-        self.session = httpx.AsyncClient(
-            timeout=httpx.Timeout(self.config.timeout),
-            headers={
-                "User-Agent": "Bio-MCP/1.0 (biomedical research; contact: bio-mcp@example.com)"
-            },
-        )
+        pass
 
     async def close(self) -> None:
-        """Close HTTP session and cleanup resources."""
-        if self.session:
-            await self.session.aclose()
-            self.session = None
-
-    async def _ensure_valid_session(self) -> None:
-        """Ensure we have a valid HTTP session for the current event loop."""
-        # Always create a fresh session for each request to avoid event loop issues
-        # This is safer for testing environments where event loops may change
-        if self.session:
-            try:
-                await self.session.aclose()
-            except Exception:
-                # Ignore errors when closing session
-                logger.debug("Ignoring error closing HTTP session")
-                pass
-            self.session = None
-        
-        # Create new session for current event loop
-        await self._init_session()
+        """Cleanup resources (no-op since we don't maintain sessions)."""
+        pass
 
     async def _make_request(self, url: str, params: dict[str, Any]) -> dict[str, Any]:
         """Make HTTP request with rate limiting and error handling."""
-        # Ensure we have a valid session for the current event loop
-        await self._ensure_valid_session()
-
         await self._rate_limiter.wait_if_needed()
 
         # Convert all parameters to strings
         str_params = {k: str(v) for k, v in params.items() if v is not None}
 
-        try:
-            logger.debug(
-                "Making ClinicalTrials.gov API request", url=url, params=str_params
-            )
-
-            if not self.session:
-                raise RuntimeError("HTTP session not initialized")
-            response = await self.session.get(url, params=str_params)
-            response.raise_for_status()
-
-            data = response.json()
-            logger.debug(
-                "ClinicalTrials.gov API response received", status=response.status_code
-            )
-
-            return data
-
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 429:
-                logger.warning("ClinicalTrials.gov API rate limit exceeded")
-                raise RateLimitError("Rate limit exceeded")
-            else:
-                logger.error(
-                    "ClinicalTrials.gov API HTTP error",
-                    status=e.response.status_code,
-                    error=str(e),
+        # Create a fresh HTTP client for this request
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(self.config.timeout),
+            headers={
+                "User-Agent": "Bio-MCP/1.0 (biomedical research; contact: bio-mcp@example.com)"
+            },
+        ) as session:
+            try:
+                logger.debug(
+                    "Making ClinicalTrials.gov API request", url=url, params=str_params
                 )
-                raise ClinicalTrialsAPIError(f"HTTP {e.response.status_code}: {e}")
-        except Exception as e:
-            logger.error("ClinicalTrials.gov API request failed", error=str(e))
-            raise ClinicalTrialsAPIError(f"Request failed: {e}")
+
+                response = await session.get(url, params=str_params)
+                response.raise_for_status()
+
+                data = response.json()
+                logger.debug(
+                    "ClinicalTrials.gov API response received", status=response.status_code
+                )
+
+                return data
+
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429:
+                    logger.warning("ClinicalTrials.gov API rate limit exceeded")
+                    raise RateLimitError("Rate limit exceeded")
+                else:
+                    logger.error(
+                        "ClinicalTrials.gov API HTTP error",
+                        status=e.response.status_code,
+                        error=str(e),
+                    )
+                    raise ClinicalTrialsAPIError(f"HTTP {e.response.status_code}: {e}")
+            except Exception as e:
+                logger.error("ClinicalTrials.gov API request failed", error=str(e))
+                raise ClinicalTrialsAPIError(f"Request failed: {e}")
 
     async def search_trials(
         self,

@@ -23,7 +23,7 @@ from bio_mcp.shared.core.embeddings import (
 
 @pytest.mark.skipif(
     not os.getenv("OPENAI_API_KEY"),
-    reason="Chunking requires OpenAI API key for consistent tokenization"
+    reason="Chunking requires OpenAI API key for consistent tokenization",
 )
 class TestDocumentChunking:
     """Test the new chunk_document() method with Document model."""
@@ -151,7 +151,7 @@ class TestDocumentChunking:
 
 @pytest.mark.skipif(
     not os.getenv("OPENAI_API_KEY"),
-    reason="Chunking requires OpenAI API key for consistent tokenization"
+    reason="Chunking requires OpenAI API key for consistent tokenization",
 )
 class TestBackwardCompatibility:
     """Test backward compatibility with legacy chunk_abstract() method."""
@@ -281,7 +281,7 @@ class TestChunkConversion:
 
 @pytest.mark.skipif(
     not os.getenv("OPENAI_API_KEY"),
-    reason="Chunking requires OpenAI API key for consistent tokenization"
+    reason="Chunking requires OpenAI API key for consistent tokenization",
 )
 class TestChunkerFactory:
     """Test chunker factory function."""
@@ -302,7 +302,7 @@ class TestChunkerFactory:
 
 @pytest.mark.skipif(
     not os.getenv("OPENAI_API_KEY"),
-    reason="Chunking requires OpenAI API key for consistent tokenization"
+    reason="Chunking requires OpenAI API key for consistent tokenization",
 )
 class TestDeprecationWarnings:
     """Test deprecation behavior."""

@@ -14,13 +14,13 @@ from bio_mcp.models.document import Document
 def get_biomedical_test_documents() -> list[Document]:
     """
     Get standardized biomedical test documents for RAG integration tests.
-    
+
     These documents are designed to test:
     - Section boosting (Results, Conclusions, Methods, Background)
     - Query enhancement (diabetes, COVID-19, cancer, heart disease terms)
     - Abstract reconstruction without title duplication
     - Quality scoring with different scores
-    
+
     Returns:
         List of Document objects ready for chunking and storage
     """
@@ -41,13 +41,12 @@ Conclusions: Metformin therapy demonstrates superior efficacy for glycemic contr
             identifiers={"pmid": "12345678", "doi": "10.1000/test.2023.001"},
             authors=["Smith J", "Johnson M", "Williams K"],
             detail={
-                "journal": "Journal of Diabetes Research", 
-                "pub_types": ["Randomized Controlled Trial", "Clinical Trial"]
-            }
+                "journal": "Journal of Diabetes Research",
+                "pub_types": ["Randomized Controlled Trial", "Clinical Trial"],
+            },
         ),
-        
         Document(
-            uid="pubmed:87654321", 
+            uid="pubmed:87654321",
             source="pubmed",
             source_id="87654321",
             title="Cancer Immunotherapy with Checkpoint Inhibitors: Systematic Review",
@@ -63,10 +62,9 @@ Conclusions: Checkpoint inhibitors provide durable clinical benefit across multi
             authors=["Anderson R", "Brown L", "Davis P"],
             detail={
                 "journal": "Cancer Treatment Reviews",
-                "pub_types": ["Systematic Review", "Meta-Analysis"] 
-            }
+                "pub_types": ["Systematic Review", "Meta-Analysis"],
+            },
         ),
-        
         Document(
             uid="pubmed:11111111",
             source="pubmed",
@@ -81,13 +79,12 @@ Results: Antiviral treatment within 5 days of symptom onset reduced mortality by
 Conclusions: Early intervention with evidence-based COVID-19 therapies significantly improves clinical outcomes. Treatment timing and patient selection are critical factors for therapeutic success.""",
             published_at=datetime(2022, 12, 10, tzinfo=UTC),
             identifiers={"pmid": "11111111", "doi": "10.1000/test.2022.001"},
-            authors=["Miller T", "Wilson S", "Taylor A"], 
+            authors=["Miller T", "Wilson S", "Taylor A"],
             detail={
                 "journal": "The Lancet Infectious Diseases",
-                "pub_types": ["Observational Study", "Real-World Evidence"]
-            }
+                "pub_types": ["Observational Study", "Real-World Evidence"],
+            },
         ),
-        
         Document(
             uid="pubmed:22222222",
             source="pubmed",
@@ -105,10 +102,9 @@ Conclusions: Structured lifestyle modification programs provide substantial card
             authors=["Garcia M", "Rodriguez C", "Martinez L"],
             detail={
                 "journal": "American Heart Journal",
-                "pub_types": ["Prospective Study", "Clinical Trial"]
-            }
+                "pub_types": ["Prospective Study", "Clinical Trial"],
+            },
         ),
-        
         # Additional document for testing edge cases
         Document(
             uid="pubmed:33333333",
@@ -127,19 +123,19 @@ Conclusions: Deep learning accelerates drug discovery pipelines while maintainin
             authors=["Chen L", "Park S", "Kumar R"],
             detail={
                 "journal": "Nature Biotechnology",
-                "pub_types": ["Original Research", "Machine Learning"]
-            }
-        )
+                "pub_types": ["Original Research", "Machine Learning"],
+            },
+        ),
     ]
 
 
 def get_quality_scores() -> list[float]:
     """
     Get quality scores corresponding to the test documents.
-    
+
     Returns scores in the same order as get_biomedical_test_documents().
     Designed to test quality boosting functionality.
-    
+
     Returns:
         List of quality scores from 0.8 to 1.0
     """
@@ -149,7 +145,7 @@ def get_quality_scores() -> list[float]:
 def get_expected_sections() -> list[list[str]]:
     """
     Get expected sections for each test document after chunking.
-    
+
     Returns:
         List of section lists for each document
     """
@@ -165,7 +161,7 @@ def get_expected_sections() -> list[list[str]]:
 def get_test_queries() -> dict[str, Any]:
     """
     Get test queries designed to test specific RAG improvements.
-    
+
     Returns:
         Dictionary mapping query types to query strings and expected behaviors
     """
@@ -174,30 +170,30 @@ def get_test_queries() -> dict[str, Any]:
             "query": "diabetes treatment",
             "expected_enhancement": True,
             "should_find_docs": ["12345678"],
-            "enhanced_terms": ["diabetes mellitus", "diabetic"]
+            "enhanced_terms": ["diabetes mellitus", "diabetic"],
         },
         "covid": {
-            "query": "COVID-19 treatment", 
+            "query": "COVID-19 treatment",
             "expected_enhancement": True,
             "should_find_docs": ["11111111"],
-            "enhanced_terms": ["coronavirus", "SARS-CoV-2"]
+            "enhanced_terms": ["coronavirus", "SARS-CoV-2"],
         },
         "cancer": {
             "query": "cancer immunotherapy",
-            "expected_enhancement": True, 
+            "expected_enhancement": True,
             "should_find_docs": ["87654321"],
-            "enhanced_terms": ["neoplasm", "tumor", "malignancy"]
+            "enhanced_terms": ["neoplasm", "tumor", "malignancy"],
         },
         "heart_disease": {
             "query": "heart disease prevention",
             "expected_enhancement": True,
-            "should_find_docs": ["22222222"], 
-            "enhanced_terms": ["cardiovascular disease", "cardiac"]
+            "should_find_docs": ["22222222"],
+            "enhanced_terms": ["cardiovascular disease", "cardiac"],
         },
         "clinical_trial": {
             "query": "clinical trial efficacy",
             "expected_enhancement": True,
             "should_find_docs": ["12345678", "87654321", "11111111"],
-            "enhanced_terms": ["randomized controlled"]
-        }
+            "enhanced_terms": ["randomized controlled"],
+        },
     }

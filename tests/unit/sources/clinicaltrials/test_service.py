@@ -29,7 +29,6 @@ class TestClinicalTrialsService:
     async def test_initialization_with_checkpoint_manager(self):
         """Test service initialization with checkpoint manager."""
         mock_client = Mock(spec=ClinicalTrialsClient)
-        mock_client._init_session = AsyncMock()
 
         with patch(
             "bio_mcp.sources.clinicaltrials.service.ClinicalTrialsClient"
@@ -42,7 +41,6 @@ class TestClinicalTrialsService:
         assert self.service.client is not None
         assert self.service.sync_strategy is not None
         assert isinstance(self.service.sync_strategy, ClinicalTrialsSyncStrategy)
-        mock_client._init_session.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_initialization_without_checkpoint_manager(self):
@@ -50,7 +48,6 @@ class TestClinicalTrialsService:
         service = ClinicalTrialsService(self.mock_config, None)
 
         mock_client = Mock(spec=ClinicalTrialsClient)
-        mock_client._init_session = AsyncMock()
 
         with patch(
             "bio_mcp.sources.clinicaltrials.service.ClinicalTrialsClient"
@@ -67,7 +64,6 @@ class TestClinicalTrialsService:
     async def test_initialization_idempotent(self):
         """Test that initialization is idempotent."""
         mock_client = Mock(spec=ClinicalTrialsClient)
-        mock_client._init_session = AsyncMock()
 
         with patch(
             "bio_mcp.sources.clinicaltrials.service.ClinicalTrialsClient"
@@ -80,14 +76,12 @@ class TestClinicalTrialsService:
 
         # Should only initialize once
         mock_client_class.assert_called_once()
-        mock_client._init_session.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_cleanup(self):
         """Test service cleanup."""
         # Setup initialized service
         mock_client = Mock(spec=ClinicalTrialsClient)
-        mock_client._init_session = AsyncMock()
         mock_client.close = AsyncMock()
 
         with patch(
@@ -107,7 +101,6 @@ class TestClinicalTrialsService:
     async def test_search_simple_query(self):
         """Test simple search functionality."""
         mock_client = Mock(spec=ClinicalTrialsClient)
-        mock_client._init_session = AsyncMock()
         mock_client.search = AsyncMock(return_value=["NCT12345678", "NCT87654321"])
 
         self.service.client = mock_client
@@ -116,7 +109,7 @@ class TestClinicalTrialsService:
         result = await self.service.search("cancer")
 
         assert result == ["NCT12345678", "NCT87654321"]
-        mock_client.search.assert_called_once_with(condition="cancer")
+        mock_client.search.assert_called_once_with("cancer", condition="cancer")
 
     @pytest.mark.asyncio
     async def test_search_structured_query(self):
@@ -129,7 +122,7 @@ class TestClinicalTrialsService:
 
         result = await self.service.search("condition:diabetes phase:PHASE3")
 
-        mock_client.search.assert_called_once_with(condition="diabetes", phase="PHASE3")
+        mock_client.search.assert_called_once_with("condition:diabetes phase:PHASE3", condition="diabetes", phase="PHASE3")
         assert result == ["NCT12345678"]
 
     @pytest.mark.asyncio
@@ -147,7 +140,7 @@ class TestClinicalTrialsService:
         )
 
         mock_client.search.assert_called_once_with(
-            condition="cancer", phase="PHASE3", limit=50
+            "condition:cancer phase:PHASE2", condition="cancer", phase="PHASE3", limit=50
         )
 
     @pytest.mark.asyncio

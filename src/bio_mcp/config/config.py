@@ -55,7 +55,7 @@ class Config:
     # OpenAI Embedding Configuration
     openai_embedding_model: str = "text-embedding-3-small"
     openai_embedding_dimensions: int | None = 1536
-    
+
     # Legacy - kept for backward compatibility during migration
     biobert_model_name: str = "pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb"
     biobert_max_tokens: int = 512
@@ -67,13 +67,13 @@ class Config:
     uuid_namespace: uuid.UUID = None  # Set in __post_init__
     document_schema_version: int = 1
     chunker_version: str = "v1.2.0"
-    
+
     # Chunking configuration
     chunker_target_tokens: int = 325
     chunker_max_tokens: int = 450
     chunker_min_tokens: int = 120
     chunker_overlap_tokens: int = 50
-    
+
     # Search boosting configuration
     boost_results_section: str = "0.15"
     boost_conclusions_section: str = "0.12"
@@ -83,7 +83,6 @@ class Config:
     recency_recent_years: str = "2"
     recency_moderate_years: str = "5"
     recency_old_years: str = "10"
-    
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -97,27 +96,47 @@ class Config:
             server_name=os.getenv("BIO_MCP_SERVER_NAME", "bio-mcp"),
             log_level=os.getenv("BIO_MCP_LOG_LEVEL", "INFO"),
             pubmed_api_key=os.getenv("BIO_MCP_PUBMED_API_KEY"),
-            openai_api_key=os.getenv("OPENAI_API_KEY") or os.getenv("BIO_MCP_OPENAI_API_KEY"),
+            openai_api_key=os.getenv("OPENAI_API_KEY")
+            or os.getenv("BIO_MCP_OPENAI_API_KEY"),
             database_url=os.getenv("BIO_MCP_DATABASE_URL", "sqlite:///:memory:"),
             weaviate_url=os.getenv("BIO_MCP_WEAVIATE_URL", "http://localhost:8080"),
             # OpenAI Embedding Configuration
-            openai_embedding_model=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"),
-            openai_embedding_dimensions=int(os.getenv("OPENAI_EMBEDDING_DIMENSIONS", "1536")) if os.getenv("OPENAI_EMBEDDING_DIMENSIONS") else None,
+            openai_embedding_model=os.getenv(
+                "OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"
+            ),
+            openai_embedding_dimensions=int(
+                os.getenv("OPENAI_EMBEDDING_DIMENSIONS", "1536")
+            )
+            if os.getenv("OPENAI_EMBEDDING_DIMENSIONS")
+            else None,
             # Legacy BioBERT Configuration (backward compatibility)
-            biobert_model_name=os.getenv("BIO_MCP_EMBED_MODEL", "pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb"),
+            biobert_model_name=os.getenv(
+                "BIO_MCP_EMBED_MODEL",
+                "pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb",
+            ),
             biobert_max_tokens=int(os.getenv("BIO_MCP_EMBED_MAX_TOKENS", "512")),
             # Collection Configuration
-            weaviate_collection_v2=os.getenv("BIO_MCP_WEAVIATE_COLLECTION_V2", "DocumentChunk_v2"),
+            weaviate_collection_v2=os.getenv(
+                "BIO_MCP_WEAVIATE_COLLECTION_V2", "DocumentChunk_v2"
+            ),
             # Chunking configuration
-            chunker_target_tokens=int(os.getenv("BIO_MCP_CHUNKER_TARGET_TOKENS", "325")),
+            chunker_target_tokens=int(
+                os.getenv("BIO_MCP_CHUNKER_TARGET_TOKENS", "325")
+            ),
             chunker_max_tokens=int(os.getenv("BIO_MCP_CHUNKER_MAX_TOKENS", "450")),
             chunker_min_tokens=int(os.getenv("BIO_MCP_CHUNKER_MIN_TOKENS", "120")),
-            chunker_overlap_tokens=int(os.getenv("BIO_MCP_CHUNKER_OVERLAP_TOKENS", "50")),
+            chunker_overlap_tokens=int(
+                os.getenv("BIO_MCP_CHUNKER_OVERLAP_TOKENS", "50")
+            ),
             # Search boosting configuration
             boost_results_section=os.getenv("BIO_MCP_BOOST_RESULTS_SECTION", "0.15"),
-            boost_conclusions_section=os.getenv("BIO_MCP_BOOST_CONCLUSIONS_SECTION", "0.12"),
+            boost_conclusions_section=os.getenv(
+                "BIO_MCP_BOOST_CONCLUSIONS_SECTION", "0.12"
+            ),
             boost_methods_section=os.getenv("BIO_MCP_BOOST_METHODS_SECTION", "0.05"),
-            boost_background_section=os.getenv("BIO_MCP_BOOST_BACKGROUND_SECTION", "0.02"),
+            boost_background_section=os.getenv(
+                "BIO_MCP_BOOST_BACKGROUND_SECTION", "0.02"
+            ),
             quality_boost_factor=os.getenv("BIO_MCP_QUALITY_BOOST_FACTOR", "0.1"),
             recency_recent_years=os.getenv("BIO_MCP_RECENCY_RECENT_YEARS", "2"),
             recency_moderate_years=os.getenv("BIO_MCP_RECENCY_MODERATE_YEARS", "5"),

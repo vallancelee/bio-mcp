@@ -232,7 +232,7 @@ class TestMCPServerConfig:
         # Store original logging state for cleanup
         original_handlers = logging.getLogger().handlers[:]
         original_level = logging.getLogger().level
-        
+
         try:
             # Re-import to trigger logging configuration
 
@@ -242,20 +242,21 @@ class TestMCPServerConfig:
             assert (
                 logging.getLogger().hasHandlers()
             )  # Should have handlers from basicConfig
-            
+
         finally:
             # Clean up logging configuration immediately
             root_logger = logging.getLogger()
-            
+
             # Remove all handlers that were added during this test
             for handler in root_logger.handlers[:]:
                 if handler not in original_handlers:
                     handler.close()
                     root_logger.removeHandler(handler)
-            
+
             # Restore original level
             root_logger.setLevel(original_level)
-            
+
             # Force garbage collection of handler resources
             import gc
+
             gc.collect()

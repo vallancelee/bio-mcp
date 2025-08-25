@@ -111,7 +111,7 @@ class TestClinicalTrialsSyncStrategy:
         assert result["updated"] == 0
         assert result["parse_errors"] == 0
         assert "investment_relevant_count" in result
-        assert "avg_investment_score" in result
+        assert "avg_quality_score" in result
 
         # Verify client calls
         self.mock_client.search.assert_called_once()
@@ -306,7 +306,7 @@ class TestClinicalTrialsSyncStrategy:
         assert result["synced"] == 2
         assert result["parse_errors"] == 0
         assert "investment_relevant_count" in result
-        assert "avg_investment_score" in result
+        assert "avg_quality_score" in result
 
         # Verify client call
         self.mock_client.get_studies_batch.assert_called_once_with(nct_ids)
@@ -384,13 +384,13 @@ class TestClinicalTrialsSyncStrategy:
         # Verify investment metrics are included
         assert result["success"] is True
         assert "investment_relevant_count" in result
-        assert "avg_investment_score" in result
+        assert "avg_quality_score" in result
 
         # This should be a high-value trial (Phase 3 + Industry + Cancer)
         assert (
             result["investment_relevant_count"] >= 1
         )  # Should have at least 1 relevant trial
-        assert result["avg_investment_score"] > 0.5  # Should be high investment score
+        assert result["avg_quality_score"] > 0.5  # Should be high quality score
 
     def test_parse_query_parameters_all_types(self):
         """Test parsing all supported query parameter types."""

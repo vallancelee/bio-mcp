@@ -31,13 +31,26 @@ def upgrade() -> None:
             "pending", "running", "completed", "failed", "cancelled", name="jobstatus"
         )
         job_status_enum.create(connection)
-    
+
     # Create jobs table
     op.create_table(
         "jobs",
         sa.Column("id", sa.UUID(), nullable=False),
         sa.Column("tool_name", sa.String(length=100), nullable=False),
-        sa.Column("status", postgresql.ENUM("pending", "running", "completed", "failed", "cancelled", name="jobstatus", create_type=False), nullable=False, server_default="pending"),
+        sa.Column(
+            "status",
+            postgresql.ENUM(
+                "pending",
+                "running",
+                "completed",
+                "failed",
+                "cancelled",
+                name="jobstatus",
+                create_type=False,
+            ),
+            nullable=False,
+            server_default="pending",
+        ),
         sa.Column("trace_id", sa.String(length=36), nullable=False),
         sa.Column(
             "parameters", postgresql.JSONB(astext_type=sa.Text()), nullable=False
