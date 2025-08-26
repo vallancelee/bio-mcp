@@ -10,6 +10,11 @@ from pathlib import Path
 
 from bio_mcp import __build__, __commit__, __version__
 
+# Import will be done lazily to avoid circular imports
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from bio_mcp.orchestrator.config import OrchestratorConfig
+
 # Try to load .env file if it exists
 try:
     from dotenv import load_dotenv
@@ -83,6 +88,9 @@ class Config:
     recency_recent_years: str = "2"
     recency_moderate_years: str = "5"
     recency_old_years: str = "10"
+    
+    # Orchestrator configuration (lazy loaded)
+    orchestrator: "OrchestratorConfig" = None
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -160,6 +168,11 @@ class Config:
             )
         if not hasattr(self, "chunker_version") or self.chunker_version == "v1.2.0":
             self.chunker_version = os.getenv("BIO_MCP_CHUNKER_VERSION", "v1.2.0")
+        
+        # Initialize orchestrator config lazily to avoid circular imports
+        if self.orchestrator is None:
+            from bio_mcp.orchestrator.config import OrchestratorConfig
+            self.orchestrator = OrchestratorConfig.from_main_config(self)
 
     def validate(self) -> None:
         """Basic validation - will be enhanced in Phase 1B."""

@@ -30,6 +30,10 @@ dependencies = [
     "spacy>=3.8.7",
     "numpy>=1.21.0,<2.0.0", # Pin numpy to compatible version for spaCy compatibility
     "en-core-web-sm",
+    "langgraph>=0.0.60",
+    "langsmith>=0.0.60",
+    "langchain-core>=0.1.0",
+    "langgraph-checkpoint-sqlite>=2.0.11",
 ]
 
 [project.optional-dependencies]
