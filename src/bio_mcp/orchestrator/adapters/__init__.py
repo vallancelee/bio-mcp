@@ -1,0 +1,1 @@
+"""Adapter layer for MCP tool integration."""
