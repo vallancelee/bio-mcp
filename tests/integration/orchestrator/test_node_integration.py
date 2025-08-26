@@ -1,8 +1,9 @@
 """Integration tests for LangGraph nodes."""
-import pytest  # noqa: F401 - may be used by test framework
-from bio_mcp.orchestrator.graph_builder import build_orchestrator_graph
-from bio_mcp.orchestrator.config import OrchestratorConfig
+import pytest
 from langgraph.checkpoint.memory import MemorySaver
+
+from bio_mcp.orchestrator.config import OrchestratorConfig
+from bio_mcp.orchestrator.graph_builder import build_orchestrator_graph
 
 
 class TestNodeIntegration:

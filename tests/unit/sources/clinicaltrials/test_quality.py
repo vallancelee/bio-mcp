@@ -2,8 +2,9 @@
 Unit tests for clinical trial quality scoring.
 """
 
+from datetime import datetime
+
 import pytest
-from datetime import datetime, date
 
 from bio_mcp.sources.clinicaltrials.models import ClinicalTrialDocument
 
@@ -24,15 +25,15 @@ def create_test_trial(**kwargs) -> ClinicalTrialDocument:
     return ClinicalTrialDocument(**all_fields)
 from bio_mcp.sources.clinicaltrials.quality import (
     ClinicalTrialQualityConfig,
+    _calculate_condition_score,
+    _calculate_enrollment_score,
+    _calculate_intervention_score,
+    _calculate_phase_score,
+    _calculate_results_score,
+    _calculate_sponsor_score,
+    _calculate_status_score,
     calculate_clinical_trial_quality,
     calculate_quality_metrics,
-    _calculate_phase_score,
-    _calculate_sponsor_score,
-    _calculate_enrollment_score,
-    _calculate_status_score,
-    _calculate_results_score,
-    _calculate_condition_score,
-    _calculate_intervention_score,
 )
 
 

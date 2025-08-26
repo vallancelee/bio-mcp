@@ -1,8 +1,9 @@
 """Test synthesizer node."""
-import pytest  # noqa: F401 - may be used by test framework
+import pytest
+
+from bio_mcp.orchestrator.config import OrchestratorConfig
 from bio_mcp.orchestrator.nodes.synthesizer_node import SynthesizerNode
 from bio_mcp.orchestrator.state import OrchestratorState
-from bio_mcp.orchestrator.config import OrchestratorConfig
 
 
 class TestSynthesizerNode:

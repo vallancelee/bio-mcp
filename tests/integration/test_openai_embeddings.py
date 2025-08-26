@@ -562,7 +562,7 @@ class TestOpenAIScaleFeatures:
                     source="test",
                     source_id=f"corpus_{i:03d}",
                     title=f"{topic.title()} Research Study {i + 1}",
-                    text=f"A comprehensive study on {topic} involving patient cohorts, molecular analysis, and clinical outcomes. This research examines therapeutic interventions and biomarker identification in {topic} patients, with statistical analysis and longitudinal follow-up data.",
+                    text=f"A comprehensive study on {topic} involving patient cohorts, molecular analysis, and clinical outcomes. This research examines therapeutic interventions and biomarker identification in {topic} patients, with statistical analysis and longitudinal follow-up data. The study methodology includes randomized controlled trials, observational studies, and meta-analyses to provide robust evidence for clinical practice guidelines. Research participants underwent extensive screening and monitoring protocols to ensure data quality and patient safety throughout the study duration.",
                 )
                 documents.append(doc)
 
@@ -579,8 +579,9 @@ class TestOpenAIScaleFeatures:
                 if i % 10 == 0:
                     print(f"Processed {i + 1}/{len(documents)} documents...")
 
-            assert total_chunks >= len(documents), (
-                f"Should generate at least {len(documents)} chunks, got {total_chunks}"
+            # Should generate at least 50 chunks (1 per document minimum)
+            assert total_chunks >= 50, (
+                f"Should generate at least 50 chunks, got {total_chunks}"
             )
 
             # Test search across the corpus

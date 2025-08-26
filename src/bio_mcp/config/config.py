@@ -8,10 +8,11 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-from bio_mcp import __build__, __commit__, __version__
-
 # Import will be done lazily to avoid circular imports
 from typing import TYPE_CHECKING
+
+from bio_mcp import __build__, __commit__, __version__
+
 if TYPE_CHECKING:
     from bio_mcp.orchestrator.config import OrchestratorConfig
 

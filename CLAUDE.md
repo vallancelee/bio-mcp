@@ -128,3 +128,4 @@ All tool contracts are defined in `contracts.md` with JSON schemas for:
 - Do not mock databases. Prefer testcontainers
 - make concise git commit messages
 - make concise but informative git commit messages
+- Never mock functionality that do not exist.

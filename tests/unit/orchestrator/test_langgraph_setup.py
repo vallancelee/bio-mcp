@@ -1,8 +1,8 @@
 """Test LangGraph orchestrator setup."""
-import pytest  # noqa: F401 - may be used by test framework
-from bio_mcp.orchestrator.graph import BioMCPGraph
+import pytest
+
 from bio_mcp.orchestrator.config import OrchestratorConfig
-from bio_mcp.orchestrator.state import OrchestratorState
+from bio_mcp.orchestrator.graph import BioMCPGraph
 
 
 class TestLangGraphSetup:

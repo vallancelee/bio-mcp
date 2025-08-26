@@ -1,9 +1,11 @@
 """Test tool execution nodes."""
-import pytest  # noqa: F401 - may be used by test framework
 from unittest.mock import AsyncMock, Mock
+
+import pytest
+
+from bio_mcp.orchestrator.config import OrchestratorConfig
 from bio_mcp.orchestrator.nodes.tool_nodes import PubMedSearchNode
 from bio_mcp.orchestrator.state import OrchestratorState
-from bio_mcp.orchestrator.config import OrchestratorConfig
 from bio_mcp.sources.pubmed.client import PubMedDocument
 
 

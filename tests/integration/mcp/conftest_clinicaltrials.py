@@ -8,8 +8,8 @@ import os
 
 import pytest_asyncio
 
-from bio_mcp.sources.clinicaltrials.config import ClinicalTrialsConfig
 from bio_mcp.services.services import get_service_manager
+from bio_mcp.sources.clinicaltrials.config import ClinicalTrialsConfig
 
 
 @pytest_asyncio.fixture(scope="function", autouse=True)
