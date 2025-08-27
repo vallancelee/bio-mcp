@@ -195,8 +195,8 @@ async def main():
 
     # Initialize database with migrations
     try:
-        from .clients.database import DatabaseConfig, DatabaseManager
-        from .clients.migrations import run_migrations
+        from .shared.clients.database import DatabaseConfig, DatabaseManager
+        from .shared.clients.migrations import run_migrations
 
         logger.info("Initializing database connection...")
         db_config = DatabaseConfig.from_env()
@@ -217,7 +217,7 @@ async def main():
         db_manager.session_factory = None
 
         # Store database manager globally for access by tools
-        import bio_mcp.clients.database as db_module
+        import bio_mcp.shared.clients.database as db_module
 
         db_module._database_manager = db_manager
 
@@ -275,7 +275,7 @@ async def main():
     finally:
         # Cleanup database connection
         try:
-            import bio_mcp.clients.database as db_module
+            import bio_mcp.shared.clients.database as db_module
 
             if db_module._database_manager:
                 await db_module._database_manager.close()
@@ -286,5 +286,10 @@ async def main():
         logger.info("Bio-MCP server stopped")
 
 
-if __name__ == "__main__":
+def run():
+    """Synchronous entry point for the bio-mcp command."""
     asyncio.run(main())
+
+
+if __name__ == "__main__":
+    run()

@@ -43,7 +43,7 @@ class TestLangGraphSetup:
         # Check result structure
         assert result["query"] == "test query about diabetes"
         assert result["answer"] is not None
-        assert result["session_id"] is not None
+        assert result["orchestrator_checkpoint_id"] is not None
         assert len(result["node_path"]) > 0
         assert "parse_frame" in result["node_path"]
         assert "synthesize" in result["node_path"]

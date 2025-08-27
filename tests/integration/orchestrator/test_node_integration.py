@@ -24,8 +24,13 @@ class TestNodeIntegration:
         initial_state = {
             "query": "recent papers on diabetes",
             "config": {},
+            "normalized_query": None,
+            "query_entities": None,
+            "query_enhancement_metadata": None,
             "frame": None,
             "routing_decision": None,
+            "intent_confidence": None,
+            "entity_confidence": None,
             "pubmed_results": None,
             "ctgov_results": None,
             "rag_results": None,
@@ -35,7 +40,7 @@ class TestNodeIntegration:
             "errors": [],
             "node_path": [],
             "answer": None,
-            "session_id": None,
+            "orchestrator_checkpoint_id": None,
             "messages": []
         }
         
@@ -45,8 +50,8 @@ class TestNodeIntegration:
         
         # Verify execution
         assert result["answer"] is not None
-        assert result["session_id"] is not None
-        assert "parse_frame" in result["node_path"]
+        assert result["orchestrator_checkpoint_id"] is not None  # Updated field name
+        assert "llm_parse" in result["node_path"]  # Updated node name
         assert "router" in result["node_path"] 
         assert "synthesizer" in result["node_path"]
         assert len(result["messages"]) > 0

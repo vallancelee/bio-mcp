@@ -1,4 +1,5 @@
 """Orchestrator error handling."""
+
 from .recovery import (
     ErrorClassifier,
     ErrorRecoveryManager,
@@ -10,7 +11,7 @@ from .recovery import (
 
 __all__ = [
     "ErrorClassifier",
-    "ErrorRecoveryManager", 
+    "ErrorRecoveryManager",
     "ErrorSeverity",
     "ErrorType",
     "RecoveryAction",

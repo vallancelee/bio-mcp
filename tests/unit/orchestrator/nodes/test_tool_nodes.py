@@ -45,12 +45,17 @@ class TestPubMedSearchNode:
         state = OrchestratorState(
             query="test query",
             config={},
+            normalized_query=None,
+            query_entities=None,
+            query_enhancement_metadata=None,
             frame={
                 "intent": "recent_pubs_by_topic",
                 "entities": {"topic": "GLP-1 agonists"},
                 "filters": {"published_within_days": 180}
             },
             routing_decision=None,
+            intent_confidence=None,
+            entity_confidence=None,
             pubmed_results=None,
             ctgov_results=None,
             rag_results=None,
@@ -60,7 +65,7 @@ class TestPubMedSearchNode:
             errors=[],
             node_path=[],
             answer=None,
-            session_id=None,
+            orchestrator_checkpoint_id=None,
             messages=[]
         )
         
@@ -87,14 +92,19 @@ class TestPubMedSearchNode:
         node = PubMedSearchNode(config)
         
         state = OrchestratorState(
-            query="test query",
+            query="",  # Empty query to trigger error
             config={},
+            normalized_query=None,
+            query_entities=None,
+            query_enhancement_metadata=None,
             frame={
                 "intent": "recent_pubs_by_topic",
                 "entities": {},  # No topic
                 "filters": {}
             },
             routing_decision=None,
+            intent_confidence=None,
+            entity_confidence=None,
             pubmed_results=None,
             ctgov_results=None,
             rag_results=None,
@@ -104,7 +114,7 @@ class TestPubMedSearchNode:
             errors=[],
             node_path=[],
             answer=None,
-            session_id=None,
+            orchestrator_checkpoint_id=None,
             messages=[]
         )
         
@@ -129,12 +139,17 @@ class TestPubMedSearchNode:
         state = OrchestratorState(
             query="test query",
             config={},
+            normalized_query=None,
+            query_entities=None,
+            query_enhancement_metadata=None,
             frame={
                 "intent": "recent_pubs_by_topic",
                 "entities": {"topic": "diabetes"},
                 "filters": {}
             },
             routing_decision=None,
+            intent_confidence=None,
+            entity_confidence=None,
             pubmed_results=None,
             ctgov_results=None,
             rag_results=None,
@@ -144,7 +159,7 @@ class TestPubMedSearchNode:
             errors=[],
             node_path=[],
             answer=None,
-            session_id=None,
+            orchestrator_checkpoint_id=None,
             messages=[]
         )
         

@@ -40,98 +40,104 @@ User Query
 [Parse Frame Node] → OrchestratorState.frame
    │
    ▼
-[Router Node] → conditional edges based on intent
-   │
-   ├─→ [PubMed Search Node] → OrchestratorState.pubmed_results
-   ├─→ [ClinicalTrials Node] → OrchestratorState.ctgov_results  
-   └─→ [RAG Search Node] → OrchestratorState.rag_results
+[Router Node] → OrchestratorState.routing_decision
    │
    ▼
-[Synthesizer Node] → OrchestratorState.answer + checkpoint_id
+[PubMed Search Node] → OrchestratorState.pubmed_results (M1: all routes go here)
+   │
+   ▼
+[Synthesizer Node] → OrchestratorState.answer + session_id
+
+Note: ClinicalTrials and RAG nodes are planned but route to PubMed in M1 implementation.
 ```
 
 ### State Management
 
 ```python
-from typing import TypedDict, List, Dict, Any, Optional
-from langgraph.graph import add_messages
+from typing import Annotated, Any, TypedDict
+from langgraph.graph.message import add_messages
 
 class OrchestratorState(TypedDict):
     """Central state for bio-mcp orchestrator workflow."""
     
-    # Input
+    # Input data
     query: str
-    config: Dict[str, Any]  # Budget, fetch policy, etc.
+    config: dict[str, Any]
     
-    # Parsed intent
-    frame: Optional[Dict[str, Any]]  # Frame from parser
+    # Processing stages
+    frame: dict[str, Any] | None  # Parsed query intent
+    routing_decision: str | None  # Which path to take
     
     # Tool execution results
-    pubmed_results: Optional[Dict[str, Any]]
-    ctgov_results: Optional[Dict[str, Any]]
-    rag_results: Optional[Dict[str, Any]]
+    pubmed_results: dict[str, Any] | None
+    ctgov_results: dict[str, Any] | None
+    rag_results: dict[str, Any] | None
     
-    # Execution metadata
-    tool_calls_made: List[str]
-    cache_hits: Dict[str, bool]
-    latencies: Dict[str, float]
-    errors: List[Dict[str, Any]]
+    # Metadata and tracing
+    tool_calls_made: list[str]
+    cache_hits: dict[str, bool]
+    latencies: dict[str, float]
+    errors: list[dict[str, Any]]
+    node_path: list[str]  # Execution path through graph
     
     # Output
-    answer: Optional[str]
-    checkpoint_id: Optional[str]
+    answer: str | None
+    orchestrator_checkpoint_id: str | None  # Renamed to avoid LangGraph reserved field collision
     
-    # Tracing
-    messages: Annotated[List[Dict], add_messages]
+    # Messages for tracing and debugging
+    messages: Annotated[list[dict[str, Any]], add_messages]
 ```
 
 ### Graph Topology
 
 ```python
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, StateGraph
+from bio_mcp.orchestrator.nodes.frame_node import create_frame_parser_node
+from bio_mcp.orchestrator.nodes.router_node import create_router_node, routing_function
+from bio_mcp.orchestrator.nodes.synthesizer_node import create_synthesizer_node
+from bio_mcp.orchestrator.nodes.tool_nodes import create_pubmed_search_node
 
-def create_orchestrator_graph() -> StateGraph:
-    """Create the main orchestrator graph."""
+def build_orchestrator_graph(config: OrchestratorConfig) -> StateGraph:
+    """Build the complete orchestrator graph with real nodes."""
     
+    # Create graph
     workflow = StateGraph(OrchestratorState)
     
-    # Add nodes
-    workflow.add_node("parse_frame", parse_frame_node)
-    workflow.add_node("route_intent", route_intent_node)
-    workflow.add_node("pubmed_search", pubmed_search_node)
-    workflow.add_node("ctgov_search", ctgov_search_node)
-    workflow.add_node("rag_search", rag_search_node)
-    workflow.add_node("pubmed_get", pubmed_get_node)
-    workflow.add_node("synthesize", synthesize_node)
+    # Create nodes with factory functions (M1 implementation)
+    frame_parser = create_frame_parser_node(config)
+    router = create_router_node(config)
+    pubmed_search = create_pubmed_search_node(config)
+    synthesizer = create_synthesizer_node(config)
+    
+    # Add nodes to graph
+    workflow.add_node("parse_frame", frame_parser)
+    workflow.add_node("router", router)
+    workflow.add_node("pubmed_search", pubmed_search)
+    workflow.add_node("synthesizer", synthesizer)
     
     # Entry point
     workflow.set_entry_point("parse_frame")
     
-    # Sequential flow to router
-    workflow.add_edge("parse_frame", "route_intent")
+    # Sequential flow
+    workflow.add_edge("parse_frame", "router")
     
-    # Conditional routing based on intent
+    # Conditional routing (M1: simplified, all routes go to pubmed)
     workflow.add_conditional_edges(
-        "route_intent",
-        route_by_intent,
+        "router",
+        routing_function,
         {
-            "recent_pubs_by_topic": ["pubmed_search"],
-            "indication_phase_trials": ["ctgov_search"], 
-            "trials_with_pubs": ["ctgov_search", "pubmed_search"],
-            "hybrid_search": ["rag_search"]
+            "pubmed_search": "pubmed_search",
+            # M1 limitation: other intents also route to pubmed_search
+            "ctgov_search": "pubmed_search", 
+            "rag_search": "pubmed_search",
         }
     )
     
-    # PubMed pipeline
-    workflow.add_edge("pubmed_search", "pubmed_get")
-    workflow.add_edge("pubmed_get", "synthesize")
-    
-    # Direct synthesis paths
-    workflow.add_edge("ctgov_search", "synthesize")
-    workflow.add_edge("rag_search", "synthesize")
+    # Direct to synthesizer (no separate pubmed_get node)
+    workflow.add_edge("pubmed_search", "synthesizer")
     
     # End state
-    workflow.add_edge("synthesize", END)
+    workflow.add_edge("synthesizer", END)
     
     return workflow
 ```
@@ -270,56 +276,63 @@ def handle_node_error(state: OrchestratorState, error: Exception, node_name: str
 ### Conditional Routing
 
 ```python
-def route_by_intent(state: OrchestratorState) -> List[str]:
-    """Route execution based on parsed intent."""
-    frame = state["frame"]
-    intent = frame["intent"]
+def routing_function(state: OrchestratorState) -> str:
+    """Conditional routing function for LangGraph edges."""
+    routing_decision = state.get("routing_decision", "pubmed_search")
+    
+    # M1 implementation: all routes go to pubmed_search
+    # Future versions will implement proper conditional routing
+    return "pubmed_search"  # Simplified for M1
+    
+# Future implementation (when M2+ nodes are ready):
+def route_by_intent_full(state: OrchestratorState) -> str:
+    """Full routing logic (not used in M1)."""
+    frame = state.get("frame", {})
+    intent = frame.get("intent", "recent_pubs_by_topic")
     
     if intent == "recent_pubs_by_topic":
-        return ["pubmed_search"]
+        return "pubmed_search"
     elif intent == "indication_phase_trials":
-        return ["ctgov_search"]
-    elif intent == "trials_with_pubs":
-        return ["ctgov_search", "pubmed_search"]  # Parallel
+        return "ctgov_search"
     elif intent == "hybrid_search":
-        return ["rag_search"]
+        return "rag_search"
     else:
-        # Fallback
-        return ["pubmed_search"]
+        return "pubmed_search"  # Fallback
 ```
 
 ---
 
 ## 5) Implementation Plan (LangGraph Milestones)
 
-### M0 — LangGraph Scaffolding (1 day)
+### ✅ M0 — LangGraph Scaffolding (COMPLETED)
 
-* Install LangGraph dependencies
-* Set up StateGraph with OrchestratorState
-* Basic node structure and graph compilation
-* Integration with bio-mcp config system
-* LangSmith integration for tracing
+* ✅ Install LangGraph dependencies
+* ✅ Set up StateGraph with OrchestratorState
+* ✅ Basic node structure and graph compilation
+* ✅ Integration with bio-mcp config system
+* 🔄 LangSmith integration for tracing (config ready, not implemented)
 
-### M1 — Core Nodes Implementation (2 days)
+### ✅ M1 — Core Nodes Implementation (COMPLETED)
 
-* Frame parser node with existing logic
-* Router node with intent-based conditional routing
-* Tool execution nodes (PubMed, ClinicalTrials, RAG)
-* Synthesizer node for final answer generation
+* ✅ Frame parser node with existing logic (`FrameParserNode`)
+* ✅ Router node with intent-based conditional routing (`RouterNode`)
+* ✅ PubMed search node (combined search + fetch) (`PubMedSearchNode`)
+* ⏳ ClinicalTrials and RAG nodes (routes to PubMed for M1)
+* ✅ Synthesizer node for final answer generation (`SynthesizerNode`)
 
-### M2 — State Management & Flow Control (1 day)
+### 🔄 M2 — State Management & Flow Control (PARTIAL)
 
-* State schema validation with Pydantic
-* Conditional edges and parallel execution
-* Error handling and retry logic
-* State persistence and checkpointing
+* ✅ State schema validation with Pydantic (`FrameModel`, `NodeResult`)
+* ⏳ Conditional edges and parallel execution (simplified for M1)
+* ✅ Error handling and retry logic (basic implementation in nodes)
+* ✅ State persistence and checkpointing (AsyncSqliteSaver)
 
-### M3 — Tool Integration (2 days)
+### 🔄 M3 — Tool Integration (PARTIAL)
 
-* Wrap existing MCP tools as LangGraph nodes
-* Cache-then-network pattern in nodes
-* Rate limiting middleware for nodes
-* Tool result normalization
+* ✅ Wrap existing MCP tools as LangGraph nodes (PubMed via client)
+* ⏳ Cache-then-network pattern in nodes (basic cache_hits tracking)
+* ✅ Rate limiting middleware for nodes (`TokenBucketRateLimiter`)
+* ✅ Tool result normalization (structured response format)
 
 ### M4 — Advanced Features (1 day)
 
@@ -457,53 +470,74 @@ class BioMCPOrchestrator:
 ### 6.2 Example Node Implementation
 
 ```python
-# orchestrator/nodes/pubmed_node.py
-from typing import Dict, Any
+# src/bio_mcp/orchestrator/nodes/tool_nodes.py (M1 Implementation)
+from typing import Any
+from datetime import UTC, datetime
 from bio_mcp.orchestrator.state import OrchestratorState
-from bio_mcp.sources.pubmed.client import PubMedClient
-from bio_mcp.orchestrator.middleware import with_rate_limit, with_cache
+from bio_mcp.sources.pubmed.client import PubMedClient, PubMedConfig
 
-@with_rate_limit(rate=2.0)  # 2 RPS
-@with_cache(ttl=3600)  # 1 hour cache
-async def pubmed_search_node(state: OrchestratorState) -> Dict[str, Any]:
-    """Execute PubMed search based on frame."""
-    frame = state["frame"]
-    topic = frame["entities"].get("topic")
+class PubMedSearchNode(BaseToolNode):
+    """Node for executing PubMed searches."""
     
-    if not topic:
-        return {
-            "errors": state["errors"] + [{"node": "pubmed_search", "error": "No topic found"}]
-        }
+    def __init__(self, config: OrchestratorConfig):
+        super().__init__(config, "pubmed_search")
+        pubmed_config = PubMedConfig()
+        self.client = PubMedClient(pubmed_config)
     
-    try:
-        # Execute search
-        client = PubMedClient()
-        result = await client.search(
-            term=topic,
-            limit=20,
-            published_within_days=frame["filters"].get("published_within_days")
-        )
+    async def __call__(self, state: OrchestratorState) -> dict[str, Any]:
+        """Execute PubMed search using query directly (M1 simplification)."""
+        search_term = state.get("query")  # Direct query usage
         
-        # Update state
-        return {
-            "pubmed_results": result,
-            "tool_calls_made": state["tool_calls_made"] + ["pubmed_search"],
-            "latencies": {**state["latencies"], "pubmed_search": result.get("latency_ms", 0)},
-            "cache_hits": {**state["cache_hits"], "pubmed_search": result.get("cache_hit", False)},
-            "messages": state["messages"] + [{
-                "role": "system", 
-                "content": f"PubMed search for '{topic}': {len(result.get('results', []))} results"
-            }]
-        }
+        if not search_term:
+            # Fallback to frame entities for backward compatibility
+            frame = state.get("frame", {})
+            entities = frame.get("entities", {})
+            search_term = entities.get("topic") or entities.get("indication")
+        
+        if not search_term:
+            return self._error_response(state, "No search term found")
     
-    except Exception as e:
-        return {
-            "errors": state["errors"] + [{
-                "node": "pubmed_search",
-                "error": str(e),
-                "query": topic
-            }]
-        }
+        try:
+            # Search for PMIDs
+            search_result = await self.client.search(
+                query=search_term,
+                limit=20
+            )
+            
+            # Fetch full documents (combined in M1)
+            documents = []
+            if search_result.pmids:
+                doc_details = await self.client.fetch_documents(search_result.pmids)
+                documents = [{
+                    "pmid": doc.pmid,
+                    "title": doc.title,
+                    "authors": doc.authors or [],
+                    "year": doc.publication_date.year if doc.publication_date else None,
+                    "abstract": doc.abstract
+                } for doc in doc_details]
+            
+            # Calculate latency
+            latency_ms = (datetime.now(UTC) - start_time).total_seconds() * 1000
+            
+            # Update state (partial update pattern)
+            return {
+                "pubmed_results": {
+                    "total_count": search_result.total_count,
+                    "results": documents,
+                    "query": search_term
+                },
+                "tool_calls_made": state["tool_calls_made"] + ["pubmed_search"],
+                "cache_hits": {**state["cache_hits"], "pubmed_search": False},
+                "latencies": {**state["latencies"], "pubmed_search": latency_ms},
+                "node_path": state["node_path"] + ["pubmed_search"],
+                "messages": state["messages"] + [{
+                    "role": "system",
+                    "content": f"PubMed search completed: {len(documents)} results"
+                }]
+            }
+        
+        except Exception as e:
+            return self._error_response(state, str(e))
 ```
 
 ---
@@ -593,7 +627,62 @@ def test_graph_routing():
 
 ---
 
-## 10) Rollout Plan
+## 10) Current Implementation Status & Architecture
+
+### Two Parallel Implementations
+
+The codebase currently has two LangGraph implementations:
+
+1. **Production Implementation** (`graph_builder.py`):
+   - Uses real node classes: `FrameParserNode`, `RouterNode`, `PubMedSearchNode`, `SynthesizerNode`
+   - Factory functions: `create_frame_parser_node()`, etc.
+   - Simplified M1 routing: all intents → pubmed_search
+   - Used by POC backend via `build_orchestrator_graph(config)`
+
+2. **Legacy Placeholder** (`graph.py`):
+   - `BioMCPGraph` class with placeholder nodes
+   - Kept for compatibility during development
+   - Uses MemorySaver instead of AsyncSqliteSaver
+
+### Current Limitations (M1)
+
+**Routing Limitations:**
+- All intents route to `pubmed_search` node
+- No parallel execution via conditional edges
+- ClinicalTrials and RAG nodes not implemented
+
+**Feature Gaps:**
+- No streaming results implementation in nodes
+- Basic cache_hits tracking (not full cache-then-network)
+- LangSmith integration configured but not active
+
+**State Management:**
+- `session_id` field exists but `checkpoint_id` renamed to `orchestrator_checkpoint_id`
+- Query normalization fields present but node excluded per requirements
+- `node_path` tracking works correctly
+
+### Working Features
+
+**Core Workflow:**
+```
+parse_frame → router → pubmed_search → synthesizer → END
+```
+
+**State Tracking:**
+- Execution path in `node_path`
+- Latency measurement per node
+- Error handling and propagation
+- Structured message logging
+
+**Integration Points:**
+- POC backend integration via `langgraph_client.py`
+- AsyncSqliteSaver checkpointing
+- Real PubMedClient integration
+- Pydantic model validation
+
+---
+
+## 11) Rollout Plan
 
 ### Phase 1: Core Migration (Week 1)
 * Set up LangGraph scaffolding

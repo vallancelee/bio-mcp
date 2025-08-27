@@ -49,7 +49,7 @@ dev = [
 ]
 
 [project.scripts]
-bio-mcp = "bio_mcp.main:main"
+bio-mcp = "bio_mcp.main:run"
 
 [build-system]
 requires = ["hatchling"]

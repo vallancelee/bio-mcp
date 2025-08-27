@@ -8,6 +8,7 @@
 .PHONY: bootstrap up down reset migrate migrate-create migrate-rollback db-reset run-worker quickstart health-check
 .PHONY: weaviate-create-v2 weaviate-info weaviate-info-v2 weaviate-recreate-v2 test-weaviate-v2
 .PHONY: reingest-full reingest-incremental reingest-sample validate-migration reingest-status
+.PHONY: poc-up poc-dev poc-frontend poc-backend poc-status poc-logs poc-logs-follow poc-test poc-down poc-reset poc-demo
 
 # Default target
 .DEFAULT_GOAL := help
@@ -397,6 +398,213 @@ pre-commit: format lint type-check test ## Run all pre-commit checks
 dev-setup: dev docker-up ## Full development setup
 	@echo "$(GREEN)✓ Development environment fully set up$(NC)"
 	@echo "$(BLUE)Ready to develop! Try 'make test' or 'make run'$(NC)"
+
+# ============================================================================
+# BIOINVEST AI COPILOT POC COMMANDS
+# ============================================================================
+
+poc-up: ## Start BioInvest AI Copilot POC with all services
+	@echo "$(BLUE)🚀 Starting BioInvest AI Copilot POC Environment$(NC)"
+	@echo "$(YELLOW)Step 1/4: Starting infrastructure services...$(NC)"
+	@docker-compose up -d postgres weaviate minio
+	@echo "$(YELLOW)Step 2/4: Waiting for services to be healthy...$(NC)"
+	@sleep 8
+	@$(MAKE) health-check || echo "$(YELLOW)Some services may still be starting...$(NC)"
+	@echo "$(YELLOW)Step 3/4: Starting Bio-MCP server (background)...$(NC)"
+	@if [ -f .env ]; then \
+		echo "  ✓ Loading environment from .env file"; \
+		nohup env $$(cat .env | xargs) $(UV) run bio-mcp > logs/bio-mcp.log 2>&1 & echo $$! > .bio-mcp.pid; \
+	else \
+		nohup $(UV) run bio-mcp > logs/bio-mcp.log 2>&1 & echo $$! > .bio-mcp.pid; \
+	fi
+	@sleep 3
+	@echo "$(YELLOW)Step 4a/5: Installing POC backend dependencies...$(NC)"
+	@cd bioinvest-copilot-poc/backend && $(UV) sync --no-install-project --quiet
+	@echo "$(YELLOW)Step 4b/6: Starting POC backend (background)...$(NC)"
+	@cd bioinvest-copilot-poc/backend && nohup $(UV) run python main.py > ../../logs/poc-backend.log 2>&1 & echo $$! > ../../.poc-backend.pid
+	@sleep 2
+	@echo "$(YELLOW)Step 5a/6: Installing frontend dependencies...$(NC)"
+	@cd bioinvest-copilot-poc/frontend && npm install --silent
+	@echo "$(YELLOW)Step 5b/6: Starting frontend development server (background)...$(NC)"
+	@cd bioinvest-copilot-poc/frontend && nohup npm run dev > ../../logs/poc-frontend.log 2>&1 &
+	@sleep 3
+	@echo "$(GREEN)🎉 BioInvest AI Copilot POC is ready!$(NC)"
+	@echo ""
+	@echo "$(BLUE)📍 Service URLs:$(NC)"
+	@echo "  • PostgreSQL: localhost:5433"
+	@echo "  • Weaviate: http://localhost:8080"
+	@echo "  • MinIO Console: http://localhost:9001 (minioadmin/minioadmin)"
+	@echo "  • Bio-MCP Server: Running via stdio (see logs/bio-mcp.log)"
+	@echo "  • POC Backend API: http://localhost:8002"
+	@echo "  • POC Frontend: http://localhost:5173"
+	@echo ""
+	@echo "$(BLUE)🎯 Ready to use!$(NC)"
+	@echo "  • Open http://localhost:5173 in your browser"
+	@echo "  • Submit biotech investment research queries"
+	@echo "  • View real-time streaming results and AI synthesis"
+	@echo ""
+	@echo "$(BLUE)📋 Useful Commands:$(NC)"
+	@echo "  • make poc-logs    - View all POC logs"
+	@echo "  • make poc-status  - Check POC services status"
+	@echo "  • make poc-down    - Stop POC environment"
+
+poc-dev: ## Setup and start complete POC development environment
+	@echo "$(BLUE)🔧 Setting up BioInvest AI Copilot Development Environment$(NC)"
+	@mkdir -p logs data
+	@echo "$(YELLOW)Installing Python dependencies...$(NC)"
+	@$(UV) sync --dev
+	@echo "$(YELLOW)Setting up POC backend dependencies...$(NC)"
+	@cd bioinvest-copilot-poc/backend && $(UV) sync
+	@echo "$(YELLOW)Setting up POC frontend dependencies...$(NC)"
+	@cd bioinvest-copilot-poc/frontend && npm install
+	@echo "$(GREEN)✅ POC development environment ready!$(NC)"
+	@echo "$(BLUE)Run 'make poc-up' to start services$(NC)"
+
+poc-frontend: ## Start frontend development server
+	@echo "$(YELLOW)Starting React frontend development server...$(NC)"
+	@echo "$(BLUE)Frontend will be available at: http://localhost:5173$(NC)"
+	@cd bioinvest-copilot-poc/frontend && npm run dev
+
+poc-backend: ## Start POC backend in development mode
+	@echo "$(YELLOW)Installing POC backend dependencies with UV...$(NC)"
+	@cd bioinvest-copilot-poc/backend && $(UV) sync --no-install-project
+	@echo "$(YELLOW)Starting POC backend server...$(NC)"
+	@echo "$(BLUE)Backend API will be available at: http://localhost:8002$(NC)"
+	@cd bioinvest-copilot-poc/backend && $(UV) run python main.py
+
+poc-status: ## Check status of POC services
+	@echo "$(YELLOW)Checking BioInvest AI Copilot POC status...$(NC)"
+	@echo ""
+	@echo "$(BLUE)Infrastructure Services:$(NC)"
+	@docker-compose ps postgres weaviate minio 2>/dev/null || echo "  Docker services not running"
+	@echo ""
+	@echo "$(BLUE)Application Services:$(NC)"
+	@if curl -s http://localhost:8002/health >/dev/null 2>&1; then \
+		POC_PID=$$(lsof -ti:8002 2>/dev/null | head -1); \
+		if [ -n "$$POC_PID" ]; then \
+			echo "  ✓ POC Backend (PID: $$POC_PID, Port: 8002)"; \
+		else \
+			echo "  ✓ POC Backend (Port: 8002, PID unknown)"; \
+		fi; \
+	else \
+		echo "  ✗ POC Backend (Port: 8002 not responding)"; \
+	fi
+	@if lsof -ti:5173 >/dev/null 2>&1; then \
+		FRONTEND_PID=$$(lsof -ti:5173 2>/dev/null | head -1); \
+		if curl -s http://localhost:5173 >/dev/null 2>&1; then \
+			echo "  ✓ Frontend (PID: $$FRONTEND_PID, Port: 5173)"; \
+		else \
+			echo "  ~ Frontend (PID: $$FRONTEND_PID, Port: 5173, HTTP check failed)"; \
+		fi; \
+	else \
+		echo "  ✗ Frontend (Port: 5173 not in use)"; \
+	fi
+	@echo ""
+	@echo "$(BLUE)Service Health & Connectivity:$(NC)"
+	@if curl -s http://localhost:8002/health >/dev/null 2>&1; then \
+		BIO_MCP_STATUS=$$(curl -s http://localhost:8002/health | grep -o '"bio_mcp":"[^"]*"' | cut -d'"' -f4 2>/dev/null || echo "unknown"); \
+		echo "  ✓ POC Backend API (Bio-MCP: $$BIO_MCP_STATUS)"; \
+	else \
+		echo "  ✗ POC Backend API"; \
+	fi
+	@curl -s http://localhost:8080/v1/.well-known/ready >/dev/null 2>&1 && echo "  ✓ Weaviate Vector Database" || echo "  ✗ Weaviate Vector Database"
+	@docker-compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1 && echo "  ✓ PostgreSQL Database" || echo "  ✗ PostgreSQL Database"
+	@curl -s http://localhost:9000/minio/health/live >/dev/null 2>&1 && echo "  ✓ MinIO Object Storage" || echo "  ✗ MinIO Object Storage"
+
+poc-logs: ## Show logs from POC services
+	@echo "$(YELLOW)Showing POC service logs...$(NC)"
+	@echo ""
+	@echo "$(BLUE)=== Bio-MCP Server Logs ===$(NC)"
+	@tail -n 20 logs/bio-mcp.log 2>/dev/null || echo "No Bio-MCP logs found"
+	@echo ""
+	@echo "$(BLUE)=== POC Backend Logs ===$(NC)"
+	@tail -n 20 logs/poc-backend.log 2>/dev/null || echo "No POC backend logs found"
+	@echo ""
+	@echo "$(BLUE)=== Docker Services Logs ===$(NC)"
+	@docker-compose logs --tail=10 postgres weaviate 2>/dev/null || echo "No Docker logs available"
+
+poc-logs-follow: ## Follow POC service logs in real-time
+	@echo "$(YELLOW)Following POC logs (Ctrl+C to stop)...$(NC)"
+	@tail -f logs/*.log 2>/dev/null || echo "No log files found. Start services with 'make poc-up'"
+
+poc-test: ## Test POC end-to-end functionality
+	@echo "$(YELLOW)Testing BioInvest AI Copilot POC...$(NC)"
+	@echo ""
+	@echo "$(BLUE)1. Testing Bio-MCP Server$(NC)"
+	@$(UV) run python clients/cli.py ping --message "POC test" | head -n 5
+	@echo ""
+	@echo "$(BLUE)2. Testing POC Backend Health$(NC)"
+	@curl -s http://localhost:8002/health | grep -q "status" && echo "  ✓ Backend healthy" || echo "  ✗ Backend unhealthy"
+	@echo ""
+	@echo "$(BLUE)3. Testing Tool Integration$(NC)"
+	@curl -s -X POST http://localhost:8002/api/research/query \
+	  -H 'Content-Type: application/json' \
+	  -d '{"query":"test query","sources":["pubmed"],"options":{"max_results_per_source":5,"include_synthesis":true,"priority":"speed"}}' \
+	  | grep -q "query_id" && echo "  ✓ Query submission works" || echo "  ✗ Query submission failed"
+	@echo "$(GREEN)✅ POC test completed$(NC)"
+
+poc-down: ## Stop BioInvest AI Copilot POC services
+	@echo "$(YELLOW)Stopping BioInvest AI Copilot POC...$(NC)"
+	@# Kill POC Backend (port 8002)
+	@if PID=$$(lsof -ti:8002 2>/dev/null); then \
+		if kill $$PID 2>/dev/null; then \
+			echo "  ✓ POC Backend stopped (PID: $$PID)"; \
+		else \
+			echo "  ✓ POC Backend was already stopped"; \
+		fi; \
+	else \
+		echo "  ✓ POC Backend not running"; \
+	fi
+	@# Kill Frontend (port 5173/5174)
+	@for PORT in 5173 5174; do \
+		if PID=$$(lsof -ti:$$PORT 2>/dev/null); then \
+			if kill $$PID 2>/dev/null; then \
+				echo "  ✓ Frontend stopped (PID: $$PID, Port: $$PORT)"; \
+			fi; \
+		fi; \
+	done
+	@# Kill any remaining npm/vite processes for the frontend
+	@if pgrep -f "vite.*bioinvest-copilot-poc" >/dev/null 2>&1; then \
+		pkill -f "vite.*bioinvest-copilot-poc" 2>/dev/null && echo "  ✓ Frontend dev server stopped" || true; \
+	fi
+	@# Clean up PID files if they exist
+	@rm -f .poc-backend.pid .bio-mcp.pid 2>/dev/null || true
+	@# Stop Docker services
+	@docker-compose down 2>/dev/null || true
+	@echo "$(GREEN)✅ POC services stopped$(NC)"
+
+poc-reset: poc-down ## Reset POC environment (stops services and clears data)
+	@echo "$(RED)⚠️  This will delete POC data! Press Ctrl+C to cancel...$(NC)"
+	@sleep 3
+	@docker-compose down -v
+	@rm -rf data/* logs/* 2>/dev/null || true
+	@rm -f .bio-mcp.pid .poc-backend.pid 2>/dev/null || true
+	@echo "$(GREEN)✅ POC environment reset$(NC)"
+
+poc-demo: poc-up ## Start POC and open demo URLs
+	@echo "$(BLUE)🎬 Opening BioInvest AI Copilot Demo...$(NC)"
+	@sleep 5
+	@echo "$(YELLOW)Starting frontend...$(NC)"
+	@cd bioinvest-copilot-poc/frontend && nohup npm run dev > ../../logs/frontend.log 2>&1 & echo $$! > ../../.frontend.pid
+	@sleep 8
+	@echo "$(GREEN)✅ Demo environment ready!$(NC)"
+	@echo ""
+	@echo "$(BLUE)🎯 Demo URLs (will open automatically):$(NC)"
+	@echo "  • Frontend: http://localhost:5173"
+	@echo "  • Backend API: http://localhost:8002"
+	@echo "  • Weaviate Console: http://localhost:8080/v1/meta"
+	@echo ""
+	@if command -v open >/dev/null 2>&1; then \
+		open http://localhost:5173; \
+		sleep 2; \
+		open http://localhost:8002/docs; \
+	elif command -v xdg-open >/dev/null 2>&1; then \
+		xdg-open http://localhost:5173; \
+		sleep 2; \
+		xdg-open http://localhost:8002/docs; \
+	else \
+		echo "$(YELLOW)Please manually open the URLs above$(NC)"; \
+	fi
 
 # Complete Testing Workflow
 test-all: ## Run all tests (unit + integration)

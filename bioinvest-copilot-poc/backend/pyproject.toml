@@ -1,0 +1,88 @@
+[project]
+name = "bioinvest-copilot-poc-backend"
+version = "0.1.0"
+description = "BioInvest AI Copilot POC Backend - FastAPI orchestrator with LangGraph integration"
+requires-python = ">=3.12"
+
+dependencies = [
+    # FastAPI and web framework
+    "fastapi>=0.104.1",
+    "uvicorn[standard]>=0.24.0",
+    "pydantic>=2.5.0",
+    "python-multipart>=0.0.6",
+    # HTTP client for Bio-MCP communication
+    "httpx>=0.25.2",
+    "aiohttp>=3.9.1",
+    # Model Context Protocol client
+    "mcp>=1.13.0",
+    # Bio-MCP integration (install main project as dependency)
+    "bio-mcp @ file:///Users/vallancelee/git/bio-mcp",
+    # LangGraph orchestration (for Bio-MCP integration)
+    "langgraph>=0.0.60",
+    "langsmith>=0.0.60",
+    "langchain-core>=0.1.0",
+    "langgraph-checkpoint-sqlite>=2.0.11",
+    # AI and NLP
+    "openai>=1.3.0",
+    "anthropic>=0.7.0",
+    "tiktoken>=0.5.1",
+    # Data processing
+    "pandas>=2.1.3",
+    "numpy>=1.24.3,<2.0.0",
+    # Environment and configuration
+    "python-dotenv>=1.0.0",
+    "pydantic-settings>=2.1.0",
+    # Logging and monitoring
+    "structlog>=23.2.0",
+    "prometheus-client>=0.19.0",
+    # Date/time handling
+    "python-dateutil>=2.8.2",
+    # Optional: Database connections (if needed for caching)
+    "asyncpg>=0.29.0",
+    "redis>=5.0.1",
+    "aiosqlite>=0.21.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    # Development and testing
+    "pytest>=7.4.3",
+    "pytest-asyncio>=0.21.1",
+    "pytest-mock>=3.12.0",
+    "black>=23.11.0",
+    "ruff>=0.1.6",
+    "mypy>=1.7.1",
+]
+
+[project.scripts]
+bioinvest-poc-backend = "main:main"
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "PIE", "T20"]
+ignore = ["E501", "B008"]  # Line too long (handled by black), Default mutable arguments
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
