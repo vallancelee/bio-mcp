@@ -14,12 +14,7 @@ class EnhancedPubMedNode:
     """Enhanced PubMed node with deep MCP integration."""
 
     def __init__(self, config: OrchestratorConfig, db_manager: Any):
-        """Initialize the enhanced PubMed node.
-
-        Args:
-            config: Orchestrator configuration
-            db_manager: Database manager
-        """
+        """Initialize the enhanced PubMed node."""
         self.config = config
         self.adapter = MCPToolAdapter(config, db_manager)
 
@@ -28,14 +23,7 @@ class EnhancedPubMedNode:
         self.executor = ParallelExecutor(rate_limiter=rate_limiter, max_concurrency=3)
 
     async def __call__(self, state: OrchestratorState) -> dict[str, Any]:
-        """Execute PubMed search with enhanced integration.
-
-        Args:
-            state: Current orchestrator state
-
-        Returns:
-            Updated state dictionary
-        """
+        """Execute PubMed search with enhanced integration."""
         frame = state.get("frame", {})
         entities = frame.get("entities", {})
         filters = frame.get("filters", {})
@@ -72,8 +60,6 @@ class EnhancedPubMedNode:
                         all_pmids.add(pmid)
                         combined_results.append(item)
 
-        # TODO: Implement full article fetching when pubmed.get tool is available
-
         # Calculate aggregate metrics
         total_cache_hits = sum(1 for r in search_results if r.cache_hit)
         total_results = len(combined_results)
@@ -84,46 +70,33 @@ class EnhancedPubMedNode:
         )
 
         # Update state
-        updated_state = dict(state)
-        updated_state.update(
-            {
-                "pubmed_results": {
-                    "search_results": combined_results,
-                    "total_results": total_results,
-                    "search_terms": search_terms,
+        return {
+            "pubmed_results": {
+                "search_results": combined_results,
+                "total_results": total_results,
+                "search_terms": search_terms,
+            },
+            "tool_calls_made": [*state.get("tool_calls_made", []), "pubmed.search"],
+            "cache_hits": {
+                **state.get("cache_hits", {}),
+                "pubmed_search": total_cache_hits > 0,
+            },
+            "latencies": {
+                **state.get("latencies", {}),
+                "pubmed_search": avg_latency,
+            },
+            "node_path": [*state.get("node_path", []), "enhanced_pubmed"],
+            "messages": [
+                *state.get("messages", []),
+                {
+                    "role": "system",
+                    "content": f"PubMed search completed: {total_results} unique results from {len(search_terms)} search terms",
                 },
-                "tool_calls_made": [*state.get("tool_calls_made", []), "pubmed.search"],
-                "cache_hits": {
-                    **state.get("cache_hits", {}),
-                    "pubmed_search": total_cache_hits > 0,
-                },
-                "latencies": {
-                    **state.get("latencies", {}),
-                    "pubmed_search": avg_latency,
-                },
-                "node_path": [*state.get("node_path", []), "enhanced_pubmed"],
-                "messages": [
-                    *state.get("messages", []),
-                    {
-                        "role": "system",
-                        "content": f"PubMed search completed: {total_results} unique results from {len(search_terms)} search terms",
-                    },
-                ],
-            }
-        )
-
-        return updated_state
+            ],
+        }
 
     async def _search_pubmed(self, term: str, filters: dict[str, Any]) -> NodeResult:
-        """Execute a single PubMed search.
-
-        Args:
-            term: Search term
-            filters: Search filters
-
-        Returns:
-            NodeResult with search results
-        """
+        """Execute a single PubMed search."""
         args = {
             "term": term,
             "limit": 20,
@@ -136,14 +109,7 @@ class EnhancedPubMedNode:
         return await self.adapter.execute_tool("pubmed.search", args)
 
     def _extract_search_terms(self, entities: dict[str, Any]) -> list[str]:
-        """Extract search terms from entities.
-
-        Args:
-            entities: Extracted entities from frame
-
-        Returns:
-            List of search terms
-        """
+        """Extract search terms from entities."""
         terms = []
 
         # Primary search terms
@@ -167,43 +133,26 @@ class EnhancedPubMedNode:
     def _error_response(
         self, state: OrchestratorState, error_msg: str
     ) -> dict[str, Any]:
-        """Generate error response.
-
-        Args:
-            state: Current state
-            error_msg: Error message
-
-        Returns:
-            Updated state with error
-        """
-        updated_state = dict(state)
-        updated_state.update(
-            {
-                "error": error_msg,
-                "errors": [
-                    *state.get("errors", []),
-                    {
-                        "node": "enhanced_pubmed",
-                        "error": error_msg,
-                        "timestamp": datetime.now(UTC).isoformat(),
-                    },
-                ],
-                "node_path": [*state.get("node_path", []), "enhanced_pubmed"],
-            }
-        )
-        return updated_state
+        """Generate error response."""
+        return {
+            "error": error_msg,
+            "errors": [
+                *state.get("errors", []),
+                {
+                    "node": "enhanced_pubmed",
+                    "error": error_msg,
+                    "timestamp": datetime.now(UTC).isoformat(),
+                },
+            ],
+            "node_path": [*state.get("node_path", []), "enhanced_pubmed"],
+        }
 
 
 class EnhancedTrialsNode:
     """Enhanced ClinicalTrials node with advanced filtering."""
 
     def __init__(self, config: OrchestratorConfig, db_manager: Any):
-        """Initialize the enhanced trials node.
-
-        Args:
-            config: Orchestrator configuration
-            db_manager: Database manager
-        """
+        """Initialize the enhanced trials node."""
         self.config = config
         self.adapter = MCPToolAdapter(config, db_manager)
 
@@ -212,14 +161,7 @@ class EnhancedTrialsNode:
         self.executor = ParallelExecutor(rate_limiter=rate_limiter, max_concurrency=2)
 
     async def __call__(self, state: OrchestratorState) -> dict[str, Any]:
-        """Execute ClinicalTrials search with enhanced filtering.
-
-        Args:
-            state: Current orchestrator state
-
-        Returns:
-            Updated state dictionary
-        """
+        """Execute ClinicalTrials search with enhanced filtering."""
         frame = state.get("frame", {})
         entities = frame.get("entities", {})
         filters = frame.get("filters", {})
@@ -249,53 +191,40 @@ class EnhancedTrialsNode:
         processed_trials = self._process_trials(trials_data, filters)
 
         # Update state
-        updated_state = dict(state)
-        updated_state.update(
-            {
-                "trials_results": {
-                    "trials": processed_trials,
-                    "total_found": len(trials_data.get("results", [])),
-                    "filtered_count": len(processed_trials),
-                    "filters_applied": filters,
-                    "search_terms": search_terms,
+        return {
+            "ctgov_results": {
+                "trials": processed_trials,
+                "total_found": len(trials_data.get("results", [])),
+                "filtered_count": len(processed_trials),
+                "filters_applied": filters,
+                "search_terms": search_terms,
+            },
+            "tool_calls_made": [
+                *state.get("tool_calls_made", []),
+                "clinicaltrials.search",
+            ],
+            "cache_hits": {
+                **state.get("cache_hits", {}),
+                "ctgov_search": search_result.cache_hit,
+            },
+            "latencies": {
+                **state.get("latencies", {}),
+                "ctgov_search": search_result.latency_ms,
+            },
+            "node_path": [*state.get("node_path", []), "enhanced_trials"],
+            "messages": [
+                *state.get("messages", []),
+                {
+                    "role": "system",
+                    "content": f"ClinicalTrials search: {len(processed_trials)} relevant trials found",
                 },
-                "tool_calls_made": [
-                    *state.get("tool_calls_made", []),
-                    "clinicaltrials.search",
-                ],
-                "cache_hits": {
-                    **state.get("cache_hits", {}),
-                    "trials_search": search_result.cache_hit,
-                },
-                "latencies": {
-                    **state.get("latencies", {}),
-                    "trials_search": search_result.latency_ms,
-                },
-                "node_path": [*state.get("node_path", []), "enhanced_trials"],
-                "messages": [
-                    *state.get("messages", []),
-                    {
-                        "role": "system",
-                        "content": f"ClinicalTrials search: {len(processed_trials)} relevant trials found",
-                    },
-                ],
-            }
-        )
-
-        return updated_state
+            ],
+        }
 
     async def _search_trials(
         self, entities: dict[str, Any], filters: dict[str, Any]
     ) -> NodeResult:
-        """Execute trials search.
-
-        Args:
-            entities: Extracted entities
-            filters: Search filters
-
-        Returns:
-            NodeResult with search results
-        """
+        """Execute trials search."""
         args = {
             "limit": 100  # Higher limit for trials
         }
@@ -317,14 +246,7 @@ class EnhancedTrialsNode:
         return await self.adapter.execute_tool("clinicaltrials.search", args)
 
     def _extract_search_terms(self, entities: dict[str, Any]) -> list[str]:
-        """Extract search terms from entities.
-
-        Args:
-            entities: Extracted entities from frame
-
-        Returns:
-            List of search terms
-        """
+        """Extract search terms from entities."""
         terms = []
 
         # Primary search terms
@@ -340,15 +262,7 @@ class EnhancedTrialsNode:
     def _process_trials(
         self, trials_data: dict[str, Any], filters: dict[str, Any]
     ) -> list[dict[str, Any]]:
-        """Post-process and filter trials data.
-
-        Args:
-            trials_data: Raw trials data from search
-            filters: Applied filters
-
-        Returns:
-            List of processed and filtered trials
-        """
+        """Post-process and filter trials data."""
         results = trials_data.get("results", [])
 
         # Apply additional filtering logic
@@ -373,14 +287,7 @@ class EnhancedTrialsNode:
         return processed
 
     def _is_quality_trial(self, trial: dict[str, Any]) -> bool:
-        """Filter for quality trials.
-
-        Args:
-            trial: Trial data
-
-        Returns:
-            True if trial meets quality criteria
-        """
+        """Filter for quality trials."""
         # Basic quality checks
         if not trial.get("title") or not trial.get("nct_id"):
             return False
@@ -395,15 +302,7 @@ class EnhancedTrialsNode:
     def _calculate_relevance_score(
         self, trial: dict[str, Any], filters: dict[str, Any]
     ) -> float:
-        """Calculate relevance score for trial.
-
-        Args:
-            trial: Trial data
-            filters: Applied filters
-
-        Returns:
-            Relevance score (higher is better)
-        """
+        """Calculate relevance score for trial."""
         score = 1.0
 
         # Phase matching bonus
@@ -425,14 +324,7 @@ class EnhancedTrialsNode:
         return score
 
     def _estimate_enrollment_speed(self, trial: dict[str, Any]) -> str:
-        """Estimate enrollment speed.
-
-        Args:
-            trial: Trial data
-
-        Returns:
-            Estimated enrollment speed category
-        """
+        """Estimate enrollment speed."""
         # Simple heuristic based on enrollment vs target
         enrollment = trial.get("enrollment", {})
         if isinstance(enrollment, dict):
@@ -450,14 +342,7 @@ class EnhancedTrialsNode:
         return "unknown"
 
     def _estimate_completion_likelihood(self, trial: dict[str, Any]) -> str:
-        """Estimate completion likelihood.
-
-        Args:
-            trial: Trial data
-
-        Returns:
-            Estimated completion likelihood
-        """
+        """Estimate completion likelihood."""
         # Simple heuristic based on status and phase
         status = trial.get("status", "").lower()
         phase = trial.get("phase", "").lower()
@@ -474,28 +359,201 @@ class EnhancedTrialsNode:
     def _error_response(
         self, state: OrchestratorState, error_msg: str
     ) -> dict[str, Any]:
-        """Generate error response.
+        """Generate error response."""
+        return {
+            "error": error_msg,
+            "errors": [
+                *state.get("errors", []),
+                {
+                    "node": "enhanced_trials",
+                    "error": error_msg,
+                    "timestamp": datetime.now(UTC).isoformat(),
+                },
+            ],
+            "node_path": [*state.get("node_path", []), "enhanced_trials"],
+        }
 
-        Args:
-            state: Current state
-            error_msg: Error message
 
-        Returns:
-            Updated state with error
-        """
-        updated_state = dict(state)
-        updated_state.update(
-            {
-                "error": error_msg,
-                "errors": [
-                    *state.get("errors", []),
-                    {
-                        "node": "enhanced_trials",
-                        "error": error_msg,
-                        "timestamp": datetime.now(UTC).isoformat(),
-                    },
-                ],
-                "node_path": [*state.get("node_path", []), "enhanced_trials"],
+class EnhancedRAGNode:
+    """Enhanced RAG search node with advanced querying."""
+
+    def __init__(self, config: OrchestratorConfig, db_manager: Any):
+        """Initialize the enhanced RAG node."""
+        self.config = config
+        self.adapter = MCPToolAdapter(config, db_manager)
+
+        # Create rate limiter for RAG (3 requests per second, capacity 8)
+        rate_limiter = TokenBucketRateLimiter(capacity=8, refill_rate=3.0)
+        self.executor = ParallelExecutor(rate_limiter=rate_limiter, max_concurrency=2)
+
+    async def __call__(self, state: OrchestratorState) -> dict[str, Any]:
+        """Execute RAG search with enhanced querying."""
+        query = state.get("normalized_query") or state.get("query", "")
+        frame = state.get("frame", {})
+        filters = frame.get("filters", {})
+
+        if not query:
+            return self._error_response(state, "No query found for RAG search")
+
+        # Create search task
+        search_task = {
+            "func": self._search_rag,
+            "args": (query, filters),
+            "kwargs": {},
+            "token_cost": 1,
+        }
+
+        # Execute search
+        search_results = await self.executor.execute_parallel([search_task])
+        search_result = search_results[0]
+
+        if not search_result.success:
+            return self._error_response(state, search_result.error_message)
+
+        # Post-process results
+        rag_data = search_result.data
+        processed_results = self._process_rag_results(rag_data, query)
+
+        # Update state
+        return {
+            "rag_results": {
+                "documents": processed_results,
+                "total_found": len(rag_data.get("results", [])),
+                "filtered_count": len(processed_results),
+                "query": query,
+            },
+            "tool_calls_made": [*state.get("tool_calls_made", []), "rag.search"],
+            "cache_hits": {
+                **state.get("cache_hits", {}),
+                "rag_search": search_result.cache_hit,
+            },
+            "latencies": {
+                **state.get("latencies", {}),
+                "rag_search": search_result.latency_ms,
+            },
+            "node_path": [*state.get("node_path", []), "enhanced_rag"],
+            "messages": [
+                *state.get("messages", []),
+                {
+                    "role": "system",
+                    "content": f"RAG search: {len(processed_results)} relevant documents found",
+                },
+            ],
+        }
+
+    async def _search_rag(self, query: str, filters: dict[str, Any]) -> NodeResult:
+        """Execute RAG search."""
+        args = {
+            "query": query,
+            "limit": 10,
+        }
+
+        # Add filters if present
+        if filters:
+            args["filters"] = filters
+
+        return await self.adapter.execute_tool("rag.search", args)
+
+    def _process_rag_results(
+        self, rag_data: dict[str, Any], query: str
+    ) -> list[dict[str, Any]]:
+        """Post-process RAG search results."""
+        results = rag_data.get("results", [])
+
+        # Enhance each result with relevance scoring
+        processed = []
+        for doc in results:
+            enhanced_doc = {
+                **doc,
+                "query_relevance": self._calculate_query_relevance(doc, query),
+                "document_quality": self._assess_document_quality(doc),
             }
+            processed.append(enhanced_doc)
+
+        # Sort by relevance and quality
+        processed.sort(
+            key=lambda x: (
+                x.get("query_relevance", 0.0) + x.get("document_quality", 0.0)
+            ),
+            reverse=True,
         )
-        return updated_state
+
+        return processed
+
+    def _calculate_query_relevance(self, doc: dict[str, Any], query: str) -> float:
+        """Calculate query relevance score."""
+        # Use existing score if available, otherwise simple text matching
+        if "score" in doc:
+            return min(1.0, max(0.0, doc["score"]))
+
+        # Simple keyword matching fallback
+        title = doc.get("title", "").lower()
+        content = doc.get("snippet", "").lower()
+        query_words = query.lower().split()
+
+        matches = 0
+        for word in query_words:
+            if word in title:
+                matches += 2  # Title matches worth more
+            elif word in content:
+                matches += 1
+
+        # Normalize by query length
+        return min(1.0, matches / len(query_words)) if query_words else 0.0
+
+    def _assess_document_quality(self, doc: dict[str, Any]) -> float:
+        """Assess document quality."""
+        score = 0.5  # Base score
+
+        # Prefer documents with titles
+        if doc.get("title"):
+            score += 0.2
+
+        # Prefer documents with abstracts/snippets
+        snippet = doc.get("snippet", "")
+        if snippet and len(snippet) > 100:
+            score += 0.2
+
+        # Prefer recent documents if date available
+        if doc.get("date"):
+            # Simple heuristic - assume recent is better
+            score += 0.1
+
+        return min(1.0, score)
+
+    def _error_response(
+        self, state: OrchestratorState, error_msg: str
+    ) -> dict[str, Any]:
+        """Generate error response."""
+        return {
+            "error": error_msg,
+            "errors": [
+                *state.get("errors", []),
+                {
+                    "node": "enhanced_rag",
+                    "error": error_msg,
+                    "timestamp": datetime.now(UTC).isoformat(),
+                },
+            ],
+            "node_path": [*state.get("node_path", []), "enhanced_rag"],
+        }
+
+
+# Factory functions
+def create_enhanced_pubmed_search_node(
+    config: OrchestratorConfig, db_manager: Any = None
+):
+    """Factory function for enhanced PubMed node."""
+    return EnhancedPubMedNode(config, db_manager)
+
+
+def create_enhanced_ctgov_search_node(
+    config: OrchestratorConfig, db_manager: Any = None
+):
+    """Factory function for enhanced ClinicalTrials node."""
+    return EnhancedTrialsNode(config, db_manager)
+
+
+def create_enhanced_rag_search_node(config: OrchestratorConfig, db_manager: Any = None):
+    """Factory function for enhanced RAG search node."""
+    return EnhancedRAGNode(config, db_manager)

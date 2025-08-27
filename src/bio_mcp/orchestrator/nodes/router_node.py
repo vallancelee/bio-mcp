@@ -90,12 +90,13 @@ def routing_function(state: OrchestratorState) -> str:
         )
         return "rag_search"  # Note: graph_builder routes this to pubmed_search in M1
 
-    # Map intents to tool nodes (M1 limitation: all go to pubmed_search)
+    # Map intents to tool nodes (M2: full routing)
     routing_map = {
         "recent_pubs_by_topic": "pubmed_search",
-        "indication_phase_trials": "pubmed_search",  # Will be ctgov_search in M2
-        "trials_with_pubs": "pubmed_search",  # Will support parallel in M2
-        "hybrid_search": "pubmed_search",  # Will be rag_search in M2
+        "indication_phase_trials": "ctgov_search",
+        "trials_with_pubs": "ctgov_search",  # TODO: Enable parallel routing in future
+        "hybrid_search": "rag_search",
+        "company_pipeline": "ctgov_search",
     }
 
     return routing_map.get(intent, "pubmed_search")

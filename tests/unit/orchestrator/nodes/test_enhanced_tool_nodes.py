@@ -286,9 +286,9 @@ class TestEnhancedTrialsNode:
 
         result = await node(state)
 
-        assert "trials_results" in result
-        assert result["trials_results"]["filtered_count"] == 1
-        assert result["trials_results"]["search_terms"] == ["diabetes"]
+        assert "ctgov_results" in result
+        assert result["ctgov_results"]["filtered_count"] == 1
+        assert result["ctgov_results"]["search_terms"] == ["diabetes"]
         assert "enhanced_trials" in result["node_path"]
         assert "clinicaltrials.search" in result["tool_calls_made"]
 
@@ -332,8 +332,8 @@ class TestEnhancedTrialsNode:
 
         result = await node(state)
 
-        assert "Pfizer" in result["trials_results"]["search_terms"]
-        assert result["latencies"]["trials_search"] == 120.0
+        assert "Pfizer" in result["ctgov_results"]["search_terms"]
+        assert result["latencies"]["ctgov_search"] == 120.0
 
     @pytest.mark.asyncio
     async def test_enhanced_trials_no_search_terms(self):

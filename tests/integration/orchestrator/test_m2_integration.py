@@ -180,14 +180,14 @@ class TestM2Integration:
 
         trials_result = await trials_node(trials_state)
 
-        assert "trials_results" in trials_result
+        assert "ctgov_results" in trials_result
         # Should filter out withdrawn trial, so 2 quality trials
-        assert trials_result["trials_results"]["filtered_count"] == 2
-        assert trials_result["trials_results"]["total_found"] == 3
+        assert trials_result["ctgov_results"]["filtered_count"] == 2
+        assert trials_result["ctgov_results"]["total_found"] == 3
         assert "enhanced_trials" in trials_result["node_path"]
 
         # Verify quality filtering worked
-        processed_trials = trials_result["trials_results"]["trials"]
+        processed_trials = trials_result["ctgov_results"]["trials"]
         nct_ids = {trial["nct_id"] for trial in processed_trials}
         assert "NCT123456" in nct_ids  # recruiting trial kept
         assert "NCT345678" in nct_ids  # active trial kept
@@ -235,26 +235,29 @@ class TestM2Integration:
         # Execute PubMed search
         pubmed_enhanced_result = await pubmed_node(workflow_state)
 
-        # Execute Trials search with updated state
-        trials_enhanced_result = await trials_node(pubmed_enhanced_result)
+        # Merge pubmed result back into workflow state for trials search
+        merged_state = {**workflow_state, **pubmed_enhanced_result}
 
-        # Verify final workflow state
-        final_state = trials_enhanced_result
+        # Execute Trials search with updated state
+        trials_enhanced_result = await trials_node(merged_state)
+
+        # Verify final workflow state - merge all results
+        final_state = {**merged_state, **trials_enhanced_result}
 
         assert (
             len(final_state["node_path"]) == 4
         )  # frame_parser, router, enhanced_pubmed, enhanced_trials
         assert "pubmed_results" in final_state
-        assert "trials_results" in final_state
+        assert "ctgov_results" in final_state
         assert (
             len(final_state["tool_calls_made"]) >= 2
         )  # At least pubmed.search and clinicaltrials.search
 
         # Verify performance tracking
         assert "pubmed_search" in final_state["latencies"]
-        assert "trials_search" in final_state["latencies"]
+        assert "ctgov_search" in final_state["latencies"]
         assert "pubmed_search" in final_state["cache_hits"]
-        assert "trials_search" in final_state["cache_hits"]
+        assert "ctgov_search" in final_state["cache_hits"]
 
         # Verify message flow
         assert len(final_state["messages"]) >= 3  # initial + pubmed + trials messages
@@ -264,7 +267,7 @@ class TestM2Integration:
             f"📊 Final state contains {final_state['pubmed_results']['total_results']} PubMed results"
         )
         print(
-            f"🔬 Final state contains {final_state['trials_results']['filtered_count']} quality trials"
+            f"🔬 Final state contains {final_state['ctgov_results']['filtered_count']} quality trials"
         )
         print(f"⚡ Tool calls made: {final_state['tool_calls_made']}")
         print(f"🛤️  Node path: {final_state['node_path']}")
