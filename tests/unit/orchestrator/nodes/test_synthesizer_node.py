@@ -1,4 +1,5 @@
 """Test synthesizer node."""
+
 import pytest
 
 from bio_mcp.orchestrator.config import OrchestratorConfig
@@ -14,14 +15,11 @@ class TestSynthesizerNode:
         """Test synthesizing with PubMed results."""
         config = OrchestratorConfig()
         node = SynthesizerNode(config)
-        
+
         state = OrchestratorState(
             query="recent publications on diabetes",
             config={},
-            frame={
-                "intent": "recent_pubs_by_topic",
-                "entities": {"topic": "diabetes"}
-            },
+            frame={"intent": "recent_pubs_by_topic", "entities": {"topic": "diabetes"}},
             routing_decision=None,
             pubmed_results={
                 "total_count": 2,
@@ -31,9 +29,9 @@ class TestSynthesizerNode:
                         "title": "Diabetes Research Study",
                         "authors": ["Dr. Smith", "Dr. Jones"],
                         "year": 2023,
-                        "abstract": "This is a study about diabetes."
+                        "abstract": "This is a study about diabetes.",
                     }
-                ]
+                ],
             },
             ctgov_results=None,
             rag_results=None,
@@ -44,22 +42,22 @@ class TestSynthesizerNode:
             node_path=["parse_frame", "router", "pubmed_search"],
             answer=None,
             session_id=None,
-            messages=[]
+            messages=[],
         )
-        
+
         result = await node(state)
-        
+
         # Verify answer was generated
         assert "answer" in result
         assert result["answer"] is not None
         assert "diabetes" in result["answer"].lower()
         assert "Diabetes Research Study" in result["answer"]
-        
+
         # Verify checkpoint ID
         assert "session_id" in result
         assert result["session_id"] is not None
         assert result["session_id"].startswith("session_")
-        
+
         # Verify state updates
         assert "synthesizer" in result["node_path"]
         assert "synthesizer" in result["latencies"]
@@ -71,13 +69,13 @@ class TestSynthesizerNode:
         """Test synthesizing when no results are available."""
         config = OrchestratorConfig()
         node = SynthesizerNode(config)
-        
+
         state = OrchestratorState(
             query="test query with no results",
             config={},
             frame={
                 "intent": "recent_pubs_by_topic",
-                "entities": {"topic": "nonexistent topic"}
+                "entities": {"topic": "nonexistent topic"},
             },
             routing_decision=None,
             pubmed_results=None,
@@ -90,11 +88,11 @@ class TestSynthesizerNode:
             node_path=[],
             answer=None,
             session_id=None,
-            messages=[]
+            messages=[],
         )
-        
+
         result = await node(state)
-        
+
         # Should still generate an answer
         assert "answer" in result
         assert result["answer"] is not None

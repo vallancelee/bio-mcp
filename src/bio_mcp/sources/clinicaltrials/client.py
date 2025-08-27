@@ -98,7 +98,8 @@ class ClinicalTrialsClient(BaseClient["ClinicalTrialDocument"]):
 
                 data = response.json()
                 logger.debug(
-                    "ClinicalTrials.gov API response received", status=response.status_code
+                    "ClinicalTrials.gov API response received",
+                    status=response.status_code,
                 )
 
                 return data
@@ -164,8 +165,10 @@ class ClinicalTrialsClient(BaseClient["ClinicalTrialDocument"]):
         if sponsor_class:
             params["query.spons"] = sponsor_class
         if updated_after:
-            # Use query.term with AREA syntax for date filtering  
-            params["query.term"] = f"AREA[LastUpdatePostDate]RANGE[{updated_after.isoformat()},MAX]"
+            # Use query.term with AREA syntax for date filtering
+            params["query.term"] = (
+                f"AREA[LastUpdatePostDate]RANGE[{updated_after.isoformat()},MAX]"
+            )
 
         logger.info(
             "Searching ClinicalTrials.gov",
@@ -331,7 +334,7 @@ class ClinicalTrialsClient(BaseClient["ClinicalTrialDocument"]):
         # For simplicity, treat query as condition if it doesn't contain structured parameters
         if ":" not in query and query.strip():
             kwargs.setdefault("condition", query.strip())
-        
+
         # Use the detailed search_trials method
         return await self.search_trials(**kwargs)
 
@@ -339,35 +342,41 @@ class ClinicalTrialsClient(BaseClient["ClinicalTrialDocument"]):
     async def get_document(self, doc_id: str) -> "ClinicalTrialDocument":
         """Get single document by NCT ID (BaseClient interface)."""
         from bio_mcp.sources.clinicaltrials.models import ClinicalTrialDocument
-        
+
         api_data = await self.get_study(doc_id)
         if not api_data:
             raise ValueError(f"Clinical trial {doc_id} not found")
-        
+
         return ClinicalTrialDocument.from_api_data(api_data)
 
     async def get_documents(self, doc_ids: list[str]) -> list["ClinicalTrialDocument"]:
         """Get multiple documents by NCT IDs (BaseClient interface)."""
         from bio_mcp.sources.clinicaltrials.models import ClinicalTrialDocument
-        
+
         if not doc_ids:
             return []
-            
+
         api_data_list = await self.get_studies_batch(doc_ids)
         documents = []
-        
+
         for api_data in api_data_list:
             try:
                 doc = ClinicalTrialDocument.from_api_data(api_data)
                 documents.append(doc)
             except Exception as e:
                 # Log but continue processing other documents
-                nct_id = api_data.get("protocolSection", {}).get("identificationModule", {}).get("nctId", "unknown")
+                nct_id = (
+                    api_data.get("protocolSection", {})
+                    .get("identificationModule", {})
+                    .get("nctId", "unknown")
+                )
                 logger.warning(f"Failed to parse clinical trial {nct_id}: {e}")
-        
+
         return documents
 
-    async def get_updates_since(self, timestamp: datetime, limit: int = 100) -> list["ClinicalTrialDocument"]:
+    async def get_updates_since(
+        self, timestamp: datetime, limit: int = 100
+    ) -> list["ClinicalTrialDocument"]:
         """Get documents updated since timestamp (BaseClient interface)."""
         # Convert datetime to date for ClinicalTrials.gov API
         since_date = timestamp.date()

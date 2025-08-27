@@ -89,7 +89,7 @@ class Config:
     recency_recent_years: str = "2"
     recency_moderate_years: str = "5"
     recency_old_years: str = "10"
-    
+
     # Orchestrator configuration (lazy loaded)
     orchestrator: "OrchestratorConfig" = None
 
@@ -169,10 +169,11 @@ class Config:
             )
         if not hasattr(self, "chunker_version") or self.chunker_version == "v1.2.0":
             self.chunker_version = os.getenv("BIO_MCP_CHUNKER_VERSION", "v1.2.0")
-        
+
         # Initialize orchestrator config lazily to avoid circular imports
         if self.orchestrator is None:
             from bio_mcp.orchestrator.config import OrchestratorConfig
+
             self.orchestrator = OrchestratorConfig.from_main_config(self)
 
     def validate(self) -> None:

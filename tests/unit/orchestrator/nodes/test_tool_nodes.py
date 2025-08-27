@@ -1,4 +1,5 @@
 """Test tool execution nodes."""
+
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -17,31 +18,31 @@ class TestPubMedSearchNode:
         """Test successful PubMed search."""
         config = OrchestratorConfig()
         node = PubMedSearchNode(config)
-        
+
         # Mock the client and its methods
         mock_search_result = Mock()
         mock_search_result.pmids = ["123456", "789012"]
         mock_search_result.total_count = 2
-        
+
         mock_documents = [
             PubMedDocument(
                 pmid="123456",
                 title="Test Article 1",
                 authors=["Author A", "Author B"],
-                abstract="Test abstract 1"
+                abstract="Test abstract 1",
             ),
             PubMedDocument(
-                pmid="789012", 
+                pmid="789012",
                 title="Test Article 2",
                 authors=["Author C"],
-                abstract="Test abstract 2"
-            )
+                abstract="Test abstract 2",
+            ),
         ]
-        
+
         node.client = Mock()
         node.client.search = AsyncMock(return_value=mock_search_result)
         node.client.fetch_documents = AsyncMock(return_value=mock_documents)
-        
+
         state = OrchestratorState(
             query="test query",
             config={},
@@ -51,7 +52,7 @@ class TestPubMedSearchNode:
             frame={
                 "intent": "recent_pubs_by_topic",
                 "entities": {"topic": "GLP-1 agonists"},
-                "filters": {"published_within_days": 180}
+                "filters": {"published_within_days": 180},
             },
             routing_decision=None,
             intent_confidence=None,
@@ -66,17 +67,17 @@ class TestPubMedSearchNode:
             node_path=[],
             answer=None,
             orchestrator_checkpoint_id=None,
-            messages=[]
+            messages=[],
         )
-        
+
         result = await node(state)
-        
+
         # Verify results
         assert "pubmed_results" in result
         assert result["pubmed_results"]["total_count"] == 2
         assert len(result["pubmed_results"]["results"]) == 2
         assert result["pubmed_results"]["results"][0]["title"] == "Test Article 1"
-        
+
         # Verify state updates
         assert "pubmed_search" in result["tool_calls_made"]
         assert "pubmed_search" in result["cache_hits"]
@@ -90,7 +91,7 @@ class TestPubMedSearchNode:
         """Test error handling when no search term is found."""
         config = OrchestratorConfig()
         node = PubMedSearchNode(config)
-        
+
         state = OrchestratorState(
             query="",  # Empty query to trigger error
             config={},
@@ -100,7 +101,7 @@ class TestPubMedSearchNode:
             frame={
                 "intent": "recent_pubs_by_topic",
                 "entities": {},  # No topic
-                "filters": {}
+                "filters": {},
             },
             routing_decision=None,
             intent_confidence=None,
@@ -115,11 +116,11 @@ class TestPubMedSearchNode:
             node_path=[],
             answer=None,
             orchestrator_checkpoint_id=None,
-            messages=[]
+            messages=[],
         )
-        
+
         result = await node(state)
-        
+
         # Verify error handling
         assert len(result["errors"]) == 1
         assert result["errors"][0]["node"] == "pubmed_search"
@@ -131,11 +132,11 @@ class TestPubMedSearchNode:
         """Test error handling when client fails."""
         config = OrchestratorConfig()
         node = PubMedSearchNode(config)
-        
+
         # Mock client to raise exception
         node.client = Mock()
         node.client.search = AsyncMock(side_effect=Exception("API Error"))
-        
+
         state = OrchestratorState(
             query="test query",
             config={},
@@ -145,7 +146,7 @@ class TestPubMedSearchNode:
             frame={
                 "intent": "recent_pubs_by_topic",
                 "entities": {"topic": "diabetes"},
-                "filters": {}
+                "filters": {},
             },
             routing_decision=None,
             intent_confidence=None,
@@ -160,11 +161,11 @@ class TestPubMedSearchNode:
             node_path=[],
             answer=None,
             orchestrator_checkpoint_id=None,
-            messages=[]
+            messages=[],
         )
-        
+
         result = await node(state)
-        
+
         # Verify error handling
         assert result["pubmed_results"] is None
         assert len(result["errors"]) == 1

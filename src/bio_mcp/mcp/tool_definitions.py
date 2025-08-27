@@ -307,17 +307,28 @@ def get_clinicaltrials_tool_definitions() -> list[Tool]:
                         "description": "Medical condition or disease",
                     },
                     "intervention": {
-                        "type": "string", 
+                        "type": "string",
                         "description": "Drug, device, or treatment intervention",
                     },
                     "phase": {
                         "type": "string",
-                        "enum": ["EARLY_PHASE1", "PHASE1", "PHASE2", "PHASE3", "PHASE4"],
+                        "enum": [
+                            "EARLY_PHASE1",
+                            "PHASE1",
+                            "PHASE2",
+                            "PHASE3",
+                            "PHASE4",
+                        ],
                         "description": "Clinical trial phase",
                     },
                     "status": {
                         "type": "string",
-                        "enum": ["RECRUITING", "ACTIVE_NOT_RECRUITING", "COMPLETED", "TERMINATED"],
+                        "enum": [
+                            "RECRUITING",
+                            "ACTIVE_NOT_RECRUITING",
+                            "COMPLETED",
+                            "TERMINATED",
+                        ],
                         "description": "Trial recruitment status",
                     },
                     "sponsor_class": {
@@ -408,7 +419,7 @@ def get_clinicaltrials_tool_definitions() -> list[Tool]:
                         "description": "Search query for trials to sync",
                     },
                     "query_key": {
-                        "type": "string", 
+                        "type": "string",
                         "description": "Unique identifier for this sync operation (for watermarking)",
                     },
                     "limit": {

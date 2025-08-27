@@ -1,4 +1,5 @@
 """Test router node."""
+
 import pytest
 
 from bio_mcp.orchestrator.config import OrchestratorConfig
@@ -14,7 +15,7 @@ class TestRouterNode:
         """Test routing for recent publications intent."""
         config = OrchestratorConfig()
         node = RouterNode(config)
-        
+
         state = OrchestratorState(
             query="recent publications on diabetes",
             config={},
@@ -24,7 +25,7 @@ class TestRouterNode:
             frame={
                 "intent": "recent_pubs_by_topic",
                 "entities": {"topic": "diabetes"},
-                "filters": {}
+                "filters": {},
             },
             routing_decision=None,
             intent_confidence=None,
@@ -39,15 +40,15 @@ class TestRouterNode:
             node_path=[],
             answer=None,
             orchestrator_checkpoint_id=None,
-            messages=[]
+            messages=[],
         )
-        
+
         result = await node(state)
-        
+
         # Verify routing decision
         assert "routing_decision" in result
         assert result["routing_decision"] == "pubmed_search"
-        
+
         # Verify state updates
         assert "router" in result["node_path"]
         assert "router" in result["latencies"]
@@ -59,7 +60,7 @@ class TestRouterNode:
         """Test routing for clinical trials intent."""
         config = OrchestratorConfig()
         node = RouterNode(config)
-        
+
         state = OrchestratorState(
             query="trials for diabetes",
             config={},
@@ -69,7 +70,7 @@ class TestRouterNode:
             frame={
                 "intent": "indication_phase_trials",
                 "entities": {"indication": "diabetes"},
-                "filters": {}
+                "filters": {},
             },
             routing_decision=None,
             intent_confidence=None,
@@ -84,20 +85,20 @@ class TestRouterNode:
             node_path=[],
             answer=None,
             orchestrator_checkpoint_id=None,
-            messages=[]
+            messages=[],
         )
-        
+
         result = await node(state)
-        
+
         # Verify routing decision (M1 limitation: returns pubmed_search instead of ctgov_search)
         assert result["routing_decision"] == "pubmed_search"
 
-    @pytest.mark.asyncio 
+    @pytest.mark.asyncio
     async def test_router_node_no_frame_error(self):
         """Test router node when no frame is present."""
         config = OrchestratorConfig()
         node = RouterNode(config)
-        
+
         state = OrchestratorState(
             query="test query",
             config={},
@@ -118,11 +119,11 @@ class TestRouterNode:
             node_path=[],
             answer=None,
             orchestrator_checkpoint_id=None,
-            messages=[]
+            messages=[],
         )
-        
+
         result = await node(state)
-        
+
         # Verify error handling and fallback
         assert result["routing_decision"] == "pubmed_search"  # Default fallback
         assert len(result["errors"]) == 1
@@ -151,12 +152,12 @@ class TestRouterNode:
             node_path=[],
             answer=None,
             orchestrator_checkpoint_id=None,
-            messages=[]
+            messages=[],
         )
-        
+
         route = routing_function(state)
         assert route == "pubmed_search"
-        
+
         # Test with low confidence (should route to rag_search)
         state["intent_confidence"] = 0.3
         route = routing_function(state)

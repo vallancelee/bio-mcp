@@ -80,8 +80,10 @@ class ClinicalTrialsSyncStrategy(BaseSyncStrategy):
             search_start_time = time.time()
             nct_ids = await self.client.search(**search_params)
             search_duration = time.time() - search_start_time
-            
-            logger.info(f"Found {len(nct_ids)} trials to sync in {search_duration:.2f}s")
+
+            logger.info(
+                f"Found {len(nct_ids)} trials to sync in {search_duration:.2f}s"
+            )
 
             if nct_ids:
                 # Fetch trial details in optimized batches
@@ -120,7 +122,9 @@ class ClinicalTrialsSyncStrategy(BaseSyncStrategy):
                 await self.set_sync_watermark(query_key, current_time)
 
                 total_duration = time.time() - start_time
-                trials_per_second = len(documents) / total_duration if total_duration > 0 else 0
+                trials_per_second = (
+                    len(documents) / total_duration if total_duration > 0 else 0
+                )
 
                 logger.info(
                     f"Successfully synced {len(documents)} ClinicalTrials.gov documents "
@@ -138,7 +142,9 @@ class ClinicalTrialsSyncStrategy(BaseSyncStrategy):
                     "success": True,
                     # Quality metrics
                     "quality_metrics": quality_metrics,
-                    "investment_relevant_count": quality_metrics["investment_relevant_count"],
+                    "investment_relevant_count": quality_metrics[
+                        "investment_relevant_count"
+                    ],
                     "avg_quality_score": quality_metrics["avg_quality_score"],
                     "high_quality_count": quality_metrics["high_quality_count"],
                     # Performance metrics
@@ -322,36 +328,42 @@ class ClinicalTrialsSyncStrategy(BaseSyncStrategy):
     ) -> list[dict[str, Any]]:
         """
         Fetch trial data in optimized batches for better performance.
-        
+
         Args:
             nct_ids: List of NCT IDs to fetch
             batch_size: Number of trials to fetch per batch
-            
+
         Returns:
             List of trial API data dictionaries
         """
         all_trial_data = []
-        total_batches = len(nct_ids) // batch_size + (1 if len(nct_ids) % batch_size > 0 else 0)
-        
+        total_batches = len(nct_ids) // batch_size + (
+            1 if len(nct_ids) % batch_size > 0 else 0
+        )
+
         for i in range(0, len(nct_ids), batch_size):
-            batch_ids = nct_ids[i:i + batch_size]
+            batch_ids = nct_ids[i : i + batch_size]
             batch_num = i // batch_size + 1
-            
-            logger.debug(f"Fetching batch {batch_num}/{total_batches} ({len(batch_ids)} trials)")
-            
+
+            logger.debug(
+                f"Fetching batch {batch_num}/{total_batches} ({len(batch_ids)} trials)"
+            )
+
             try:
                 batch_data = await self.client.get_studies_batch(batch_ids)
                 all_trial_data.extend(batch_data)
-                
+
                 # Log progress for large syncs
                 if total_batches > 5 and batch_num % max(1, total_batches // 10) == 0:
-                    logger.info(f"Fetch progress: {batch_num}/{total_batches} batches completed")
-                    
+                    logger.info(
+                        f"Fetch progress: {batch_num}/{total_batches} batches completed"
+                    )
+
             except Exception as e:
                 logger.error(f"Failed to fetch batch {batch_num}: {e}")
                 # Continue with other batches
                 continue
-        
+
         return all_trial_data
 
     async def _parse_and_score_trials(
@@ -359,97 +371,108 @@ class ClinicalTrialsSyncStrategy(BaseSyncStrategy):
     ) -> tuple[list[ClinicalTrialDocument], int]:
         """
         Parse API data to documents and calculate quality scores.
-        
+
         Args:
             trial_data: List of trial API data dictionaries
-            
+
         Returns:
             Tuple of (parsed_documents, parse_error_count)
         """
         documents = []
         parse_errors = 0
-        
+
         for i, api_data in enumerate(trial_data):
             try:
                 # Parse document from API data
                 doc = ClinicalTrialDocument.from_api_data(api_data)
-                
+
                 # Calculate enhanced quality score using the new quality module
                 quality_score = calculate_clinical_trial_quality(doc)
-                
+
                 # Update the document's quality score (overrides the basic one from the model)
                 doc.investment_relevance_score = quality_score
-                
+
                 documents.append(doc)
-                
+
                 # Log progress for large parsing operations
                 if len(trial_data) > 100 and (i + 1) % 50 == 0:
-                    logger.debug(f"Parse progress: {i + 1}/{len(trial_data)} trials processed")
-                
+                    logger.debug(
+                        f"Parse progress: {i + 1}/{len(trial_data)} trials processed"
+                    )
+
             except Exception as e:
                 parse_errors += 1
                 logger.warning(f"Failed to parse trial data at index {i}: {e}")
-        
+
         logger.info(f"Parsed {len(documents)} trials with {parse_errors} errors")
-        
+
         return documents, parse_errors
 
     async def sync_with_quality_filtering(
-        self, 
-        query: str, 
-        query_key: str, 
-        limit: int, 
+        self,
+        query: str,
+        query_key: str,
+        limit: int,
         min_quality_score: float = 0.5,
-        batch_size: int = 50
+        batch_size: int = 50,
     ) -> dict[str, Any]:
         """
         Perform sync with quality score filtering for investment-focused results.
-        
+
         Args:
             query: Search query string
             query_key: Unique key for checkpoint tracking
             limit: Maximum number of trials to sync
             min_quality_score: Minimum quality score threshold (0.0-1.0)
             batch_size: Batch size for API calls
-            
+
         Returns:
             Sync result dictionary with quality filtering metrics
         """
         logger.info(f"Starting quality-filtered sync (min_score={min_quality_score})")
-        
+
         # First do regular incremental sync
         sync_result = await self.sync_incremental(query, query_key, limit, batch_size)
-        
+
         if not sync_result["success"]:
             return sync_result
-        
+
         # If no documents were synced, return as-is
         if sync_result["synced"] == 0:
             return sync_result
-        
+
         # Apply quality filtering (this would be done during storage in production)
         quality_metrics = sync_result["quality_metrics"]
-        
+
         # Calculate filtered counts based on quality threshold
         total_trials = quality_metrics["total_trials"]
         avg_score = quality_metrics["avg_quality_score"]
-        
+
         # Estimate filtered count (in production, this would be actual filtered storage)
-        estimated_filtered_count = int(
-            total_trials * max(0, (avg_score - min_quality_score) / (1.0 - min_quality_score))
-        ) if avg_score > min_quality_score else 0
-        
-        sync_result.update({
-            "quality_filtered": True,
-            "min_quality_threshold": min_quality_score,
-            "quality_filtered_count": estimated_filtered_count,
-            "quality_rejected_count": total_trials - estimated_filtered_count,
-            "quality_filter_efficiency": estimated_filtered_count / total_trials if total_trials > 0 else 0,
-        })
-        
+        estimated_filtered_count = (
+            int(
+                total_trials
+                * max(0, (avg_score - min_quality_score) / (1.0 - min_quality_score))
+            )
+            if avg_score > min_quality_score
+            else 0
+        )
+
+        sync_result.update(
+            {
+                "quality_filtered": True,
+                "min_quality_threshold": min_quality_score,
+                "quality_filtered_count": estimated_filtered_count,
+                "quality_rejected_count": total_trials - estimated_filtered_count,
+                "quality_filter_efficiency": estimated_filtered_count / total_trials
+                if total_trials > 0
+                else 0,
+            }
+        )
+
         logger.info(
             f"Quality filtering: {estimated_filtered_count}/{total_trials} trials "
             f"above {min_quality_score} threshold"
         )
-        
+
         return sync_result

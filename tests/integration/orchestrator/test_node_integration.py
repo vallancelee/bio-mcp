@@ -1,4 +1,5 @@
 """Integration tests for LangGraph nodes."""
+
 import pytest
 from langgraph.checkpoint.memory import MemorySaver
 
@@ -15,11 +16,11 @@ class TestNodeIntegration:
         """Test complete graph execution with real nodes."""
         config = OrchestratorConfig()
         graph = build_orchestrator_graph(config)
-        
+
         # Compile with checkpointing
         checkpointer = MemorySaver()
         compiled = graph.compile(checkpointer=checkpointer)
-        
+
         # Execute a query
         initial_state = {
             "query": "recent papers on diabetes",
@@ -41,21 +42,21 @@ class TestNodeIntegration:
             "node_path": [],
             "answer": None,
             "orchestrator_checkpoint_id": None,
-            "messages": []
+            "messages": [],
         }
-        
+
         # Need thread_id for checkpointer
         config_dict = {"configurable": {"thread_id": "test-thread"}}
         result = await compiled.ainvoke(initial_state, config=config_dict)
-        
+
         # Verify execution
         assert result["answer"] is not None
         assert result["orchestrator_checkpoint_id"] is not None  # Updated field name
         assert "llm_parse" in result["node_path"]  # Updated node name
-        assert "router" in result["node_path"] 
+        assert "router" in result["node_path"]
         assert "synthesizer" in result["node_path"]
         assert len(result["messages"]) > 0
-        
+
         # Should have gone through PubMed route for this query
         assert "pubmed_search" in result["node_path"]
         assert "pubmed_search" in result["tool_calls_made"]

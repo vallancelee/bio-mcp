@@ -122,7 +122,9 @@ class TestClinicalTrialsService:
 
         result = await self.service.search("condition:diabetes phase:PHASE3")
 
-        mock_client.search.assert_called_once_with("condition:diabetes phase:PHASE3", condition="diabetes", phase="PHASE3")
+        mock_client.search.assert_called_once_with(
+            "condition:diabetes phase:PHASE3", condition="diabetes", phase="PHASE3"
+        )
         assert result == ["NCT12345678"]
 
     @pytest.mark.asyncio
@@ -140,7 +142,10 @@ class TestClinicalTrialsService:
         )
 
         mock_client.search.assert_called_once_with(
-            "condition:cancer phase:PHASE2", condition="cancer", phase="PHASE3", limit=50
+            "condition:cancer phase:PHASE2",
+            condition="cancer",
+            phase="PHASE3",
+            limit=50,
         )
 
     @pytest.mark.asyncio

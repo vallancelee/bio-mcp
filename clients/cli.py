@@ -565,20 +565,32 @@ def corpus_checkpoint_delete(
 
 @app.command("clinicaltrials.search")
 def clinicaltrials_search(
-    query: str = typer.Option(..., "--query", "-q", help="Search query for clinical trials"),
-    condition: str = typer.Option(None, "--condition", help="Medical condition or disease"),
-    intervention: str = typer.Option(None, "--intervention", help="Drug, device, or treatment"),
-    phase: str = typer.Option(None, "--phase", help="Clinical trial phase (PHASE1, PHASE2, PHASE3, etc.)"),
-    status: str = typer.Option(None, "--status", help="Trial status (RECRUITING, COMPLETED, etc.)"),
-    sponsor_class: str = typer.Option(None, "--sponsor-class", help="Sponsor type (INDUSTRY, NIH, ACADEMIC, etc.)"),
+    query: str = typer.Option(
+        ..., "--query", "-q", help="Search query for clinical trials"
+    ),
+    condition: str = typer.Option(
+        None, "--condition", help="Medical condition or disease"
+    ),
+    intervention: str = typer.Option(
+        None, "--intervention", help="Drug, device, or treatment"
+    ),
+    phase: str = typer.Option(
+        None, "--phase", help="Clinical trial phase (PHASE1, PHASE2, PHASE3, etc.)"
+    ),
+    status: str = typer.Option(
+        None, "--status", help="Trial status (RECRUITING, COMPLETED, etc.)"
+    ),
+    sponsor_class: str = typer.Option(
+        None, "--sponsor-class", help="Sponsor type (INDUSTRY, NIH, ACADEMIC, etc.)"
+    ),
     limit: int = typer.Option(50, "--limit", "-l", help="Maximum number of results"),
 ):
     """Search ClinicalTrials.gov for clinical trials."""
-    
+
     async def run_search():
         async with get_client() as client:
             console.print(f"[blue]Searching clinical trials: '{query}'[/blue]")
-            
+
             args = {"query": query, "limit": limit}
             if condition:
                 args["condition"] = condition
@@ -590,7 +602,7 @@ def clinicaltrials_search(
                 args["status"] = status
             if sponsor_class:
                 args["sponsor_class"] = sponsor_class
-            
+
             response = await client.call_tool("clinicaltrials.search", args)
             display_response(response, "clinicaltrials.search")
 
@@ -602,11 +614,11 @@ def clinicaltrials_get(
     nct_id: str = typer.Option(..., "--nct-id", help="ClinicalTrials.gov NCT ID"),
 ):
     """Get detailed information for a specific clinical trial."""
-    
+
     async def run_get():
         async with get_client() as client:
             console.print(f"[blue]Retrieving clinical trial: {nct_id}[/blue]")
-            
+
             response = await client.call_tool("clinicaltrials.get", {"nct_id": nct_id})
             display_response(response, "clinicaltrials.get")
 
@@ -615,21 +627,26 @@ def clinicaltrials_get(
 
 @app.command("clinicaltrials.investment_search")
 def clinicaltrials_investment_search(
-    query: str = typer.Option("", "--query", "-q", help="Search query for therapeutic areas"),
-    min_score: float = typer.Option(0.5, "--min-score", help="Minimum investment relevance score (0.0-1.0)"),
+    query: str = typer.Option(
+        "", "--query", "-q", help="Search query for therapeutic areas"
+    ),
+    min_score: float = typer.Option(
+        0.5, "--min-score", help="Minimum investment relevance score (0.0-1.0)"
+    ),
     limit: int = typer.Option(25, "--limit", "-l", help="Maximum number of results"),
 ):
     """Search for investment-relevant clinical trials."""
-    
+
     async def run_investment_search():
         async with get_client() as client:
-            console.print(f"[blue]Investment search: '{query}' (min score: {min_score})[/blue]")
-            
-            response = await client.call_tool("clinicaltrials.investment_search", {
-                "query": query,
-                "min_investment_score": min_score,
-                "limit": limit
-            })
+            console.print(
+                f"[blue]Investment search: '{query}' (min score: {min_score})[/blue]"
+            )
+
+            response = await client.call_tool(
+                "clinicaltrials.investment_search",
+                {"query": query, "min_investment_score": min_score, "limit": limit},
+            )
             display_response(response, "clinicaltrials.investment_search")
 
     asyncio.run(run_investment_search())

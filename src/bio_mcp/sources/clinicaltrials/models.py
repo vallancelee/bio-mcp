@@ -172,7 +172,9 @@ class ClinicalTrialDocument(BaseDocument):
 
             # Create publication date from study dates (convert date to datetime)
             if first_posted_date:
-                publication_date = datetime.combine(first_posted_date, datetime.min.time())
+                publication_date = datetime.combine(
+                    first_posted_date, datetime.min.time()
+                )
             elif start_date:
                 publication_date = datetime.combine(start_date, datetime.min.time())
             else:
@@ -412,9 +414,15 @@ class ClinicalTrialDocument(BaseDocument):
             "locations": self.locations,
             "has_results": self.has_results,
             "start_date": self.start_date.isoformat() if self.start_date else None,
-            "primary_completion_date": self.primary_completion_date.isoformat() if self.primary_completion_date else None,
-            "first_posted_date": self.first_posted_date.isoformat() if self.first_posted_date else None,
-            "last_update_posted_date": self.last_update_posted_date.isoformat() if self.last_update_posted_date else None,
+            "primary_completion_date": self.primary_completion_date.isoformat()
+            if self.primary_completion_date
+            else None,
+            "first_posted_date": self.first_posted_date.isoformat()
+            if self.first_posted_date
+            else None,
+            "last_update_posted_date": self.last_update_posted_date.isoformat()
+            if self.last_update_posted_date
+            else None,
             "investment_relevance_score": self.investment_relevance_score,
         }
         base_data["metadata"] = metadata  # type: ignore[assignment]

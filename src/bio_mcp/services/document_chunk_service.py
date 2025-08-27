@@ -203,7 +203,8 @@ class DocumentChunkService:
                     "text": chunk.text,
                     "published_at": (
                         document.published_at.isoformat() + "Z"
-                        if document.published_at and document.published_at.tzinfo is None
+                        if document.published_at
+                        and document.published_at.tzinfo is None
                         else document.published_at.isoformat()
                     )
                     if document.published_at

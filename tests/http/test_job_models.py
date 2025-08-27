@@ -132,6 +132,7 @@ class TestJobData:
 
         # Duration calculated from start to completion
         from datetime import timedelta
+
         start_time = datetime.now(UTC)
         job.started_at = start_time
         job.completed_at = start_time + timedelta(milliseconds=100)

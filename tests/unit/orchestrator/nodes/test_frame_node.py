@@ -15,7 +15,7 @@ class TestFrameParserNode:
         """Test successful frame parsing."""
         config = OrchestratorConfig()
         node = FrameParserNode(config)
-        
+
         state = OrchestratorState(
             query="recent publications on GLP-1 agonists",
             config={},
@@ -31,16 +31,16 @@ class TestFrameParserNode:
             node_path=[],
             answer=None,
             session_id=None,
-            messages=[]
+            messages=[],
         )
-        
+
         result = await node(state)
-        
+
         # Verify frame was parsed correctly
         assert "frame" in result
         assert result["frame"]["intent"] == "recent_pubs_by_topic"
         assert "GLP-1 agonists" in result["frame"]["entities"]["topic"]
-        
+
         # Verify state updates
         assert "parse_frame" in result["node_path"]
         assert "parse_frame" in result["latencies"]
@@ -52,7 +52,7 @@ class TestFrameParserNode:
         """Test error handling in frame parser."""
         config = OrchestratorConfig()
         node = FrameParserNode(config)
-        
+
         # Test with empty query that should cause parsing error
         state = OrchestratorState(
             query="",
@@ -69,11 +69,11 @@ class TestFrameParserNode:
             node_path=[],
             answer=None,
             session_id=None,
-            messages=[]
+            messages=[],
         )
-        
+
         result = await node(state)
-        
+
         # Verify error handling
         assert len(result["errors"]) == 1
         assert result["errors"][0]["node"] == "parse_frame"
