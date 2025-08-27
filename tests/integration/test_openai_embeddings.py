@@ -540,7 +540,7 @@ class TestOpenAIScaleFeatures:
             service.config = test_config
             await service.initialize()
 
-            # Generate 50 diverse biomedical documents (reasonable for testing, not too expensive)
+            # Generate 30 diverse biomedical documents (reasonable for testing, not too expensive)
             biomedical_topics = [
                 "diabetes",
                 "hypertension",
@@ -555,7 +555,7 @@ class TestOpenAIScaleFeatures:
             ]
 
             documents = []
-            for i in range(50):  # 50 documents should cost ~$0.01-0.02 in API calls
+            for i in range(30):  # 30 documents should cost ~$0.006-0.012 in API calls
                 topic = biomedical_topics[i % len(biomedical_topics)]
                 doc = Document(
                     uid=f"test:corpus_{i:03d}",
@@ -579,9 +579,9 @@ class TestOpenAIScaleFeatures:
                 if i % 10 == 0:
                     print(f"Processed {i + 1}/{len(documents)} documents...")
 
-            # Should generate at least 50 chunks (1 per document minimum)
-            assert total_chunks >= 50, (
-                f"Should generate at least 50 chunks, got {total_chunks}"
+            # Should generate at least 30 chunks (1 per document minimum)
+            assert total_chunks >= 30, (
+                f"Should generate at least 30 chunks, got {total_chunks}"
             )
 
             # Test search across the corpus

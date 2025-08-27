@@ -163,54 +163,37 @@ class TestMCPServerLogging:
     """Test logging functionality in MCP server."""
 
     @pytest.mark.asyncio
-    async def test_ping_tool_logging(self):
+    async def test_ping_tool_logging(self, caplog):
         """Test that ping tool logs correctly."""
         import logging
-        from io import StringIO
 
-        # Capture log output
-        log_stream = StringIO()
-        handler = logging.StreamHandler(log_stream)
-        handler.setLevel(logging.INFO)
+        # Set logging level to capture INFO messages
+        caplog.set_level(logging.INFO, logger="bio_mcp")
 
-        # Add handler to the structured logger's underlying logger
-        from bio_mcp.main import logger
+        await call_tool("ping", {"message": "test"})
 
-        underlying_logger = logger.logger
-        underlying_logger.addHandler(handler)
-        underlying_logger.setLevel(logging.INFO)
+        # Check for expected log messages in caplog records
+        log_messages = [record.message for record in caplog.records]
 
-        try:
-            await call_tool("ping", {"message": "test"})
+        # Check for expected log messages
+        has_processing_message = any(
+            "Processing ping tool request" in msg for msg in log_messages
+        )
+        has_completion_message = any(
+            "Ping tool completed successfully" in msg for msg in log_messages
+        )
 
-            # Check log output (handle both JSON and plain text formats)
-            log_output = log_stream.getvalue()
-
-            # Check for expected log messages in either format
-            has_processing_message = (
-                "Processing ping tool request" in log_output
-                or '"message": "Processing ping tool request"' in log_output
+        # If no logs were captured, it might be due to logging configuration
+        # In that case, let's just verify the call completed without error
+        if not caplog.records:
+            # The ping tool executed without error, which is the main test goal
+            assert True, (
+                "Ping tool executed successfully (no logs captured due to test environment)"
             )
-            has_completion_message = (
-                "Ping tool completed successfully" in log_output
-                or '"message": "Ping tool completed successfully"' in log_output
+        else:
+            assert has_processing_message or has_completion_message, (
+                f"Expected log messages not found in: {log_messages}"
             )
-
-            # If no logs were captured, it might be due to logging configuration
-            # In that case, let's just verify the call completed without error
-            if not log_output.strip():
-                # The ping tool executed without error, which is the main test goal
-                assert True, (
-                    "Ping tool executed successfully (no logs captured due to test environment)"
-                )
-            else:
-                assert has_processing_message or has_completion_message, (
-                    f"Expected log messages not found in: {log_output}"
-                )
-
-        finally:
-            # Clean up
-            underlying_logger.removeHandler(handler)
 
 
 @pytest.mark.unit
@@ -229,34 +212,9 @@ class TestMCPServerConfig:
         """Test that logging is configured from config."""
         import logging
 
-        # Store original logging state for cleanup
-        original_handlers = logging.getLogger().handlers[:]
-        original_level = logging.getLogger().level
-
-        try:
-            # Re-import to trigger logging configuration
-
-            # Check that bio_mcp logger level is configured
-            # The logger should inherit from root or have explicit level set
-            # Since basicConfig is called, root level should be set
-            assert (
-                logging.getLogger().hasHandlers()
-            )  # Should have handlers from basicConfig
-
-        finally:
-            # Clean up logging configuration immediately
-            root_logger = logging.getLogger()
-
-            # Remove all handlers that were added during this test
-            for handler in root_logger.handlers[:]:
-                if handler not in original_handlers:
-                    handler.close()
-                    root_logger.removeHandler(handler)
-
-            # Restore original level
-            root_logger.setLevel(original_level)
-
-            # Force garbage collection of handler resources
-            import gc
-
-            gc.collect()
+        # Check that bio_mcp logger level is configured
+        # The logger should inherit from root or have explicit level set
+        # Since basicConfig is called, root level should be set
+        assert (
+            logging.getLogger().hasHandlers()
+        )  # Should have handlers from basicConfig
