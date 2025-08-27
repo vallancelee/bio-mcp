@@ -178,10 +178,10 @@ class SynthesisService:
                 "Monitor competitive clinical trial results and adjust market access strategies accordingly",
             ]
 
-            summary = """The GLP-1 market faces significant competitive pressure from superior-efficacy dual and triple agonists, 
-            particularly Eli Lilly's tirzepatide which demonstrates 22.5% weight reduction compared to semaglutide's ~15%. 
-            Key risks include approaching patent expiry (2031-2033) enabling biosimilar competition, and evolving patient 
-            preference toward oral formulations. Strategic recommendations focus on next-generation compound development, 
+            summary = """The GLP-1 market faces significant competitive pressure from superior-efficacy dual and triple agonists,
+            particularly Eli Lilly's tirzepatide which demonstrates 22.5% weight reduction compared to semaglutide's ~15%.
+            Key risks include approaching patent expiry (2031-2033) enabling biosimilar competition, and evolving patient
+            preference toward oral formulations. Strategic recommendations focus on next-generation compound development,
             lifecycle management, and market positioning strategies."""
 
         # Clinical trial prediction queries
@@ -216,8 +216,8 @@ class SynthesisService:
                 "Consider accelerated approval pathway if applicable",
             ]
 
-            summary = """Analysis of similar clinical trials suggests moderate success probability. 
-            Key factors include historical indication success rates, sponsor experience, and study design quality. 
+            summary = """Analysis of similar clinical trials suggests moderate success probability.
+            Key factors include historical indication success rates, sponsor experience, and study design quality.
             Recommend close monitoring of trial progress and regulatory strategy preparation."""
 
         # General biotech/investment queries
@@ -240,8 +240,8 @@ class SynthesisService:
                 "Assess regulatory pathway and approval timelines",
             ]
 
-            summary = f"""Analysis of {total_results} research sources reveals opportunities in the queried area. 
-            Clinical and publication activity suggests active development interest. Recommend further investigation 
+            summary = f"""Analysis of {total_results} research sources reveals opportunities in the queried area.
+            Clinical and publication activity suggests active development interest. Recommend further investigation
             of specific opportunities and competitive positioning."""
 
         # Generate quality metrics

@@ -7,7 +7,7 @@ from bio_mcp.orchestrator.adapters.mcp_adapter import MCPToolAdapter
 from bio_mcp.orchestrator.config import OrchestratorConfig
 from bio_mcp.orchestrator.execution.parallel_executor import ParallelExecutor
 from bio_mcp.orchestrator.middleware.rate_limiter import TokenBucketRateLimiter
-from bio_mcp.orchestrator.types import NodeResult, OrchestratorState
+from bio_mcp.orchestrator.state import NodeResult, OrchestratorState
 
 
 class EnhancedPubMedNode:
@@ -92,7 +92,7 @@ class EnhancedPubMedNode:
                     "total_results": total_results,
                     "search_terms": search_terms,
                 },
-                "tool_calls_made": [*state.get("tool_calls_made", []), "pubmed.search"],
+                "tool_calls_made": state.get("tool_calls_made", []) + ["pubmed.search"],
                 "cache_hits": {
                     **state.get("cache_hits", {}),
                     "pubmed_search": total_cache_hits > 0,
@@ -101,13 +101,13 @@ class EnhancedPubMedNode:
                     **state.get("latencies", {}),
                     "pubmed_search": avg_latency,
                 },
-                "node_path": [*state.get("node_path", []), "enhanced_pubmed"],
-                "messages": [
-                    *state.get("messages", []),
+                "node_path": state.get("node_path", []) + ["enhanced_pubmed"],
+                "messages": state.get("messages", [])
+                + [
                     {
                         "role": "system",
                         "content": f"PubMed search completed: {total_results} unique results from {len(search_terms)} search terms",
-                    },
+                    }
                 ],
             }
         )
@@ -180,15 +180,15 @@ class EnhancedPubMedNode:
         updated_state.update(
             {
                 "error": error_msg,
-                "errors": [
-                    *state.get("errors", []),
+                "errors": state.get("errors", [])
+                + [
                     {
                         "node": "enhanced_pubmed",
                         "error": error_msg,
                         "timestamp": datetime.now(UTC).isoformat(),
-                    },
+                    }
                 ],
-                "node_path": [*state.get("node_path", []), "enhanced_pubmed"],
+                "node_path": state.get("node_path", []) + ["enhanced_pubmed"],
             }
         )
         return updated_state
@@ -259,10 +259,8 @@ class EnhancedTrialsNode:
                     "filters_applied": filters,
                     "search_terms": search_terms,
                 },
-                "tool_calls_made": [
-                    *state.get("tool_calls_made", []),
-                    "clinicaltrials.search",
-                ],
+                "tool_calls_made": state.get("tool_calls_made", [])
+                + ["clinicaltrials.search"],
                 "cache_hits": {
                     **state.get("cache_hits", {}),
                     "trials_search": search_result.cache_hit,
@@ -271,13 +269,13 @@ class EnhancedTrialsNode:
                     **state.get("latencies", {}),
                     "trials_search": search_result.latency_ms,
                 },
-                "node_path": [*state.get("node_path", []), "enhanced_trials"],
-                "messages": [
-                    *state.get("messages", []),
+                "node_path": state.get("node_path", []) + ["enhanced_trials"],
+                "messages": state.get("messages", [])
+                + [
                     {
                         "role": "system",
                         "content": f"ClinicalTrials search: {len(processed_trials)} relevant trials found",
-                    },
+                    }
                 ],
             }
         )
@@ -487,15 +485,15 @@ class EnhancedTrialsNode:
         updated_state.update(
             {
                 "error": error_msg,
-                "errors": [
-                    *state.get("errors", []),
+                "errors": state.get("errors", [])
+                + [
                     {
                         "node": "enhanced_trials",
                         "error": error_msg,
                         "timestamp": datetime.now(UTC).isoformat(),
-                    },
+                    }
                 ],
-                "node_path": [*state.get("node_path", []), "enhanced_trials"],
+                "node_path": state.get("node_path", []) + ["enhanced_trials"],
             }
         )
         return updated_state

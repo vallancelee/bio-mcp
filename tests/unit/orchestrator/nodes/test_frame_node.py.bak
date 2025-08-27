@@ -4,7 +4,7 @@ import pytest
 
 from bio_mcp.orchestrator.config import OrchestratorConfig
 from bio_mcp.orchestrator.nodes.frame_node import FrameParserNode
-from bio_mcp.orchestrator.types import OrchestratorState
+from bio_mcp.orchestrator.state import OrchestratorState
 
 
 class TestFrameParserNode:

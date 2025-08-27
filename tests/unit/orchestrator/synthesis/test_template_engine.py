@@ -1,6 +1,5 @@
 """Test template engine functionality."""
 
-
 import pytest
 
 from bio_mcp.orchestrator.synthesis.template_engine import TemplateEngine

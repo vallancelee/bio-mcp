@@ -1,7 +1,18 @@
-# M0 — LangGraph Scaffolding & Setup (1 day)
+# M0 — LangGraph Scaffolding & Setup (COMPLETED ✅)
+
+## Current Status: COMPLETED ✅
+All scaffolding components have been successfully implemented and are operational in production.
 
 ## Objective
 Set up LangGraph infrastructure for the bio-mcp orchestrator, including state schema definition, basic graph structure, and integration with existing bio-mcp components. Replace the original custom DAG executor approach with LangGraph's stateful graph architecture.
+
+**COMPLETED FEATURES:**
+- ✅ LangGraph dependencies installed and configured
+- ✅ OrchestratorState typed state schema implemented
+- ✅ AsyncSqliteSaver checkpointing operational
+- ✅ Production graph with real nodes (not placeholders)
+- ✅ Configuration integration complete
+- ✅ Basic testing infrastructure in place
 
 ## Dependencies (Existing Bio-MCP Components)
 - **Config System**: `src/bio_mcp/config/config.py` - Pydantic settings management
@@ -451,17 +462,17 @@ async def orchestrate_query(request: OrchestrationRequest):
     return result
 ```
 
-## Acceptance Criteria
-- [ ] LangGraph and dependencies successfully installed
-- [ ] `OrchestratorState` typed state schema defined
-- [ ] Basic graph structure with placeholder nodes created
-- [ ] Graph compilation with SQLite checkpointing works
-- [ ] Basic graph execution (invoke) works with placeholders
-- [ ] Streaming execution (astream) works
-- [ ] Configuration integrated with main bio-mcp config
-- [ ] Unit tests pass for basic setup
-- [ ] Integration tests validate end-to-end placeholder execution
-- [ ] Logging and telemetry integration confirmed
+## Acceptance Criteria ✅ COMPLETED
+- [x] LangGraph and dependencies successfully installed
+- [x] `OrchestratorState` typed state schema defined (`src/bio_mcp/orchestrator/state.py`)
+- [x] Production graph structure with real nodes created (`src/bio_mcp/orchestrator/graph_builder.py`)
+- [x] Graph compilation with AsyncSqliteSaver checkpointing works
+- [x] Graph execution (invoke) works with production nodes
+- [x] Streaming execution (astream) implemented
+- [x] Configuration integrated with main bio-mcp config
+- [x] Unit tests pass for basic setup (`tests/unit/orchestrator/test_langgraph_setup.py`)
+- [x] Integration tests validate end-to-end execution (`tests/integration/orchestrator/test_node_integration.py`)
+- [x] Logging and telemetry integration confirmed
 
 ## Files Created
 - `src/bio_mcp/orchestrator/state.py` - LangGraph state schema

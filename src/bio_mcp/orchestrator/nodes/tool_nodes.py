@@ -5,7 +5,7 @@ from typing import Any
 
 from bio_mcp.config.logging_config import get_logger
 from bio_mcp.orchestrator.config import OrchestratorConfig
-from bio_mcp.orchestrator.state import OrchestratorState
+from bio_mcp.orchestrator.types import OrchestratorState
 from bio_mcp.sources.pubmed.client import PubMedClient, PubMedConfig
 
 logger = get_logger(__name__)

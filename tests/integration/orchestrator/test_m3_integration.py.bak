@@ -15,11 +15,11 @@ from bio_mcp.orchestrator.error.recovery import (
     ErrorRecoveryManager,
     RecoveryAction,
 )
+from bio_mcp.orchestrator.state import NodeResult, OrchestratorState
 from bio_mcp.orchestrator.state_management.persistence import (
     BioMCPCheckpointSaver,
     StateManager,
 )
-from bio_mcp.orchestrator.types import NodeResult, OrchestratorState
 
 
 class TestM3Integration:
@@ -307,7 +307,7 @@ class TestM3Integration:
         await budget_manager.enforce_budget(budget_tracker, ResourceType.REQUESTS, 1)
 
         # Test 2: Check if expensive operation can be afforded (should fail)
-        await budget_manager.estimate_operation_cost(
+        rag_cost = await budget_manager.estimate_operation_cost(
             "rag.search", {"query": "diabetes", "limit": 20}
         )
         can_afford_expensive = await budget_manager.can_afford_operation(

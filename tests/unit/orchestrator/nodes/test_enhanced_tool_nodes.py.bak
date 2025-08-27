@@ -9,7 +9,7 @@ from bio_mcp.orchestrator.nodes.enhanced_tool_nodes import (
     EnhancedPubMedNode,
     EnhancedTrialsNode,
 )
-from bio_mcp.orchestrator.types import NodeResult, OrchestratorState
+from bio_mcp.orchestrator.state import NodeResult, OrchestratorState
 
 
 class TestEnhancedPubMedNode:

@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from bio_mcp.config.logging_config import get_logger
 from bio_mcp.orchestrator.config import OrchestratorConfig
-from bio_mcp.orchestrator.state import FrameModel, OrchestratorState
+from bio_mcp.orchestrator.types import FrameModel, OrchestratorState
 
 logger = get_logger(__name__)
 

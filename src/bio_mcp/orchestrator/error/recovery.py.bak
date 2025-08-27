@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from enum import Enum
 
 from bio_mcp.orchestrator.config import OrchestratorConfig
-from bio_mcp.orchestrator.types import NodeResult, OrchestratorState
+from bio_mcp.orchestrator.state import NodeResult, OrchestratorState
 
 
 class ErrorType(Enum):
@@ -292,9 +292,9 @@ class ErrorRecoveryManager:
             messages=list(state["messages"])
             if isinstance(state, dict)
             else list(state.messages),
-            errors=[*list(state["errors"]), error_record]
+            errors=list(state["errors"]) + [error_record]
             if isinstance(state, dict)
-            else [*list(state.errors), error_record],
+            else list(state.errors) + [error_record],
             answer=state.get("answer")
             if isinstance(state, dict)
             else getattr(state, "answer", None),

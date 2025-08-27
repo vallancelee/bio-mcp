@@ -7,6 +7,18 @@ from datetime import datetime
 import pytest
 
 from bio_mcp.sources.clinicaltrials.models import ClinicalTrialDocument
+from bio_mcp.sources.clinicaltrials.quality import (
+    ClinicalTrialQualityConfig,
+    _calculate_condition_score,
+    _calculate_enrollment_score,
+    _calculate_intervention_score,
+    _calculate_phase_score,
+    _calculate_results_score,
+    _calculate_sponsor_score,
+    _calculate_status_score,
+    calculate_clinical_trial_quality,
+    calculate_quality_metrics,
+)
 
 
 def create_test_trial(**kwargs) -> ClinicalTrialDocument:
@@ -23,20 +35,6 @@ def create_test_trial(**kwargs) -> ClinicalTrialDocument:
     # Merge with provided kwargs
     all_fields = {**base_fields, **kwargs}
     return ClinicalTrialDocument(**all_fields)
-
-
-from bio_mcp.sources.clinicaltrials.quality import (
-    ClinicalTrialQualityConfig,
-    _calculate_condition_score,
-    _calculate_enrollment_score,
-    _calculate_intervention_score,
-    _calculate_phase_score,
-    _calculate_results_score,
-    _calculate_sponsor_score,
-    _calculate_status_score,
-    calculate_clinical_trial_quality,
-    calculate_quality_metrics,
-)
 
 
 class TestClinicalTrialQualityConfig:

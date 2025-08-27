@@ -1,4 +1,22 @@
-# M3 — LangGraph State Management & Flow Control (1 day)
+# M3 — LangGraph State Management & Flow Control (PARTIAL 🔄)
+
+## Current Status: PARTIAL 🔄
+Basic state management is implemented. Advanced features like parallel execution and budget enforcement are pending.
+
+**COMPLETED:**
+- ✅ AsyncSqliteSaver checkpointing operational
+- ✅ OrchestratorState with typed fields and confidence tracking
+- ✅ Basic error handling and state propagation
+- ✅ Node path tracking (`node_path` field)
+- ✅ Latency measurement per node
+- ✅ Message logging for debugging
+
+**PENDING (Next Phase):**
+- ⏳ Conditional edges for parallel execution (`trials_with_pubs`)
+- ⏳ Budget/timeout enforcement mechanisms
+- ⏳ Advanced error recovery strategies
+- ⏳ Partial results handling on timeout
+- ⏳ State persistence optimization
 
 ## Objective
 Implement advanced state persistence, error recovery, and flow control mechanisms using LangGraph's built-in capabilities. Focus on checkpointing, conditional routing, budget enforcement, partial results handling, and robust error recovery strategies that ensure the orchestrator can handle failures gracefully and provide useful results even under adverse conditions.

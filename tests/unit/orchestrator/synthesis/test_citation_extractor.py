@@ -1,6 +1,5 @@
 """Test citation extraction functionality."""
 
-
 import pytest
 
 from bio_mcp.orchestrator.synthesis.citation_extractor import CitationExtractor

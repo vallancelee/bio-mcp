@@ -59,7 +59,7 @@ class LangGraphOrchestrator:
             if self.checkpointer_ctx:
                 try:
                     await self.checkpointer_ctx.__aexit__(None, None, None)
-                except:
+                except Exception:
                     pass
             raise RuntimeError(f"LangGraph orchestrator setup failed: {e}") from e
 

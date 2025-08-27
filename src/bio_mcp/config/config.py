@@ -171,10 +171,15 @@ class Config:
             self.chunker_version = os.getenv("BIO_MCP_CHUNKER_VERSION", "v1.2.0")
 
         # Initialize orchestrator config lazily to avoid circular imports
+        # Note: orchestrator field will be None until explicitly requested via get_orchestrator_config()
+
+    def get_orchestrator_config(self) -> "OrchestratorConfig":
+        """Get orchestrator config, creating it lazily if needed."""
         if self.orchestrator is None:
             from bio_mcp.orchestrator.config import OrchestratorConfig
 
             self.orchestrator = OrchestratorConfig.from_main_config(self)
+        return self.orchestrator
 
     def validate(self) -> None:
         """Basic validation - will be enhanced in Phase 1B."""

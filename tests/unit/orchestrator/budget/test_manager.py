@@ -1,6 +1,5 @@
 """Test budget management functionality."""
 
-
 import pytest
 
 from bio_mcp.orchestrator.budget.manager import (

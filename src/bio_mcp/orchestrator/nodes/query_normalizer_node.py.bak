@@ -12,7 +12,7 @@ import re
 
 from bio_mcp.config.logging_config import get_logger
 from bio_mcp.orchestrator.config import OrchestratorConfig
-from bio_mcp.orchestrator.types import OrchestratorState
+from bio_mcp.orchestrator.state import OrchestratorState
 
 logger = get_logger(__name__)
 
@@ -207,7 +207,7 @@ class QueryNormalizer:
         """Add therapeutic class context based on query content."""
         context_terms = []
         for therapy_area, keywords in self.therapeutic_classes.items():
-            if any(keyword in query for keyword in [therapy_area, *keywords[:2]]):
+            if any(keyword in query for keyword in [therapy_area] + keywords[:2]):
                 context_terms.extend(keywords[:2])  # Add top 2 relevant terms
                 break  # Only add one therapeutic area to avoid over-expansion
         return context_terms

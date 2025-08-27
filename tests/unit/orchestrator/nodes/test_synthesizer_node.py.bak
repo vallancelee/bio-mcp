@@ -4,7 +4,7 @@ import pytest
 
 from bio_mcp.orchestrator.config import OrchestratorConfig
 from bio_mcp.orchestrator.nodes.synthesizer_node import SynthesizerNode
-from bio_mcp.orchestrator.types import OrchestratorState
+from bio_mcp.orchestrator.state import OrchestratorState
 
 
 class TestSynthesizerNode:
@@ -54,9 +54,9 @@ class TestSynthesizerNode:
         assert "Diabetes Research Study" in result["answer"]
 
         # Verify checkpoint ID
-        assert "orchestrator_checkpoint_id" in result
-        assert result["orchestrator_checkpoint_id"] is not None
-        assert result["orchestrator_checkpoint_id"].startswith("session_")
+        assert "session_id" in result
+        assert result["session_id"] is not None
+        assert result["session_id"].startswith("session_")
 
         # Verify state updates
         assert "synthesizer" in result["node_path"]
@@ -97,5 +97,5 @@ class TestSynthesizerNode:
         assert "answer" in result
         assert result["answer"] is not None
         assert "No results found" in result["answer"]
-        assert "orchestrator_checkpoint_id" in result
+        assert "session_id" in result
         assert "synthesizer" in result["node_path"]

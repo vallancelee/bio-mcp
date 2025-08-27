@@ -74,5 +74,5 @@ class TestLangGraphSetup:
         assert len(chunks) > 0
 
         # Last chunk should have final results
-        final_chunk = chunks[-1]
+        chunks[-1]
         assert any("synthesize" in chunk for chunk in chunks)

@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from bio_mcp.orchestrator.middleware.rate_limiter import TokenBucketRateLimiter
-from bio_mcp.orchestrator.types import NodeResult
+from bio_mcp.orchestrator.state import NodeResult
 
 
 class ParallelExecutor:

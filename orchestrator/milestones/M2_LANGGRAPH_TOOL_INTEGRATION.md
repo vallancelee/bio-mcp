@@ -1,4 +1,19 @@
-# M2 — LangGraph Tool Integration (2 days)
+# M2 — LangGraph Tool Integration (PARTIAL 🔄)
+
+## Current Status: PARTIAL 🔄
+PubMed integration is complete. ClinicalTrials and RAG nodes need implementation for full tool expansion.
+
+**COMPLETED:**
+- ✅ PubMed tool integration via `PubMedSearchNode` (search + fetch combined)
+- ✅ Basic rate limiting with `TokenBucketRateLimiter`
+- ✅ State normalization and result formatting
+- ✅ Error handling and fallback logic
+
+**PENDING (Next Phase):**
+- ⏳ ClinicalTrials node implementation (`ctgov_search`)
+- ⏳ RAG search node implementation (`rag_search`)
+- ⏳ Parallel execution via conditional edges (`trials_with_pubs`)
+- ⏳ Full cache-then-network pattern (currently basic cache_hits tracking)
 
 ## Objective
 Implement deep integration between LangGraph nodes and existing bio-mcp MCP tools. Focus on cache-then-network patterns, robust error handling, parallel execution coordination, and tool result normalization to ensure seamless operation between the orchestrator and bio-mcp's existing data infrastructure.

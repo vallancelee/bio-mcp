@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from bio_mcp.orchestrator.config import OrchestratorConfig
-from bio_mcp.orchestrator.state import NodeResult
+from bio_mcp.orchestrator.types import NodeResult
 
 
 class MCPToolAdapter:

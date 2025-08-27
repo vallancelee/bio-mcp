@@ -179,9 +179,7 @@ class PubMedArticle(BaseModel):
     impact_factor: float | None = Field(
         default=None, description="Journal impact factor"
     )
-    relevance_score: float | None = Field(
-        default=None, description="Relevance score"
-    )
+    relevance_score: float | None = Field(default=None, description="Relevance score")
 
 
 class ClinicalTrial(BaseModel):
@@ -209,18 +207,14 @@ class ClinicalTrial(BaseModel):
     locations: list[dict[str, Any]] = Field(
         default_factory=list, description="Study locations"
     )
-    primary_endpoint: str | None = Field(
-        default=None, description="Primary endpoint"
-    )
+    primary_endpoint: str | None = Field(default=None, description="Primary endpoint")
     secondary_endpoints: list[str] = Field(
         default_factory=list, description="Secondary endpoints"
     )
     investment_score: float | None = Field(
         default=None, description="Investment attractiveness score"
     )
-    relevance_score: float | None = Field(
-        default=None, description="Relevance score"
-    )
+    relevance_score: float | None = Field(default=None, description="Relevance score")
 
 
 class RAGDocument(BaseModel):
@@ -262,6 +256,4 @@ class ErrorResponse(BaseModel):
         default_factory=lambda: datetime.utcnow().isoformat(),
         description="Error timestamp",
     )
-    request_id: str | None = Field(
-        default=None, description="Request ID for tracking"
-    )
+    request_id: str | None = Field(default=None, description="Request ID for tracking")
