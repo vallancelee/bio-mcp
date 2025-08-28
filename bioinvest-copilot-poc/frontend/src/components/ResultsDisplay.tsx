@@ -16,14 +16,19 @@ import {
 } from 'lucide-react'
 import { QueryResults, PubMedResult, ClinicalTrialResult, RAGResult } from '@/shared-types'
 import { format } from 'date-fns'
+import QualityScoreDisplay, { QualityMetrics } from './QualityScoreDisplay'
+import CitationManager, { Citation, CitationFormat } from './CitationManager'
+import PartialResultsIndicator, { PartialResultsData } from './PartialResultsIndicator'
 
 interface ResultsDisplayProps {
   results: QueryResults | null
+  partialResults?: PartialResultsData
 }
 
-const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results }) => {
+const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results, partialResults }) => {
   const [activeTab, setActiveTab] = useState<'summary' | 'pubmed' | 'trials' | 'insights'>('summary')
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set())
+  const [citationFormat, setCitationFormat] = useState<CitationFormat>('full')
 
   if (!results) {
     return (
@@ -63,39 +68,54 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results }) => {
 
     const { synthesis } = results
 
+    // Convert citations to proper format
+    const formattedCitations: Citation[] = synthesis.citations?.map(citation => ({
+      id: citation.pmid || citation.id || 'unknown',
+      title: citation.title || 'Unknown title',
+      authors: citation.authors || [],
+      source: citation.journal || citation.source || 'Unknown source',
+      year: citation.year?.toString() || 'Unknown year',
+      url: citation.url,
+      relevance_score: citation.relevance_score || 0.5
+    })) || []
+
     return (
       <div className="space-y-6">
-        {/* Executive Summary */}
-        <div className="card p-6">
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <TrendingUp className="h-5 w-5" />
-            Executive Summary
-          </h3>
-          <p className="text-gray-700 leading-relaxed">{synthesis.summary}</p>
-          
-          {/* Quality Metrics */}
-          <div className="mt-6 grid grid-cols-2 md:grid-cols-3 gap-4">
-            {Object.entries(synthesis.quality_metrics).map(([key, value]) => {
-              if (key === 'overall_score') return null
-              return (
-                <div key={key} className="text-center">
-                  <div className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${getQualityColor(value)}`}>
-                    {Math.round(value * 100)}%
-                  </div>
-                  <p className="text-xs text-gray-600 mt-1 capitalize">
-                    {key.replace('_', ' ')}
-                  </p>
-                </div>
-              )
-            })}
-          </div>
+        {/* Quality Score Display */}
+        <QualityScoreDisplay metrics={synthesis.quality_metrics as QualityMetrics} />
 
-          <div className="mt-4 text-center">
-            <div className={`inline-flex px-4 py-2 rounded-lg text-lg font-semibold ${getQualityColor(synthesis.quality_metrics.overall_score)}`}>
-              Overall Score: {Math.round(synthesis.quality_metrics.overall_score * 100)}%
+        {/* Executive Summary */}
+        <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+          <div className="border-b border-gray-200 px-6 py-4">
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <TrendingUp className="h-5 w-5" />
+              AI Synthesis
+            </h3>
+          </div>
+          <div className="px-6 py-4">
+            <div className="prose max-w-none">
+              <p className="text-gray-700 leading-relaxed">{synthesis.summary}</p>
             </div>
           </div>
         </div>
+
+        {/* Citations Manager */}
+        {formattedCitations.length > 0 && (
+          <CitationManager
+            citations={formattedCitations}
+            format={citationFormat}
+            onFormatChange={setCitationFormat}
+          />
+        )}
+
+        {/* Checkpoint Information */}
+        {synthesis.generation_metadata?.checkpoint_id && (
+          <div className="mt-4">
+            <span className="inline-flex items-center px-2 py-1 rounded border border-gray-300 text-xs">
+              Checkpoint: {synthesis.generation_metadata.checkpoint_id}
+            </span>
+          </div>
+        )}
 
         {/* Key Insights */}
         <div className="card p-6">
@@ -489,6 +509,11 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ results }) => {
 
   return (
     <div className="space-y-6">
+      {/* Partial Results Indicator */}
+      {partialResults && (
+        <PartialResultsIndicator data={partialResults} />
+      )}
+
       {/* Query Header */}
       <div className="card p-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-2">
