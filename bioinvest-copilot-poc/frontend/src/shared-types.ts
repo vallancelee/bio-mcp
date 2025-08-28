@@ -19,12 +19,83 @@ export interface OrchestrationRequest {
   }
 }
 
+// M3/M4 Enhanced Orchestration Request Interface
+export interface EnhancedOrchestrationRequest {
+  query: string
+  sources: string[]
+  options: {
+    // Basic Options
+    max_results_per_source: number
+    include_synthesis: boolean
+    priority: 'speed' | 'comprehensive' | 'balanced'
+    
+    // M3 Advanced State Management
+    budget_ms?: number
+    enable_partial_results?: boolean
+    retry_strategy?: 'exponential' | 'linear' | 'none'
+    parallel_execution?: boolean
+    
+    // M4 Synthesis Options
+    citation_format?: 'pmid' | 'full' | 'inline'
+    quality_threshold?: number
+    checkpoint_enabled?: boolean
+  }
+}
+
 export interface OrchestrationResponse {
   query_id: string
   status: 'initiated' | 'processing' | 'completed' | 'failed'
   estimated_completion_time: number
   progress: Record<string, SourceStatus>
   partial_results_available: boolean
+  stream_url: string
+  created_at: string
+}
+
+// M3/M4 Budget Status Interface
+export interface BudgetStatus {
+  allocated_ms: number
+  consumed_ms: number
+  remaining_ms: number
+  utilization: number  // 0.0-1.0
+}
+
+// M3/M4 Middleware Active Interface
+export interface MiddlewareActive {
+  budget_enforcement: boolean
+  error_recovery: boolean
+  partial_results_enabled: boolean
+}
+
+// M4 Synthesis Metrics Interface
+export interface SynthesisMetrics {
+  citation_count: number
+  quality_score: number  // 0.0-1.0
+  answer_type: 'comprehensive' | 'partial' | 'minimal' | 'empty'
+}
+
+// M3/M4 Enhanced Orchestration Response Interface
+export interface EnhancedOrchestrationResponse {
+  query_id: string
+  status: 'initiated' | 'processing' | 'completed' | 'failed' | 'partial'
+  estimated_completion_time: number
+  
+  // Standard Progress
+  progress: {
+    pubmed: 'pending' | 'processing' | 'completed' | 'failed'
+    clinical_trials: 'pending' | 'processing' | 'completed' | 'failed'
+    rag: 'pending' | 'processing' | 'completed' | 'failed'
+  }
+  
+  // M3 State Management Status
+  budget_status?: BudgetStatus
+  middleware_active?: MiddlewareActive
+  
+  // M4 Synthesis Metadata
+  checkpoint_id?: string
+  synthesis_metrics?: SynthesisMetrics
+  
+  // Stream Information
   stream_url: string
   created_at: string
 }
@@ -73,6 +144,57 @@ export interface LangGraphStatusResponse {
   timestamp: string
 }
 
+// M3/M4 Advanced Capabilities Response Interface
+export interface CapabilitiesResponse {
+  orchestration: {
+    version: string
+    features: string[]
+    nodes: string[]
+    middleware: string[]
+  }
+  performance: {
+    parallel_speedup: number
+    middleware_overhead: number
+    average_latencies: {
+      pubmed_search: number
+      clinical_trials: number
+      rag_search: number
+      synthesis: number
+    }
+  }
+  limits: {
+    max_budget_ms: number
+    max_parallel_nodes: number
+    max_retry_attempts: number
+  }
+}
+
+// M3/M4 Advanced Middleware Status Response Interface
+export interface MiddlewareStatusResponse {
+  active_middleware: {
+    budget_enforcement: {
+      enabled: boolean
+      default_budget_ms: number
+      active_queries: number
+    }
+    error_recovery: {
+      enabled: boolean
+      retry_strategy: string
+      success_rate: number
+    }
+    partial_results: {
+      enabled: boolean
+      extraction_rate: number
+    }
+  }
+  performance_metrics: {
+    average_execution_time: number
+    timeout_rate: number
+    retry_rate: number
+    partial_results_rate: number
+  }
+}
+
 // ============================================================================
 // SSE EVENT TYPES
 // ============================================================================
@@ -97,6 +219,119 @@ export type StreamEventType =
   | 'query_completed' 
   | 'query_failed'
   | 'message'
+  // M3 Advanced State Management Events
+  | 'middleware_status'
+  | 'retry_attempt'
+  | 'partial_results'
+  | 'budget_warning'
+  // M4 Advanced Synthesis Events
+  | 'synthesis_progress'
+  | 'citation_extracted'
+  | 'checkpoint_created'
+
+// ============================================================================
+// M3/M4 SSE EVENT INTERFACES
+// ============================================================================
+
+// Standard Events
+export interface ConnectedEvent {
+  event: 'connected'
+  data: {
+    query_id: string
+    timestamp: string
+    capabilities: string[]
+  }
+}
+
+export interface ProgressEvent {
+  event: 'progress'
+  data: {
+    query_id: string
+    timestamp: string
+    source: string
+    status: string
+    progress_percent: number  // 0-100
+  }
+}
+
+// M3 State Management Events
+export interface MiddlewareStatusEvent {
+  event: 'middleware_status'
+  data: {
+    query_id: string
+    timestamp: string
+    budget?: {
+      consumed_ms: number
+      remaining_ms: number
+      in_danger_zone: boolean
+    }
+    error_recovery?: {
+      active_retries: number
+      retry_strategy: string
+      last_error?: string
+    }
+    partial_results?: {
+      available: boolean
+      sources_with_data: string[]
+    }
+  }
+}
+
+export interface RetryAttemptEvent {
+  event: 'retry_attempt'
+  data: {
+    query_id: string
+    timestamp: string
+    node: string
+    attempt: number
+    max_attempts: number
+    delay_ms: number
+    error: string
+  }
+}
+
+export interface PartialResultsEvent {
+  event: 'partial_results'
+  data: {
+    query_id: string
+    timestamp: string
+    reason: 'timeout' | 'error' | 'budget_exhausted'
+    completion_percentage: number  // 0.0-1.0
+    available_sources: string[]
+    total_results: number
+  }
+}
+
+// M4 Synthesis Events
+export interface SynthesisProgressEvent {
+  event: 'synthesis_progress'
+  data: {
+    query_id: string
+    timestamp: string
+    stage: 'citation_extraction' | 'quality_scoring' | 'template_rendering'
+    progress_percent: number
+    citations_found?: number
+    quality_score?: number
+  }
+}
+
+export interface SynthesisCompletedEvent {
+  event: 'synthesis_completed'
+  data: {
+    query_id: string
+    timestamp: string
+    checkpoint_id: string
+    synthesis_time_ms: number
+    metrics: {
+      total_sources: number
+      successful_sources: number
+      citation_count: number
+      quality_score: number
+      answer_type: string
+    }
+    answer: string
+  }
+}
 
 // ============================================================================
 // DOMAIN MODELS
@@ -306,6 +541,25 @@ export type ApiError = {
 
 export type ApiResponse<T> = T | ApiError
 
+// M3/M4 Standard Error Interface
+export interface StandardError {
+  error: {
+    code: string
+    message: string
+    details?: any
+    timestamp: string
+    
+    // M3 Error Recovery Context
+    recovery_attempted?: boolean
+    retry_count?: number
+    fallback_applied?: string
+    
+    // M4 Quality Context
+    partial_synthesis?: boolean
+    checkpoint_saved?: string
+  }
+}
+
 // Type guards
 export const isApiError = (response: any): response is ApiError => {
   return response && typeof response.detail === 'string' && typeof response.status_code === 'number'
@@ -336,6 +590,9 @@ export const API_ENDPOINTS = {
   STREAM: '/api/research/stream',
   LANGGRAPH_VISUALIZATION: '/api/langgraph/visualization',
   LANGGRAPH_STATUS: '/api/langgraph/status',
+  // M3/M4 Advanced Endpoints
+  CAPABILITIES: '/api/langgraph/capabilities',
+  MIDDLEWARE_STATUS: '/api/langgraph/middleware-status',
 } as const
 
 export const SOURCE_TYPES = ['pubmed', 'clinical_trials', 'rag'] as const

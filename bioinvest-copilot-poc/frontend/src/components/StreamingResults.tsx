@@ -1,7 +1,11 @@
 import React from 'react'
 import { CheckCircle, Clock, AlertCircle, Loader2, Database, FileText, Activity } from 'lucide-react'
-import { StreamEvent } from '@/shared-types'
+import { StreamEvent, BudgetStatus, MiddlewareStatusEvent, RetryAttemptEvent, PartialResultsEvent, SynthesisProgressEvent } from '../shared-types'
 import { format } from 'date-fns'
+import BudgetMonitor from './BudgetMonitor'
+import RetryVisualizer, { RetryAttempt } from './RetryVisualizer'
+import SynthesisProgress, { SynthesisStage } from './SynthesisProgress'
+import PartialResultsIndicator, { PartialResultsData } from './PartialResultsIndicator'
 
 interface StreamingResultsProps {
   events: StreamEvent[]
@@ -14,6 +18,29 @@ const StreamingResults: React.FC<StreamingResultsProps> = ({
   isConnected,
   error
 }) => {
+  // Parse M3/M4 monitoring data from events
+  const budgetStatus = events
+    .filter(e => e.event === 'middleware_status')
+    .slice(-1)[0]?.data?.budget as BudgetStatus | undefined
+    
+  const retryAttempts: RetryAttempt[] = events
+    .filter(e => e.event === 'retry_attempt')
+    .map(e => ({
+      node: e.data.node,
+      attempt: e.data.attempt,
+      max_attempts: e.data.max_attempts,
+      delay_ms: e.data.delay_ms,
+      error: e.data.error,
+      timestamp: e.timestamp
+    }))
+    
+  const synthesisProgress = events
+    .filter(e => e.event === 'synthesis_progress')
+    .slice(-1)[0]?.data as SynthesisStage | undefined
+    
+  const partialResults = events
+    .filter(e => e.event === 'partial_results')
+    .slice(-1)[0]?.data as PartialResultsData | undefined
   const getEventIcon = (eventType: string) => {
     switch (eventType) {
       case 'source_started':
@@ -123,20 +150,41 @@ const StreamingResults: React.FC<StreamingResultsProps> = ({
   }
 
   return (
-    <div className="card">
-      <div className="p-4 border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">Research Progress</h3>
-          <div className="flex items-center gap-2">
-            <div className={`h-2 w-2 rounded-full ${
-              isConnected ? 'bg-green-400' : error ? 'bg-red-400' : 'bg-gray-400'
-            }`} />
-            <span className={`text-sm font-medium ${getStatusColor()}`}>
-              {getStatusText()}
-            </span>
+    <div className="streaming-results space-y-4">
+      {/* Connection Status */}
+      <div className="card">
+        <div className="p-4 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-900">Research Progress</h3>
+            <div className="flex items-center gap-2">
+              <div className={`h-2 w-2 rounded-full ${
+                isConnected ? 'bg-green-400' : error ? 'bg-red-400' : 'bg-gray-400'
+              }`} data-testid="connection-status" />
+              <span className={`text-sm font-medium ${getStatusColor()}`}>
+                {getStatusText()}
+              </span>
+            </div>
           </div>
         </div>
+        
+        {/* Real-time Monitoring Panels */}
+        <div className="monitoring-grid grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
+          {/* Budget Monitor */}
+          {budgetStatus && <BudgetMonitor status={budgetStatus} />}
+          
+          {/* Retry Visualizer */}
+          {retryAttempts.length > 0 && <RetryVisualizer attempts={retryAttempts} />}
+          
+          {/* Synthesis Progress */}
+          {synthesisProgress && <SynthesisProgress stage={synthesisProgress} />}
+          
+          {/* Partial Results Indicator */}
+          {partialResults && <PartialResultsIndicator data={partialResults} />}
+        </div>
       </div>
+      
+      {/* Traditional Progress Display */}
+      <div className="card">
 
       <div className="max-h-96 overflow-y-auto">
         {error && (
@@ -187,19 +235,20 @@ const StreamingResults: React.FC<StreamingResultsProps> = ({
             )
           })}
         </div>
-      </div>
-
-      {events.length > 0 && (
-        <div className="p-4 border-t border-gray-200 bg-gray-50">
-          <div className="text-sm text-gray-600">
-            <strong>{events.length}</strong> events • 
-            Started {events.length > 0 && formatTimestamp(events[0].timestamp)}
-            {events.length > 1 && events[events.length - 1].event === 'query_completed' && (
-              <span> • Completed {formatTimestamp(events[events.length - 1].timestamp)}</span>
-            )}
-          </div>
         </div>
-      )}
+
+        {events.length > 0 && (
+          <div className="p-4 border-t border-gray-200 bg-gray-50">
+            <div className="text-sm text-gray-600">
+              <strong>{events.length}</strong> events • 
+              Started {events.length > 0 && formatTimestamp(events[0].timestamp)}
+              {events.length > 1 && events[events.length - 1].event === 'query_completed' && (
+                <span> • Completed {formatTimestamp(events[events.length - 1].timestamp)}</span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

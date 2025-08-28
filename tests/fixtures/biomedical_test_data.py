@@ -209,7 +209,7 @@ class BiomedicTestCorpus:
 
     def get_paper_by_pmid(self, pmid: str) -> TestPaper:
         """Get specific paper by PMID."""
-        for paper in self.ALL_PAPERS:
+        for paper in self.all_papers:
             if paper.pmid == pmid:
                 return paper
         raise ValueError(f"No test paper found with PMID: {pmid}")

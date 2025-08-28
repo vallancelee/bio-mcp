@@ -63,7 +63,7 @@ class TestWorkingEndToEndWorkflows:
         get_result = await rag_get_tool(
             "rag.get",
             {
-                "doc_id": "36653448"  # PMID from our test corpus
+                "doc_id": "test_doc_001"  # Generic test document ID
             },
         )
 
@@ -78,9 +78,10 @@ class TestWorkingEndToEndWorkflows:
         # Should have meaningful response (found or not found)
         assert len(get_text) > 20
         assert (
-            "36653448" in get_text
+            "test_doc_001" in get_text
             or "not found" in get_text.lower()
             or "document" in get_text.lower()
+            or "no document" in get_text.lower()
         )
 
         # === Phase 3: Create research checkpoint ===
@@ -229,11 +230,11 @@ class TestWorkingEndToEndWorkflows:
             or "search" in search_text.lower()
         )
 
-        # Try to get a known immunotherapy paper
+        # Try to get a test immunotherapy paper  
         get_result = await rag_get_tool(
             "rag.get",
             {
-                "doc_id": "33445566"  # PMID from immunotherapy paper in test corpus
+                "doc_id": "test_immunotherapy_001"  # Test document ID
             },
         )
 
@@ -491,7 +492,7 @@ class TestWorkingEndToEndWorkflows:
 
             # Try to get a document
             get_result = await rag_get_tool(
-                "rag.get", {"doc_id": f"1234567{researcher_id}"}
+                "rag.get", {"doc_id": f"test_doc_{researcher_id:03d}"}
             )
             assert len(get_result) == 1
 
