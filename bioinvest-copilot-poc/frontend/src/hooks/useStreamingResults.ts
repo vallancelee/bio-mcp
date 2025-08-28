@@ -149,6 +149,85 @@ export const useStreamingResults = ({
         setIsConnected(false)
       })
 
+      // M3 Advanced State Management Event Listeners
+      eventSource.addEventListener('middleware_status', (event) => {
+        const data = JSON.parse((event as MessageEvent).data)
+        const streamEvent: StreamEvent = {
+          event: 'middleware_status',
+          timestamp: data.timestamp || new Date().toISOString(),
+          data: data,
+          query_id: data.query_id
+        }
+        addEvent(streamEvent)
+      })
+
+      eventSource.addEventListener('retry_attempt', (event) => {
+        const data = JSON.parse((event as MessageEvent).data)
+        const streamEvent: StreamEvent = {
+          event: 'retry_attempt',
+          timestamp: data.timestamp || new Date().toISOString(),
+          data: data,
+          query_id: data.query_id
+        }
+        addEvent(streamEvent)
+      })
+
+      eventSource.addEventListener('partial_results', (event) => {
+        const data = JSON.parse((event as MessageEvent).data)
+        const streamEvent: StreamEvent = {
+          event: 'partial_results',
+          timestamp: data.timestamp || new Date().toISOString(),
+          data: data,
+          query_id: data.query_id
+        }
+        addEvent(streamEvent)
+      })
+
+      eventSource.addEventListener('budget_warning', (event) => {
+        const data = JSON.parse((event as MessageEvent).data)
+        const streamEvent: StreamEvent = {
+          event: 'budget_warning',
+          timestamp: data.timestamp || new Date().toISOString(),
+          data: data,
+          query_id: data.query_id
+        }
+        addEvent(streamEvent)
+      })
+
+      // M4 Advanced Synthesis Event Listeners
+      eventSource.addEventListener('synthesis_progress', (event) => {
+        const data = JSON.parse((event as MessageEvent).data)
+        const streamEvent: StreamEvent = {
+          event: 'synthesis_progress',
+          timestamp: data.timestamp || new Date().toISOString(),
+          data: data,
+          query_id: data.query_id
+        }
+        addEvent(streamEvent)
+      })
+
+      eventSource.addEventListener('citation_extracted', (event) => {
+        const data = JSON.parse((event as MessageEvent).data)
+        const streamEvent: StreamEvent = {
+          event: 'citation_extracted',
+          timestamp: data.timestamp || new Date().toISOString(),
+          data: data,
+          query_id: data.query_id
+        }
+        addEvent(streamEvent)
+      })
+
+      eventSource.addEventListener('checkpoint_created', (event) => {
+        const data = JSON.parse((event as MessageEvent).data)
+        const streamEvent: StreamEvent = {
+          event: 'checkpoint_created',
+          timestamp: data.timestamp || new Date().toISOString(),
+          data: data,
+          query_id: data.query_id
+        }
+        addEvent(streamEvent)
+      })
+
     } catch (err) {
       setError('Failed to connect to stream')
       setIsConnected(false)

@@ -4,7 +4,7 @@
  * Testing individual functions and basic rendering with TDD approach
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import CitationManager, { Citation, CitationFormat } from '../../src/components/CitationManager'
 
