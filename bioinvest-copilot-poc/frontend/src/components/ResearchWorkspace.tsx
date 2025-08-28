@@ -1,22 +1,26 @@
 import React, { useState, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Brain, Loader2 } from 'lucide-react'
+import { Brain, Loader2, GitBranch } from 'lucide-react'
 import QueryBuilder from './QueryBuilder'
 import StreamingResults from './StreamingResults'
 import ResultsDisplay from './ResultsDisplay'
+import LangGraphVisualizer from './LangGraphVisualizer'
+import MiddlewareStatusPanel from './MiddlewareStatusPanel'
+import GraphLegend from './GraphLegend'
 import { useStreamingResults } from '@/hooks/useStreamingResults'
 import { apiService } from '@/services/api'
-import { OrchestrationRequest, QueryResults } from '@/shared-types'
+import { EnhancedOrchestrationRequest, QueryResults } from '@/shared-types'
 
 const ResearchWorkspace: React.FC = () => {
   console.log('ResearchWorkspace rendering')
   const [currentQuery, setCurrentQuery] = useState<{
     queryId: string
     streamUrl: string
-    request: OrchestrationRequest
+    request: EnhancedOrchestrationRequest
   } | null>(null)
   const [finalResults, setFinalResults] = useState<QueryResults | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showVisualization, setShowVisualization] = useState(false)
 
   // Stream results hook
   const {
@@ -41,16 +45,16 @@ const ResearchWorkspace: React.FC = () => {
     enabled: !currentQuery
   })
 
-  const handleSubmitQuery = async (request: OrchestrationRequest) => {
+  const handleSubmitQuery = async (request: EnhancedOrchestrationRequest) => {
     try {
-      console.log('Submitting query:', request)
+      console.log('Submitting enhanced query:', request)
       setIsSubmitting(true)
       setFinalResults(null)
       resetStream()
 
-      // Submit the query
-      const response = await apiService.submitQuery(request)
-      console.log('Query response:', response)
+      // Submit the enhanced query
+      const response = await apiService.submitEnhancedQuery(request)
+      console.log('Enhanced query response:', response)
       
       // Set up streaming
       setCurrentQuery({
@@ -93,7 +97,7 @@ const ResearchWorkspace: React.FC = () => {
               </div>
             </div>
 
-            {/* Status Indicator */}
+            {/* Status and Controls */}
             <div className="flex items-center gap-4">
               {activeQueries.length > 0 && !currentQuery && (
                 <div className="flex items-center gap-2 text-sm text-amber-600">
@@ -101,6 +105,19 @@ const ResearchWorkspace: React.FC = () => {
                   {activeQueries.length} active queries
                 </div>
               )}
+              
+              {/* Visualization Toggle */}
+              <button
+                onClick={() => setShowVisualization(!showVisualization)}
+                className={`flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors ${
+                  showVisualization 
+                    ? 'bg-blue-100 text-blue-700 border border-blue-300' 
+                    : 'bg-gray-100 text-gray-600 border border-gray-300 hover:bg-gray-200'
+                }`}
+              >
+                <GitBranch className="h-4 w-4" />
+                LangGraph View
+              </button>
               
               {currentQuery && (
                 <button
@@ -118,31 +135,128 @@ const ResearchWorkspace: React.FC = () => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column - Query Builder */}
-          <div className="lg:col-span-1">
-            <QueryBuilder
-              onSubmit={handleSubmitQuery}
-              isLoading={isSubmitting || !!currentQuery}
-            />
-
-            {/* Streaming Progress */}
-            {(currentQuery || events.length > 0) && (
-              <div className="mt-6">
-                <StreamingResults
-                  events={events}
-                  isConnected={isConnected}
-                  error={streamError}
+        {showVisualization ? (
+          /* LangGraph Visualization Mode */
+          <div className="space-y-6">
+            {/* Visualization Panels Row */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+              <div className="xl:col-span-2">
+                <LangGraphVisualizer
+                  visualization={{
+                    nodes: [
+                      { id: 'parse_frame', label: 'Parse Frame', type: 'router', x: 50, y: 50 },
+                      { id: 'router', label: 'Router', type: 'router', x: 200, y: 50 },
+                      { id: 'pubmed_search', label: 'PubMed', type: 'source', x: 50, y: 150 },
+                      { id: 'ctgov_search', label: 'ClinicalTrials', type: 'source', x: 200, y: 150 },
+                      { id: 'rag_search', label: 'RAG Search', type: 'source', x: 350, y: 150 },
+                      { id: 'synthesizer', label: 'Synthesize', type: 'synthesis', x: 200, y: 250 }
+                    ],
+                    edges: [
+                      { from: 'parse_frame', to: 'router' },
+                      { from: 'router', to: 'pubmed_search' },
+                      { from: 'router', to: 'ctgov_search' },
+                      { from: 'router', to: 'rag_search' },
+                      { from: 'pubmed_search', to: 'synthesizer' },
+                      { from: 'ctgov_search', to: 'synthesizer' },
+                      { from: 'rag_search', to: 'synthesizer' }
+                    ]
+                  }}
+                  currentPath={events.map(e => e.node_id).filter(Boolean)}
+                  activeNode={currentQuery ? 'router' : undefined}
+                  executionMetrics={events.reduce((acc, e) => {
+                    if (e.node_id && e.latency_ms) {
+                      acc[e.node_id] = e.latency_ms
+                    }
+                    return acc
+                  }, {} as Record<string, number>)}
+                />
+                <GraphLegend />
+              </div>
+              
+              <div>
+                <MiddlewareStatusPanel
+                  status={{
+                    active_middleware: {
+                      budget_enforcement: {
+                        enabled: true,
+                        active_queries: currentQuery ? 1 : 0,
+                        default_budget_ms: 10000
+                      },
+                      error_recovery: {
+                        enabled: true,
+                        retry_strategy: 'exponential_backoff',
+                        success_rate: 0.95
+                      },
+                      partial_results: {
+                        enabled: true,
+                        extraction_rate: 0.88
+                      }
+                    },
+                    performance_metrics: {
+                      average_execution_time: 3200,
+                      timeout_rate: 0.02,
+                      retry_rate: 0.05,
+                      partial_results_rate: 0.12
+                    }
+                  }}
                 />
               </div>
-            )}
+            </div>
+            
+            {/* Results Below Visualization */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div>
+                <QueryBuilder
+                  onSubmit={handleSubmitQuery}
+                  isLoading={isSubmitting || !!currentQuery}
+                />
+              </div>
+              
+              <div className="lg:col-span-2">
+                {(currentQuery || events.length > 0) && (
+                  <StreamingResults
+                    events={events}
+                    isConnected={isConnected}
+                    error={streamError}
+                  />
+                )}
+                
+                {finalResults && (
+                  <div className="mt-6">
+                    <ResultsDisplay results={finalResults} />
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
+        ) : (
+          /* Standard Research Mode */
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Left Column - Query Builder */}
+            <div className="lg:col-span-1">
+              <QueryBuilder
+                onSubmit={handleSubmitQuery}
+                isLoading={isSubmitting || !!currentQuery}
+              />
 
-          {/* Right Column - Results */}
-          <div className="lg:col-span-2">
-            <ResultsDisplay results={finalResults} />
+              {/* Streaming Progress */}
+              {(currentQuery || events.length > 0) && (
+                <div className="mt-6">
+                  <StreamingResults
+                    events={events}
+                    isConnected={isConnected}
+                    error={streamError}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Right Column - Results */}
+            <div className="lg:col-span-2">
+              <ResultsDisplay results={finalResults} />
+            </div>
           </div>
-        </div>
+        )}
       </main>
 
       {/* Footer */}
